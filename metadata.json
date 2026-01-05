@@ -1,0 +1,5 @@
+{
+  "name": "Sylvan Architect Babel",
+  "description": "A sophisticated linguistic tool that uses Gemini to analyze English sentences and generate detailed X-bar theory syntax trees with high-fidelity visual rendering.",
+  "requestFramePermissions": []
+}
