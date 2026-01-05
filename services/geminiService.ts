@@ -1,29 +1,10 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { ParseResult } from "../types";
 
 const SYSTEM_INSTRUCTION = `You are a world-class linguistic expert specializing in Generative Grammar and X-bar theory. 
 Your task is to parse English sentences into formal X-bar syntax trees.
 
-Output MUST be a single JSON object with this exact structure:
-{
-  "tree": {
-    "label": "CP",
-    "children": [
-      { 
-        "label": "C", 
-        "word": "∅" 
-      },
-      { 
-        "label": "InflP", 
-        "children": [ ... ] 
-      }
-    ]
-  },
-  "explanation": "A brief linguistic analysis of the sentence structure.",
-  "partsOfSpeech": [
-    { "word": "word", "pos": "CATEGORY" }
-  ]
-}
+Output MUST be a single JSON object.
 
 Rules for X-bar labels:
 1. Use standard labels: CP, InflP (Inflectional Phrase), DP, NP, VP, PP, AdjP, AdvP.
@@ -34,22 +15,18 @@ Rules for X-bar labels:
 6. CRITICAL: If a head (like C, Infl, or V) is null/silent, you MUST include the node with "word": "∅". Do not omit the head node. In most simple declarative sentences, the C head is null (∅).
 7. Ensure the tree is deeply nested following proper formal syntax principles.`;
 
+// Service function to parse sentence structure using X-bar theory
 export const parseSentence = async (sentence: string): Promise<ParseResult> => {
-  /**
-   * Accessing the API key from process.env.API_KEY.
-   * This variable is populated by the global shim in index.tsx 
-   * from Vite's .env.local variables during local development.
-   */
-  const apiKey = process.env.API_KEY;
-  
-  if (!apiKey) {
+  // Obtain the API key exclusively from the environment variable process.env.API_KEY.
+  if (!process.env.API_KEY) {
     throw new Error(
-      "API Key Missing: Please ensure VITE_API_KEY is set in your .env.local file " +
-      "and you have RESTARTED your development server (npx vite)."
+      "Arbor Connection Failed: No API Key detected. " +
+      "Please ensure the environment is configured with a valid API_KEY."
     );
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  // Create a new instance right before making an API call to ensure the latest key is used.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
     const response = await ai.models.generateContent({
@@ -58,10 +35,42 @@ export const parseSentence = async (sentence: string): Promise<ParseResult> => {
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
+        // Using responseSchema for the expected JSON output as per best practices.
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            tree: {
+              type: Type.OBJECT,
+              properties: {
+                label: { type: Type.STRING },
+                children: { 
+                  type: Type.ARRAY, 
+                  items: { type: Type.OBJECT } 
+                },
+                word: { type: Type.STRING }
+              },
+              required: ["label"]
+            },
+            explanation: { type: Type.STRING },
+            partsOfSpeech: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  word: { type: Type.STRING },
+                  pos: { type: Type.STRING }
+                },
+                required: ["word", "pos"]
+              }
+            }
+          },
+          required: ["tree", "explanation", "partsOfSpeech"]
+        },
         temperature: 0,
       }
     });
 
+    // Extracting text output directly from GenerateContentResponse property.
     const text = response.text;
     if (!text) {
       throw new Error("The linguistic model returned an empty response.");
@@ -75,6 +84,12 @@ export const parseSentence = async (sentence: string): Promise<ParseResult> => {
     }
   } catch (error: any) {
     console.error("Syntactic Parsing Error:", error);
+    
+    // Check for common API key errors or project issues
+    if (error.message?.includes("API key not valid") || error.message?.includes("Requested entity was not found")) {
+      throw new Error("Authentication failed. Please ensure the API key is valid and linked to a paid project.");
+    }
+    
     throw new Error(error.message || "An unexpected error occurred during syntactic analysis.");
   }
 };
