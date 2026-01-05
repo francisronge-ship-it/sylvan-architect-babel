@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,12 +13,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sylvan Architect Babel</title>
-    <script>
-      // Shim process.env for the browser to prevent crashes if it is missing
-      if (typeof window.process === 'undefined') {
-        window.process = { env: { API_KEY: "" } };
-      }
-    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700;800&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -41,7 +34,6 @@
             height: 100vh;
         }
         
-        /* Wooded Kingdom Atmosphere */
         .god-rays {
             position: fixed;
             top: 0;
@@ -86,11 +78,6 @@
         }
         .mono {
             font-family: 'JetBrains Mono', monospace;
-        }
-        .soil-texture {
-            background: linear-gradient(135deg, #1a0f0a 0%, #2a1810 100%);
-            background-image: url("https://www.transparenttextures.com/patterns/carbon-fibre.png");
-            background-blend-mode: overlay;
         }
         .moss-gradient {
             background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
@@ -144,7 +131,6 @@
 </head>
 <body>
     <div class="god-rays"></div>
-    <!-- Simple spores injection script -->
     <script>
         for (let i = 0; i < 20; i++) {
             const spore = document.createElement('div');

@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { ParseResult } from "../types";
 
@@ -36,10 +35,18 @@ Rules for X-bar labels:
 7. Ensure the tree is deeply nested following proper formal syntax principles.`;
 
 export const parseSentence = async (sentence: string): Promise<ParseResult> => {
-  // Use the API key from process.env.
-  const apiKey = (process.env as any).API_KEY;
+  /**
+   * Accessing the API key from process.env.API_KEY.
+   * This variable is populated by the global shim in index.tsx 
+   * from Vite's .env.local variables during local development.
+   */
+  const apiKey = process.env.API_KEY;
+  
   if (!apiKey) {
-    throw new Error("Linguistic engine API key not found. Please ensure the environment is configured with process.env.API_KEY.");
+    throw new Error(
+      "API Key Missing: Please ensure VITE_API_KEY is set in your .env.local file " +
+      "and you have RESTARTED your development server (npx vite)."
+    );
   }
 
   const ai = new GoogleGenAI({ apiKey });
