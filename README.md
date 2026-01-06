@@ -1,7 +1,3 @@
-<div align="center">
-  <img width="1200" alt="Sylvan Architect Babel interface" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
-
 # Sylvan Architect Babel
 
 **Sylvan Architect Babel** is a structural syntax analysis tool that generates explicit, theory-driven syntax trees for natural language sentences.
