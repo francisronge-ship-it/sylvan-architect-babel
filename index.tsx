@@ -3,9 +3,25 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 
 /**
- * APPLICATION ENTRY POINT
- * The API key is assumed to be pre-configured in process.env.API_KEY as per the execution environment standards.
+ * ENVIRONMENT SHIM
+ * Forces population of process.env from various potential sources.
  */
+if (typeof window !== 'undefined') {
+  // @ts-ignore
+  window.process = window.process || { env: {} };
+  const env = (window as any).process.env;
+  
+  const key = 
+    env.GEMINI_API_KEY || 
+    env.API_KEY || 
+    (window as any).importMetaEnv?.VITE_GEMINI_API_KEY || 
+    "";
+
+  if (key) {
+    env.API_KEY = key;
+    console.debug("Arbor: Environment initialized.");
+  }
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

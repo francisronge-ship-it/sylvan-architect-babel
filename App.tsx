@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { parseSentence } from './services/geminiService';
 import { ParseResult, SyntaxNode } from './types';
 import TreeVisualizer from './components/TreeVisualizer';
@@ -19,7 +18,8 @@ import {
   ChevronUp,
   ChevronDown,
   BarChart3,
-  FlameKindling
+  FlameKindling,
+  Key
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -29,6 +29,37 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'tree' | 'growth' | 'pos' | 'notes' | 'stats'>('tree');
   const [isInputExpanded, setIsInputExpanded] = useState(true);
+  const [needsKey, setNeedsKey] = useState(false);
+
+  // Check if we need to show the key selection button on mount
+  useEffect(() => {
+    const checkKeyStatus = async () => {
+      const aistudio = (window as any).aistudio;
+      if (aistudio && typeof aistudio.hasSelectedApiKey === 'function') {
+        const hasKey = await aistudio.hasSelectedApiKey();
+        if (!hasKey) setNeedsKey(true);
+      }
+    };
+    checkKeyStatus();
+  }, []);
+
+  const handleOpenKeySelection = async () => {
+    const aistudio = (window as any).aistudio;
+    if (aistudio && typeof aistudio.openSelectKey === 'function') {
+      try {
+        await aistudio.openSelectKey();
+        // Proceed as if key is valid after triggering dialog
+        setNeedsKey(false);
+        setError(null);
+        // Automatically attempt parsing again if they were in the middle of it
+        if (loading) {
+           handleParse();
+        }
+      } catch (err) {
+        console.error("Key selection failed", err);
+      }
+    }
+  };
 
   const handleParse = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -36,13 +67,20 @@ const App: React.FC = () => {
 
     setLoading(true);
     setError(null);
+
     try {
       const data = await parseSentence(input);
       setResult(data);
       setActiveTab('tree');
+      setNeedsKey(false);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'The linguistic growth was interrupted. The soil might need a moment to settle.');
+      if (err.message === 'API_KEY_EXPIRED' || err.message === 'API_KEY_MISSING' || err.message === 'API_KEY_INVALID') {
+        setNeedsKey(true);
+        setError("Your API credentials have expired or are missing. Please renew them below.");
+      } else {
+        setError(err.message || 'Linguistic growth interrupted. Soil needs a moment.');
+      }
     } finally {
       setLoading(false);
     }
@@ -88,7 +126,7 @@ const App: React.FC = () => {
           <div className="flex items-center gap-4">
             <div className="hidden md:flex items-center gap-2 text-[9px] font-black text-emerald-400 bg-emerald-950/40 px-5 py-2.5 rounded-full border border-emerald-900/30 tracking-widest uppercase shadow-inner">
               <Zap size={10} className="fill-emerald-400" />
-              Gemini 3.0 Pro
+              Gemini 3 Pro
             </div>
           </div>
         </div>
@@ -224,12 +262,24 @@ const App: React.FC = () => {
               </button>
             </div>
             
-            <div className={`transition-all duration-700 ease-in-out ${isInputExpanded ? 'max-h-[250px] opacity-100 p-6 pt-4' : 'max-h-0 opacity-0'}`}>
+            <div className={`transition-all duration-700 ease-in-out ${isInputExpanded ? 'max-h-[350px] opacity-100 p-6 pt-4' : 'max-h-0 opacity-0'}`}>
               {error && (
-                <div className="mb-4 bg-rose-500/10 border border-rose-500/20 px-4 py-2.5 rounded-2xl flex items-center gap-4 text-rose-400 text-xs italic serif shadow-inner">
-                  <AlertTriangle size={14} /> {error}
+                <div className="mb-4 bg-rose-500/10 border border-rose-500/20 px-4 py-3 rounded-2xl flex flex-col gap-3 text-rose-400 text-xs shadow-inner">
+                  <div className="flex items-center gap-3 italic serif">
+                    <AlertTriangle size={14} className="shrink-0" /> {error}
+                  </div>
+                  {needsKey && (
+                    <button
+                      onClick={handleOpenKeySelection}
+                      className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-rose-500/20 border border-rose-500/30 hover:bg-rose-500/40 transition-all font-black uppercase tracking-widest text-[10px] text-rose-200 animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.3)]"
+                    >
+                      <Key size={12} />
+                      Renew API Credentials
+                    </button>
+                  )}
                 </div>
               )}
+              
               <form onSubmit={handleParse} className="flex gap-4 items-end">
                 <div className="flex-1 relative">
                   <textarea
@@ -270,8 +320,18 @@ const App: React.FC = () => {
             <span className="h-3 w-px bg-white/10"></span>
             <span className="flex items-center gap-3"><TreeDeciduous size={12} /> Deep X-Bar Formalism</span>
           </div>
-          <div className="italic serif lowercase text-[10px] tracking-normal opacity-40">
-            rooted in generative grammar and neural synthesis
+          <div className="flex items-center gap-6">
+            {needsKey && (
+              <button 
+                onClick={handleOpenKeySelection}
+                className="flex items-center gap-2 text-rose-500/80 hover:text-rose-400 transition-colors"
+              >
+                <Key size={10} /> Key Expired - Renew
+              </button>
+            )}
+            <div className="italic serif lowercase text-[10px] tracking-normal opacity-40">
+              rooted in generative grammar and neural synthesis
+            </div>
           </div>
         </div>
       </footer>
