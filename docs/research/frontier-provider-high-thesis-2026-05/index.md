@@ -1,11 +1,11 @@
 ---
-title: Frontier Models On A High-Tier Babel Derivation
+title: Frontier Models On A Harder Babel Derivation
 description: Mini research devlog comparing Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.7 on a longer Minimalist wh-question with passive, embedding, and successive-cyclic movement.
 ---
 
 <div class="paper-hero">
   <p class="paper-kicker">Mini Research Devlog</p>
-  <h1 class="paper-title">Frontier Models On A High-Tier Babel Derivation</h1>
+  <h1 class="paper-title">Frontier Models On A Harder Babel Derivation</h1>
   <p class="paper-subtitle">A Babel comparison of Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.7 on a longer Minimalist wh-question with passive, embedding, and successive-cyclic movement.</p>
   <div class="paper-meta-grid">
     <div class="paper-meta-item">
@@ -41,17 +41,21 @@ The main result is that the renderer is no longer the story. The current replay 
 
 ## Method
 
-The benchmark used one sentence, one framework, and one high-effort provider call per route. There were no provider retries and no fallback provider calls. Raw provider output was saved for all routes.
+The benchmark used one sentence, one framework, and one high-effort provider call per route. "Harder" means harder than the earlier matrix wh-question benchmark: this sentence adds embedding, passive subject movement, perfect auxiliary structure, and successive-cyclic wh movement. It does not name a separate Babel product tier. There were no provider retries and no fallback provider calls. Raw provider output was saved for all routes.
 
 The provider run finished on May 31, 2026. The replay assets on this page were recaptured after the June 2 renderer stabilization pass. The GPT render below is explicitly marked as a diagnostic repair because the raw GPT output did not normalize as a Babel provider response.
 
-| Route | Model | Provider result | Stored elapsed time | Input tokens | Visible/output tokens | Reasoning/thinking tokens | Render frames |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Gemini | Gemini 3.1 Pro Preview | Passed local normalization | 115.6s | 3,836 | 3,929 | 13,718 | 59 |
-| Claude | Claude Opus 4.7 | Passed local normalization | 287.5s | 6,103 | 25,199 | 0 reported | 61 |
-| GPT | GPT-5.5 | Failed local normalization; diagnostic repair rendered | 373.1s | 3,777 | 34,664 reported output tokens | 34,664 reported reasoning tokens | 59 repaired |
+| Route | Model | Provider result | Stored elapsed time | Input tokens | Saved output tokens | Saved thinking/reasoning detail | Estimated API cost | Render frames |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Gemini | Gemini 3.1 Pro Preview | Passed local normalization | 115.6s | 3,836 | 3,929 visible output | 13,718 thoughts | $0.2194 | 59 |
+| Claude | Claude Opus 4.7 | Passed local normalization | 287.5s | 6,103 | 25,199 output | 21,409 thinking tokens inside output | $0.6605 | 61 |
+| GPT | GPT-5.5 | Failed local normalization; diagnostic repair rendered | 373.1s | 3,777 | 34,664 output | 34,664 reasoning tokens inside output | $1.0588 | 59 repaired |
 
-The token columns preserve the provider usage fields saved in the artifacts. They are not a price estimate and should not be added together without checking each provider's current accounting rules.
+The estimated API cost uses public list prices checked on June 2, 2026: Gemini 3.1 Pro Preview at $2.00 per 1M input tokens and $12.00 per 1M output tokens including thinking tokens; GPT-5.5 at $5.00 per 1M input tokens and $30.00 per 1M output tokens; Claude Opus 4.7 at $5.00 per 1M input tokens and $25.00 per 1M output tokens. The estimates exclude cached-input discounts, batch pricing, priority surcharges, taxes, subscriptions, and any non-token platform charges.
+
+The token columns preserve the provider usage fields saved in the artifacts. They must not be added together blindly. For Gemini, the cost estimate counts visible output plus thoughts because Gemini prices output including thinking tokens. For Claude and GPT, the saved thinking or reasoning count is treated as a detail inside `output_tokens`, not as a second output total.
+
+Pricing references: [OpenAI API pricing](https://openai.com/api/pricing/), [Claude API pricing](https://www.anthropic.com/pricing#api), and [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing).
 
 ## Why This Sentence Is Harder
 
@@ -85,7 +89,7 @@ Gemini produced a compact four-stage derivation. It passed local normalization a
 
 | Replay | Canopy | Notes |
 | --- | --- | --- |
-| ![Gemini 3.1 Pro high-tier derivation replay](../assets/frontier-provider-high-thesis-2026-05/gemini-replay.gif) | ![Gemini 3.1 Pro high-tier canopy](../assets/frontier-provider-high-thesis-2026-05/gemini-canopy.png) | ![Gemini 3.1 Pro high-tier notes](../assets/frontier-provider-high-thesis-2026-05/gemini-notes.png) |
+| ![Gemini 3.1 Pro harder derivation replay](../assets/frontier-provider-high-thesis-2026-05/gemini-replay.gif) | ![Gemini 3.1 Pro harder derivation canopy](../assets/frontier-provider-high-thesis-2026-05/gemini-canopy.png) | ![Gemini 3.1 Pro harder derivation notes](../assets/frontier-provider-high-thesis-2026-05/gemini-notes.png) |
 
 ### Linguistic Audit
 
@@ -130,7 +134,7 @@ Claude produced the strongest provider-native analysis in this run. It used seve
 
 | Replay | Canopy | Notes |
 | --- | --- | --- |
-| ![Claude Opus 4.7 high-tier derivation replay](../assets/frontier-provider-high-thesis-2026-05/claude-replay.gif) | ![Claude Opus 4.7 high-tier canopy](../assets/frontier-provider-high-thesis-2026-05/claude-canopy.png) | ![Claude Opus 4.7 high-tier notes](../assets/frontier-provider-high-thesis-2026-05/claude-notes.png) |
+| ![Claude Opus 4.7 harder derivation replay](../assets/frontier-provider-high-thesis-2026-05/claude-replay.gif) | ![Claude Opus 4.7 harder derivation canopy](../assets/frontier-provider-high-thesis-2026-05/claude-canopy.png) | ![Claude Opus 4.7 harder derivation notes](../assets/frontier-provider-high-thesis-2026-05/claude-notes.png) |
 
 ### Linguistic Audit
 
@@ -188,7 +192,7 @@ That is why the raw GPT run failed normalization: Babel read the first analysis,
 
 | Replay | Canopy | Notes |
 | --- | --- | --- |
-| ![GPT-5.5 diagnostic repaired high-tier derivation replay](../assets/frontier-provider-high-thesis-2026-05/gpt-repaired-replay.gif) | ![GPT-5.5 diagnostic repaired high-tier canopy](../assets/frontier-provider-high-thesis-2026-05/gpt-repaired-canopy.png) | ![GPT-5.5 diagnostic repaired high-tier notes](../assets/frontier-provider-high-thesis-2026-05/gpt-repaired-notes.png) |
+| ![GPT-5.5 diagnostic repaired harder derivation replay](../assets/frontier-provider-high-thesis-2026-05/gpt-repaired-replay.gif) | ![GPT-5.5 diagnostic repaired harder derivation canopy](../assets/frontier-provider-high-thesis-2026-05/gpt-repaired-canopy.png) | ![GPT-5.5 diagnostic repaired harder derivation notes](../assets/frontier-provider-high-thesis-2026-05/gpt-repaired-notes.png) |
 
 ### Linguistic Audit
 
@@ -277,7 +281,7 @@ That matters for Babel as a benchmark. If the renderer invents, hides, or telepo
 
 ## Benchmark Takeaway
 
-Claude wins this high-tier run as the best complete provider-native Babel result. It obeys the contract, gives strong staging, and provides a serious Minimalist analysis of the embedded wh-chain and passive matrix subject.
+Claude wins this harder run as the best complete provider-native Babel result. It obeys the contract, gives strong staging, and provides a serious Minimalist analysis of the embedded wh-chain and passive matrix subject.
 
 Gemini is a valid compact pass. It is faster and structurally correct, but less explicit about the local derivational logic that a syntactician would want to inspect.
 

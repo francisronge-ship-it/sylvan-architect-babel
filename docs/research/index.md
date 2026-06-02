@@ -7,17 +7,17 @@ This section collects short papers and devlogs produced from Babel benchmark bat
 
 ## May 2026
 
-### [Frontier Models On A High-Tier Babel Derivation](./frontier-provider-high-thesis-2026-05/)
+### [Frontier Models On A Harder Babel Derivation](./frontier-provider-high-thesis-2026-05/)
 
 Mini research devlog: Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.7 on a longer Minimalist wh-question with passive, embedding, and successive-cyclic movement.
 
 - Date: May 31, 2026
 - Assets: [frontier-provider-high-thesis-2026-05](./assets/frontier-provider-high-thesis-2026-05/)
-- Focus: high-tier derivational staging, provider contract discipline, passive subject movement, successive-cyclic wh movement, and renderer stabilization
+- Focus: harder derivational staging, provider contract discipline, passive subject movement, successive-cyclic wh movement, renderer stabilization, and API cost comparison
 
 | Gemini 3.1 Pro | GPT-5.5 diagnostic repair | Claude Opus 4.7 |
 | --- | --- | --- |
-| ![Gemini high-tier replay](./assets/frontier-provider-high-thesis-2026-05/gemini-replay.gif) | ![GPT high-tier diagnostic repaired replay](./assets/frontier-provider-high-thesis-2026-05/gpt-repaired-replay.gif) | ![Claude high-tier replay](./assets/frontier-provider-high-thesis-2026-05/claude-replay.gif) |
+| ![Gemini harder derivation replay](./assets/frontier-provider-high-thesis-2026-05/gemini-replay.gif) | ![GPT harder derivation diagnostic repaired replay](./assets/frontier-provider-high-thesis-2026-05/gpt-repaired-replay.gif) | ![Claude harder derivation replay](./assets/frontier-provider-high-thesis-2026-05/claude-replay.gif) |
 
 ### [Three Frontier Models Under One Babel Prompt](./frontier-provider-wh-question-2026-05/)
 
