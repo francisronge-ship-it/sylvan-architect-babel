@@ -5,6 +5,20 @@ permalink: /research/
 
 This section collects short papers and devlogs produced from Babel benchmark batches.
 
+## June 2026
+
+### [Low Reasoning Effort On A Tiny Babel Derivation](./provider-reasoning-effort-mia-laughed-2026-06-03/)
+
+Mini research devlog: Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.8 at low reasoning effort on the tiny Minimalist sentence `Mia laughed.`
+
+- Date: June 3, 2026
+- Assets: [provider-reasoning-effort-mia-laughed-2026-06-03](./assets/provider-reasoning-effort-mia-laughed-2026-06-03/)
+- Focus: reasoning-effort scouting, compact derivation stages, low-effort token/time/cost comparison, and renderer lifecycle fixes for explicit movement relations
+
+| Gemini 3.1 Pro Low | GPT-5.5 Low | Claude Opus 4.8 Low |
+| --- | --- | --- |
+| ![Gemini low-effort contact sheet](./assets/provider-reasoning-effort-mia-laughed-2026-06-03/gemini-low-contact-sheet.png) | ![GPT low-effort contact sheet](./assets/provider-reasoning-effort-mia-laughed-2026-06-03/gpt-low-contact-sheet.png) | ![Claude low-effort contact sheet](./assets/provider-reasoning-effort-mia-laughed-2026-06-03/claude-low-contact-sheet.png) |
+
 ## May 2026
 
 ### [Frontier Models On A Harder Babel Derivation](./frontier-provider-high-thesis-2026-05/)
