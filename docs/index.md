@@ -6,20 +6,20 @@ permalink: /
 This site collects mini papers and devlogs from explicit syntax benchmarking in Sylvan Architect Babel. The current focus is forced syntactic commitment: visible trees, replayable derivations, and prose explanations that can be compared across model routes.
 
 <div class="research-card">
-  <p><strong>Featured note.</strong> <a href="./research/frontier-provider-high-thesis-2026-05/">Frontier Models On A Harder Babel Derivation</a> compares Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.7 on a longer Minimalist wh-question with passive, embedding, and successive-cyclic movement.</p>
-  <p class="research-meta">Batch date: May 31, 2026</p>
+  <p><strong>Featured note.</strong> <a href="./research/provider-reasoning-effort-mia-laughed-2026-06-03/">Low Reasoning Effort On A Tiny Babel Derivation</a> compares Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.8 at low reasoning effort on a two-word Minimalist derivation.</p>
+  <p class="research-meta">Batch date: June 3, 2026</p>
 </div>
 
 ## Latest Research Note
 
-- [Frontier Models On A Harder Babel Derivation](./research/frontier-provider-high-thesis-2026-05/)
-  Mini research devlog: a one-sentence Babel comparison of Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.7 on a longer Minimalist wh-question with passive, embedding, and successive-cyclic movement.
+- [Low Reasoning Effort On A Tiny Babel Derivation](./research/provider-reasoning-effort-mia-laughed-2026-06-03/)
+  Mini research devlog: a one-sentence Babel comparison of Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.8 at low reasoning effort on `Mia laughed.`
 
 ## Preview Figures
 
-| Gemini 3.1 Pro | GPT-5.5 diagnostic repair | Claude Opus 4.7 |
+| Gemini 3.1 Pro Low | GPT-5.5 Low | Claude Opus 4.8 Low |
 | --- | --- | --- |
-| ![Gemini harder derivation replay preview](./research/assets/frontier-provider-high-thesis-2026-05/gemini-replay.gif) | ![GPT harder derivation diagnostic repaired replay preview](./research/assets/frontier-provider-high-thesis-2026-05/gpt-repaired-replay.gif) | ![Claude harder derivation replay preview](./research/assets/frontier-provider-high-thesis-2026-05/claude-replay.gif) |
+| ![Gemini low-effort contact sheet preview](./research/assets/provider-reasoning-effort-mia-laughed-2026-06-03/gemini-low-contact-sheet.png) | ![GPT low-effort contact sheet preview](./research/assets/provider-reasoning-effort-mia-laughed-2026-06-03/gpt-low-contact-sheet.png) | ![Claude low-effort contact sheet preview](./research/assets/provider-reasoning-effort-mia-laughed-2026-06-03/claude-low-contact-sheet.png) |
 
 ## Browse
 
