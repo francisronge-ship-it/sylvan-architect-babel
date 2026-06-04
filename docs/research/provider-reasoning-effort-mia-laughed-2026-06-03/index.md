@@ -41,7 +41,7 @@ This run tested a deliberately tiny sentence at low reasoning effort across the 
 
 All three routes produced usable derivational analyses for `Mia laughed.` after the compact-stage prompt fix. The result is encouraging, but narrow. Low effort can handle a very small intransitive clause. This does not prove that low effort is enough for real Babel benchmark sentences with embedding, wh-movement, passive structure, head movement, or multiple copy chains.
 
-The run was also useful as renderer research. GPT exposed two renderer assumptions that were too brittle: relation index handling when an unrendered Agree relation precedes movement, and pending movement-target display when a stage snapshot already contains both lower and higher occurrences. Fixing those made the saved GPT render clean without changing the provider output.
+The run was also useful as renderer research. GPT exposed two renderer assumptions that were too brittle: relation index handling when an unrendered Agree relation precedes movement, and pending movement-target display when a stage snapshot already contains both lower and higher occurrences. Fixing those made the saved GPT render replayable without changing the provider output. Its projection-label mismatch remains visible as model evidence.
 
 ## Method
 
