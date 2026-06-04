@@ -109,7 +109,7 @@ The main limitation is only the test size. `Mia laughed.` does not stress the ro
 
 ## GPT-5.5 Low
 
-GPT returned a valid compact parse, but it exposed renderer weaknesses. The model labeled DP ids with head labels in places such as `DP1` with label `D`. It also placed an unrendered Agree relation before the movement relation in `visualRelations`. The old renderer filtered out Agree, then used the filtered relation index as if it were the original authored relation index. That made the movement frame disappear.
+GPT returned a compact parse with one model-output defect: it labeled phrasal projection nodes with their heads. For example, the raw output used `id: "DP1"` with `label: "D"`. Babel now leaves that authored label visible instead of correcting it from the id. GPT also placed an unrendered Agree relation before the movement relation in `visualRelations`. The old renderer filtered out Agree, then used the filtered relation index as if it were the original authored relation index. That made the movement frame disappear.
 
 The current renderer now preserves the original relation index before filtering. It also treats same-stage movement targets as pending until the authored movement relation frame fires. That means the lower occurrence stays overt before movement, and the higher occurrence does not appear as an independent duplicate before movement.
 
@@ -119,19 +119,20 @@ The current renderer now preserves the original relation index before filtering.
 
 ### Linguistic Audit
 
-GPT's model output is acceptable for this tiny sentence, but it is less renderer-friendly than Claude's. The stage granularity is more compressed, and the stage snapshot already contains both the lower silent occurrence and the higher pronounced occurrence. That is legal only because the stage also authors the movement relation. The replay compiler must therefore show the pre-movement lifecycle carefully: lower occurrence active first, then movement, then lower occurrence silent.
+GPT's model output is syntactically intelligible for this tiny sentence, but it is less contract-clean than Claude's. The stage granularity is more compressed, and the stage snapshot already contains both the lower silent occurrence and the higher pronounced occurrence. That is legal only because the stage also authors the movement relation. The replay compiler must therefore show the pre-movement lifecycle carefully: lower occurrence active first, then movement, then lower occurrence silent.
 
-The final render now does that. This is a renderer stabilization result, not a new model output.
+The final render now does that, while preserving GPT's authored projection-label mismatch as visible model evidence.
 
 ## Renderer Lessons
 
-This run fixed three general renderer problems:
+This run fixed two general renderer problems:
 
 1. Authored relation indexes are now preserved before filtering visual relations. If a non-rendered relation such as Agree appears before movement, the movement relation still gets the correct authored index.
 2. Movement-target projection steps are folded into the movement frame when they are only the target side of an explicit movement relation. This prevents a moved item from appearing overtly in the landing site before movement.
-3. Authored projection-shell labels can be canonicalized from explicit ids when the model gives a projected id with a head label. This fixes display cases like `DP1` with label `D` without inventing a new syntactic node.
 
 These are renderer fixes. They do not add syntax. They preserve the model's authored objects and relation anchors while enforcing Babel's replay lifecycle.
+
+The `DP1` / `D` mismatch is not a renderer fix. It is a model-output defect. Babel should not repair it silently in the renderer.
 
 ## What This Means
 
