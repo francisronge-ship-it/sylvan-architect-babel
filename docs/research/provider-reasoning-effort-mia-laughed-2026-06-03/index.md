@@ -79,6 +79,16 @@ For this sentence, GPT's 2-stage result is acceptable. The first stage builds th
 
 The important constraint is not stage count. The important constraint is whether each stage makes a real sentence-specific derivational claim witnessed by `workspaceForest`.
 
+## Linguistic Baseline
+
+`Mia laughed.` is a small sentence, but it still has a real syntactic profile. In a Minimalist analysis, `laugh` is most naturally treated as an unergative predicate: the sole argument is an external argument of the verbal event, not an internal object that starts inside the complement position. A good derivation should therefore build a verbal domain, introduce `Mia` as the argument associated with that event, and then let the finite clause place the pronounced subject in the surface subject position.
+
+The proper name can be represented compactly. A bare D head spelling `Mia`, or a DP shell with a D head spelling `Mia`, is acceptable if the structure is consistent. What is not acceptable is a node whose authored category and visible label disagree, because that makes the tree witness ambiguous. If the authored node is a DP, the displayed label should be DP; the D label belongs on the D head.
+
+Finite T should provide the clausal finite position, with tense, phi/Agree, case, and EPP content if the analysis uses those commitments. The past-tense morphology can be recorded as a T feature realized on the verb `laughed`; the model does not need to invent a second overt tense token. Subject raising to Spec-TP is a standard choice: the lower occurrence remains the thematic occurrence, and the higher occurrence is the pronounced subject.
+
+A null declarative C is optional at this scale. It is linguistically fine when the provider explicitly uses C to type the clause. It is also fine for a compact derivation to stop at TP if the final workspace is otherwise converged and spells the sentence. This sentence does not test harder machinery: no embedding, no wh-dependency, no object movement, no passive, no auxiliary sequence, and no long copy chain.
+
 ## Gemini 3.1 Pro Low
 
 Gemini produced the most compact successful derivation. It built the verbal domain, then introduced a null subject-landing shell, finite T, and subject movement, then added the null declarative C. The movement relation is explicit and rendered as a phrasal trajectory from the lower DP position to the higher DP position.
@@ -89,9 +99,11 @@ Gemini produced the most compact successful derivation. It built the verbal doma
 
 ### Linguistic Audit
 
-Gemini is good enough on this sentence. It gives a standard intransitive-clause derivation: a verbal predicate, a DP subject, finite T, subject movement, and a null declarative C. It also keeps the Agree relation separate from the visible movement arrow, which matches the renderer rule that only movement gets arrows.
+Gemini gives the most textbook Minimalist shape for this sentence. It treats `laughed` as an intransitive verbal predicate, introduces `Mia` as the external argument in the verbal domain, then adds finite T with EPP, phi-agreement, nominative case, and subject raising. That is the right linguistic story for an unergative predicate.
 
-The analysis is compact rather than rich. That is acceptable here because the sentence is tiny. The same compactness would not be enough evidence for a hard benchmark sentence.
+The DP analysis is clean: `Mia` is pronounced under D inside a DP shell, and the moved/lower subject occurrences share lineage. The lower copy is silent only after the T-stage movement relation licenses it. Gemini also separates Agree from Movement in `visualRelations`, which is linguistically right: Agree is a dependency, but it should not be drawn as a movement arrow.
+
+The final null C is acceptable. It adds declarative clause typing, but it is not the only possible analysis of such a small sentence. The main limitation is compactness: Gemini's three stages are enough here, but this level of compression would not be enough evidence for a sentence with embedding or a long-distance dependency.
 
 ## Claude Opus 4.8 Low
 
@@ -103,9 +115,11 @@ Claude returned the cleanest low-effort output. It built the proper-name DP, sel
 
 ### Linguistic Audit
 
-Claude's output is the best pedagogical object in this small run. It is compact, but it still separates the lexical predicate from the later functional structure. It does not pad the derivation with generic stages. It also does not need renderer repair beyond the general fixes already applied to the replay engine.
+Claude's output is the best pedagogical object in this small run. It starts from lexical selection, then builds the verbal projection, then adds T, then moves the subject to the clausal subject position. That gives the clearest visible derivational path.
 
-The main limitation is only the test size. `Mia laughed.` does not stress the route.
+There is one linguistic choice to notice: Claude represents the proper name directly as D rather than as a full DP shell in the earliest stage, and its verbal projection is labeled V rather than vP. For this tiny sentence, that is not a serious analytic failure if read as a compact Bare Phrase Structure notation. It preserves the core claims: `Mia` is the sole argument of an unergative predicate, T supplies finite clausal structure, and the subject raises to satisfy the T-domain requirement.
+
+Claude does not add a null declarative C. That is acceptable here. The final TP can be treated as the converged clause for this smoke sentence. Compared with Gemini, Claude is less explicit about clausal typing but clearer about the stepwise growth of the derivation.
 
 ## GPT-5.5 Low
 
@@ -119,9 +133,11 @@ The current renderer now preserves the original relation index before filtering.
 
 ### Linguistic Audit
 
-GPT's model output is syntactically intelligible for this tiny sentence, but it is less contract-clean than Claude's. The stage granularity is more compressed, and the stage snapshot already contains both the lower silent occurrence and the higher pronounced occurrence. That is legal only because the stage also authors the movement relation. The replay compiler must therefore show the pre-movement lifecycle carefully: lower occurrence active first, then movement, then lower occurrence silent.
+GPT's linguistic analysis is intelligible. It correctly treats `laughed` as an intransitive predicate with no internal complement, places `Mia` as the external argument of the v-domain, then introduces finite T with past, EPP, agreement, and subject raising. It also correctly avoids inventing an extra overt tense token; the finite verbal form is realized on `laughed`.
 
-The final render now does that, while preserving GPT's authored projection-label mismatch as visible model evidence.
+The problem is not the syntactic analysis of `Mia laughed.` The problem is the authored tree-label contract. GPT says in prose that the proper name projects a DP, and its node ids also say DP/TP/vP, but the visible labels on those phrasal nodes are the head labels: `DP1` is labeled `D`, `TP1` is labeled `T`, and `vP1` is labeled `v`. That makes the tree visually say something narrower than the prose says. Babel should preserve that mismatch as model evidence, not repair it in the renderer.
+
+GPT's stage granularity is also compressed. The second stage already contains both the lower silent occurrence and the higher pronounced occurrence. That is linguistically acceptable only because the same stage explicitly authors the movement relation. The renderer therefore has to replay the lifecycle carefully: lower occurrence active first, movement relation fires, then lower occurrence becomes silent. After the renderer fixes, the saved render does that.
 
 ## Renderer Lessons
 
