@@ -52,7 +52,7 @@ Rules for this run:
 - one API call per provider route;
 - no retries;
 - no fallbacks;
-- saved raw provider text, parsed payload, normalized bundle, render, contact sheet, token usage, timing, and estimated cost;
+- saved raw provider text, parsed payload, normalized bundle, render, replay GIF, token usage, timing, and estimated cost;
 - renderer fixes were applied only to display/compile the saved model output, not to create a new model analysis.
 
 Pricing estimates use saved provider usage fields and public provider pricing checked on June 3, 2026. For Gemini, billed output includes visible output plus thinking tokens. For GPT and Claude, the saved output token count is used directly. These are estimates, not invoices.
@@ -83,9 +83,9 @@ The important constraint is not stage count. The important constraint is whether
 
 Gemini produced the most compact successful derivation. It built the verbal domain, then introduced a null subject-landing shell, finite T, and subject movement, then added the null declarative C. The movement relation is explicit and rendered as a phrasal trajectory from the lower DP position to the higher DP position.
 
-| Contact Sheet | Canopy | Notes |
+| Replay | Canopy | Notes |
 | --- | --- | --- |
-| ![Gemini low reasoning contact sheet](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gemini-low-contact-sheet.png) | ![Gemini low reasoning canopy](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gemini-low-canopy.png) | ![Gemini low reasoning notes](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gemini-low-notes.png) |
+| ![Gemini low reasoning replay](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gemini-low-replay.gif) | ![Gemini low reasoning canopy](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gemini-low-canopy.png) | ![Gemini low reasoning notes](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gemini-low-notes.png) |
 
 ### Linguistic Audit
 
@@ -97,9 +97,9 @@ The analysis is compact rather than rich. That is acceptable here because the se
 
 Claude returned the cleanest low-effort output. It built the proper-name DP, selected the intransitive predicate, merged the subject with the verbal domain, introduced T, moved the subject, and closed the clause with a null C. The render is stable and visually ordinary.
 
-| Contact Sheet | Canopy | Notes |
+| Replay | Canopy | Notes |
 | --- | --- | --- |
-| ![Claude low reasoning contact sheet](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/claude-low-contact-sheet.png) | ![Claude low reasoning canopy](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/claude-low-canopy.png) | ![Claude low reasoning notes](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/claude-low-notes.png) |
+| ![Claude low reasoning replay](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/claude-low-replay.gif) | ![Claude low reasoning canopy](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/claude-low-canopy.png) | ![Claude low reasoning notes](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/claude-low-notes.png) |
 
 ### Linguistic Audit
 
@@ -113,9 +113,9 @@ GPT returned a valid compact parse, but it exposed renderer weaknesses. The mode
 
 The current renderer now preserves the original relation index before filtering. It also treats same-stage movement targets as pending until the authored movement relation frame fires. That means the lower occurrence stays overt before movement, and the higher occurrence does not appear as an independent duplicate before movement.
 
-| Contact Sheet | Canopy | Notes |
+| Replay | Canopy | Notes |
 | --- | --- | --- |
-| ![GPT low reasoning contact sheet](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gpt-low-contact-sheet.png) | ![GPT low reasoning canopy](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gpt-low-canopy.png) | ![GPT low reasoning notes](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gpt-low-notes.png) |
+| ![GPT low reasoning replay](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gpt-low-replay.gif) | ![GPT low reasoning canopy](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gpt-low-canopy.png) | ![GPT low reasoning notes](../assets/provider-reasoning-effort-mia-laughed-2026-06-03/gpt-low-notes.png) |
 
 ### Linguistic Audit
 

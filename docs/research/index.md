@@ -17,7 +17,7 @@ Mini research devlog: Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.8 at low reason
 
 | Gemini 3.1 Pro Low | GPT-5.5 Low | Claude Opus 4.8 Low |
 | --- | --- | --- |
-| ![Gemini low-effort contact sheet](./assets/provider-reasoning-effort-mia-laughed-2026-06-03/gemini-low-contact-sheet.png) | ![GPT low-effort contact sheet](./assets/provider-reasoning-effort-mia-laughed-2026-06-03/gpt-low-contact-sheet.png) | ![Claude low-effort contact sheet](./assets/provider-reasoning-effort-mia-laughed-2026-06-03/claude-low-contact-sheet.png) |
+| ![Gemini low-effort replay](./assets/provider-reasoning-effort-mia-laughed-2026-06-03/gemini-low-replay.gif) | ![GPT low-effort replay](./assets/provider-reasoning-effort-mia-laughed-2026-06-03/gpt-low-replay.gif) | ![Claude low-effort replay](./assets/provider-reasoning-effort-mia-laughed-2026-06-03/claude-low-replay.gif) |
 
 ## May 2026
 
