@@ -345,7 +345,14 @@ export const createDerivationCompilerHelpers = ({
                 role.includes('movedcopy')
                 || role.includes('highestcopy')
                 || role.includes('frontcopy')
+                || role.includes('pronouncedoccurrence')
                 || role.includes('pronouncedhighest')
+                || (
+                  role.includes('operator')
+                  && !role.includes('attract')
+                  && !role.includes('probe')
+                  && !role.includes('trigger')
+                )
               )
             );
           const sourceNodeId = getFirstVisualAnchor(anchors, ['source', 'from', 'origin', 'lower', 'lowerCopy'])
@@ -358,10 +365,39 @@ export const createDerivationCompilerHelpers = ({
                 || role.includes('basecopy')
                 || role.includes('intermediatecopy')
                 || role.includes('silentlower')
+                || role.includes('thematicoccurrence')
+                || role.includes('baseoccurrence')
+                || role.includes('loweroccurrence')
               )
             )
             || tailCopyNodeId;
           const landingNodeId = getFirstVisualAnchor(anchors, ['landing', 'to', 'target', 'destination', 'operator'])
+            || getFirstVisualAnchorMatchingRole(
+              anchors,
+              (role) => (
+                (
+                  role.includes('landing')
+                  || role.includes('target')
+                  || role.includes('destination')
+                  || role.includes('higher')
+                  || role.includes('raised')
+                  || role.includes('moved')
+                  || role.includes('operator')
+                  || role.includes('pronouncedoccurrence')
+                )
+                && !role.includes('lower')
+                && !role.includes('base')
+                && !role.includes('trace')
+                && !role.includes('gap')
+                && !role.includes('residue')
+                && !role.includes('source')
+                && !role.includes('from')
+                && !role.includes('origin')
+                && !role.includes('attract')
+                && !role.includes('probe')
+                && !role.includes('trigger')
+              )
+            )
             || headCopyNodeId
             || explicitMovingNodeId;
           const movingNodeId = explicitMovingNodeId
@@ -377,6 +413,9 @@ export const createDerivationCompilerHelpers = ({
                 || role.includes('basecopy')
                 || role.includes('intermediatecopy')
                 || role.includes('silentlower')
+                || role.includes('thematicoccurrence')
+                || role.includes('baseoccurrence')
+                || role.includes('loweroccurrence')
               )
             )
             || tailCopyNodeId
@@ -739,6 +778,55 @@ export const createDerivationCompilerHelpers = ({
       .map((terminal) => resolveNodeSurface(terminal))
       .map((token) => String(token || '').trim())
       .filter(Boolean);
+
+  const collectOvertTokenIdentityFromNode = (node) => {
+    const terminals = collectOvertTerminalNodes(node);
+    return terminals
+      .map((terminal, index) => {
+        const surface = normalizeSurfaceToken(resolveNodeSurface(terminal));
+        if (!surface) return '';
+        const tokenIndex = Number(terminal?.tokenIndex);
+        return Number.isFinite(tokenIndex)
+          ? `${tokenIndex}:${surface}`
+          : `surface-${index}:${surface}`;
+      })
+      .filter(Boolean);
+  };
+
+  const collectDescendantOvertTokenIdentityKeys = (node) => {
+    const keys = new Set();
+    const visit = (current, isRoot = false) => {
+      if (!current || typeof current !== 'object') return;
+      if (!isRoot) {
+        const identity = collectOvertTokenIdentityFromNode(current);
+        if (identity.length > 0) keys.add(identity.join('|'));
+      }
+      (Array.isArray(current.children) ? current.children : []).forEach((child) => visit(child, false));
+    };
+    visit(node, true);
+    return keys;
+  };
+
+  const removeConsumedDuplicateWorkspaceRoots = (forest, integrityFlags, frameIndex) => {
+    if (!Array.isArray(forest) || forest.length < 2) return forest;
+
+    const rootIdentities = forest.map((root) => collectOvertTokenIdentityFromNode(root));
+    const descendantIdentityKeysByRoot = forest.map((root) => collectDescendantOvertTokenIdentityKeys(root));
+    const removeIndexes = new Set();
+
+    rootIdentities.forEach((identity, rootIndex) => {
+      if (identity.length === 0) return;
+      const key = identity.join('|');
+      const isConsumedInsideAnotherRoot = descendantIdentityKeysByRoot.some((keys, otherRootIndex) =>
+        otherRootIndex !== rootIndex && keys.has(key)
+      );
+      if (isConsumedInsideAnotherRoot) removeIndexes.add(rootIndex);
+    });
+
+    if (removeIndexes.size === 0) return forest;
+    integrityFlags.push(`duplicate_workspace_roots_consumed:${frameIndex + 1}:${removeIndexes.size}`);
+    return forest.filter((_root, index) => !removeIndexes.has(index));
+  };
 
   const normalizeDerivationTargetLabel = (label) =>
     String(label || '').trim().replace(/[\s']/g, '').toUpperCase();
@@ -1601,6 +1689,39 @@ export const createDerivationCompilerHelpers = ({
     const overtProfile = getLabelProfile(overtChild.label);
     const silentProfile = getLabelProfile(silentChild.label);
     if (!overtProfile.isHeadLikeStructural || !silentProfile.isHeadLikeStructural) return node;
+    if (String(silentChild?.lineageId || '').trim()) return node;
+    if (String(silentChild.label || '').trim().toUpperCase() !== String(node.label || '').trim().toUpperCase()) return node;
+    const overtChildContainsPhrasalMaterial = (() => {
+      let found = false;
+      const visit = (current) => {
+        if (!current || typeof current !== 'object' || found) return;
+        if (current !== overtChild && getLabelProfile(current.label).isPhrasal) {
+          found = true;
+          return;
+        }
+        const currentChildren = Array.isArray(current.children) ? current.children : [];
+        currentChildren.forEach(visit);
+      };
+      visit(overtChild);
+      return found;
+    })();
+    if (overtChildContainsPhrasalMaterial) return node;
+    const overtChildContainsSilentStructuralMaterial = (() => {
+      let found = false;
+      const visit = (current) => {
+        if (!current || typeof current !== 'object' || found) return;
+        if (current !== overtChild && !subtreeHasOvertYield(current)) {
+          found = true;
+          return;
+        }
+        const currentChildren = Array.isArray(current.children) ? current.children : [];
+        currentChildren.forEach(visit);
+      };
+      visit(overtChild);
+      return found;
+    })();
+    if (overtChildContainsSilentStructuralMaterial) return node;
+    if ((Array.isArray(overtChild.children) ? overtChild.children : []).length > 1) return node;
 
     const overtYield = collectOvertYieldTokensFromNode(overtChild);
     if (overtYield.length !== 1) return node;
@@ -1618,7 +1739,6 @@ export const createDerivationCompilerHelpers = ({
     const clonedForest = cloneSyntaxForestDeep(forest);
     clonedForest.forEach((root) => {
       collapseMalformedHeadMoveLandings(root);
-      collapseOvertHeadLandingChains(root);
     });
     return clonedForest;
   };
@@ -1892,6 +2012,7 @@ export const createDerivationCompilerHelpers = ({
             protectedSubtreeIds: protectedMovementSubtreeIds
           });
         });
+        workspaceForest = removeConsumedDuplicateWorkspaceRoots(workspaceForest, integrityFlags, frameIndex);
         const normalizedFrameNodeIds = new Set();
         const currentNodeById = new Map();
         workspaceForest.forEach((root) => {

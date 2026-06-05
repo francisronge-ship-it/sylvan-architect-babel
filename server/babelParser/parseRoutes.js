@@ -3,9 +3,12 @@ import { attachAggregateParseTokenCounts } from './provenance.js';
 import { buildSystemInstruction } from './systemInstruction.js';
 import { buildParseContentsPrompt } from './prompts.js';
 import {
+  buildGeminiThinkingConfig,
   LOCAL_MODEL_COMMAND,
   LOCAL_MODEL_NAME,
   LOCAL_MODEL_URL,
+  ANTHROPIC_MODEL,
+  OPENAI_MODEL,
   PAYLOAD_TRANSCRIBER_MAX_OUTPUT_TOKENS,
   PAYLOAD_TRANSCRIBER_MODEL,
   PAYLOAD_TRANSCRIBER_TEMPERATURE,
@@ -17,9 +20,12 @@ import {
   resolveRequestTimeoutMs,
   resolveRouteMaxOutputTokens,
   resolveRouteTemperature,
-  routeUnavailableMessage
+  routeUnavailableMessage,
+  normalizeProviderReasoningEffort
 } from './routeConfig.js';
 import {
+  generateAnthropicStructuredContent,
+  generateOpenAIStructuredContent,
   generateStructuredContent,
   generateStructuredLocalContent,
   getErrorMeta,
@@ -119,6 +125,74 @@ export const classifyGeminiRouteError = ({
   }
 
   return new ParseApiError('PARSE_FAILED', msg || 'Syntactic parsing failed.', 500);
+};
+
+const classifyProviderRouteError = ({
+  error,
+  ParseApiError,
+  providerLabel,
+  model
+}) => {
+  if (error instanceof ParseApiError) {
+    return error;
+  }
+
+  const { msg, haystack, statusCode } = getErrorMeta(error);
+  const providerMessage = String(msg || '').trim();
+  if (
+    haystack.includes('api key expired') ||
+    haystack.includes('invalid api key') ||
+    haystack.includes('unauthorized') ||
+    haystack.includes('unauthenticated') ||
+    haystack.includes('permission') ||
+    statusCode === 401 ||
+    statusCode === 403
+  ) {
+    return new ParseApiError('API_KEY_INVALID', `${providerLabel} API key is invalid or lacks required permissions.`, 500, {
+      provider: providerLabel,
+      model,
+      providerMessage: providerMessage || null
+    });
+  }
+  if (haystack.includes('quota') || haystack.includes('rate limit') || statusCode === 429) {
+    return new ParseApiError('PROVIDER_QUOTA', `Rate limit or quota reached for ${providerLabel}.`, 429, {
+      provider: providerLabel,
+      model,
+      providerMessage: providerMessage || null
+    });
+  }
+  if (
+    statusCode === 404 ||
+    (haystack.includes('model') && (
+      haystack.includes('not found') ||
+      haystack.includes('not available') ||
+      haystack.includes('unsupported')
+    ))
+  ) {
+    return new ParseApiError('MODEL_UNAVAILABLE', `${providerLabel} model is unavailable for this key or endpoint.`, 503, {
+      provider: providerLabel,
+      model,
+      providerMessage: providerMessage || null
+    });
+  }
+  if (statusCode === 400 || haystack.includes('invalid')) {
+    return new ParseApiError('INVALID_REQUEST', `${providerLabel} rejected the request.`, 400, {
+      provider: providerLabel,
+      model,
+      providerMessage: providerMessage || null
+    });
+  }
+  if (isNetworkTransportError(error)) {
+    return new ParseApiError('PROVIDER_UNAVAILABLE', `${providerLabel} transport failed before the model returned a result.`, 503, {
+      provider: providerLabel,
+      model,
+      providerMessage: providerMessage || null
+    });
+  }
+  return new ParseApiError('PARSE_FAILED', providerMessage || `${providerLabel} parsing failed.`, 500, {
+    provider: providerLabel,
+    model
+  });
 };
 
 export const createParseRoutes = ({
@@ -222,6 +296,21 @@ export const createParseRoutes = ({
       ...extraProvenance
     })
   });
+
+  const maybeWritePrimaryDebugPayload = ({
+    modelRoute,
+    model,
+    sentence,
+    rawText
+  }) => {
+    if (String(process.env.BABEL_SAVE_PROVIDER_RAW || '').trim() !== '1') return null;
+    return writeDebugModelPayload({
+      stage: `${modelRoute}-primary-output`,
+      model,
+      sentence,
+      rawText
+    });
+  };
 
   const attemptPayloadTranscriber = async ({
     ai,
@@ -451,14 +540,14 @@ export const createParseRoutes = ({
     }
   };
 
-  const parseSentenceWithGemini = async (sentence, framework = 'xbar', modelRoute = 'pro') => {
+  const parseSentenceWithGemini = async (sentence, framework = 'xbar', modelRoute = 'pro', options = {}) => {
     const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
     if (!apiKey) {
       throw new ParseApiError('API_KEY_MISSING', 'Gemini API key is not configured on the server.', 500);
     }
 
     const ai = new GoogleGenAI({ apiKey });
-    const normalizedModelRoute = 'pro';
+    const normalizedModelRoute = 'gemini';
     const systemInstruction = buildSystemInstruction(framework, normalizedModelRoute);
     const fullContents = buildParseContentsPrompt(
       sentence,
@@ -469,6 +558,7 @@ export const createParseRoutes = ({
     const routeMaxOutputTokens = resolveRouteMaxOutputTokens(normalizedModelRoute, sentence);
     const selectedModel = PRO_MODEL;
     const requestStartedAt = Date.now();
+    const reasoningEffort = normalizeProviderReasoningEffort(normalizedModelRoute, options.reasoningEffort);
 
     try {
       const remainingBudgetMs = getRemainingRequestBudgetMs(requestStartedAt, normalizedModelRoute);
@@ -488,10 +578,7 @@ export const createParseRoutes = ({
           systemInstruction,
           temperature: routeTemperature,
           maxOutputTokens: routeMaxOutputTokens,
-          // First-pass Pro needs machine-valid JSON more than provider reasoning traces.
-          // Keeping thoughts off here reduces latency and truncation pressure on derivation output.
-          // Do not force a lower provider thinking mode on the live route.
-          includeThoughts: false,
+          thinkingConfig: buildGeminiThinkingConfig(reasoningEffort),
           abortSignal
         }),
         resolveRequestTimeoutMs({
@@ -503,6 +590,12 @@ export const createParseRoutes = ({
 
       const generationMeta = summarizeGeneration(generation);
       const truncatedGeneration = isTruncatedGeneration(generation);
+      const primaryDebugPayloadPath = maybeWritePrimaryDebugPayload({
+        modelRoute: normalizedModelRoute,
+        model: selectedModel,
+        sentence,
+        rawText: generationMeta.rawText
+      });
 
       let payload;
       let payloadIntegrityFlags = [];
@@ -534,18 +627,20 @@ export const createParseRoutes = ({
                 attachPayloadTranscriberProvenance(
                   attachPrimaryParseProvenance(
                     transcribed.normalized.analyses[0],
-                    generationMeta
+                    generationMeta,
+                    primaryDebugPayloadPath ? { primaryDebugPayloadPath } : {}
                   ),
                   transcribed.transcriberMeta
                 )
               ]
             };
-            if (normalizedModelRoute === 'pro' && recovered?.analyses?.[0]) {
+            if (recovered?.analyses?.[0]) {
               recovered = validateFinalProNoteBindings(recovered);
             }
             return {
               ...recovered,
               requestedModelRoute: normalizedModelRoute,
+              requestedReasoningEffort: reasoningEffort,
               modelUsed: selectedModel
             };
           }
@@ -591,7 +686,8 @@ export const createParseRoutes = ({
             analyses: [
               attachPrimaryParseProvenance(
                 normalized.analyses[0],
-                generationMeta
+                generationMeta,
+                primaryDebugPayloadPath ? { primaryDebugPayloadPath } : {}
               )
             ]
           };
@@ -616,7 +712,8 @@ export const createParseRoutes = ({
                 attachPayloadTranscriberProvenance(
                   attachPrimaryParseProvenance(
                     transcribed.normalized.analyses[0],
-                    generationMeta
+                    generationMeta,
+                    primaryDebugPayloadPath ? { primaryDebugPayloadPath } : {}
                   ),
                   transcribed.transcriberMeta
                 )
@@ -656,13 +753,14 @@ export const createParseRoutes = ({
         }
       }
 
-      if (normalizedModelRoute === 'pro' && normalized?.analyses?.[0]) {
+      if (normalized?.analyses?.[0]) {
         normalized = validateFinalProNoteBindings(normalized);
       }
 
       return {
         ...normalized,
         requestedModelRoute: normalizedModelRoute,
+        requestedReasoningEffort: reasoningEffort,
         modelUsed: selectedModel
       };
     } catch (error) {
@@ -675,8 +773,197 @@ export const createParseRoutes = ({
     }
   };
 
+  const parseSentenceWithExternalProvider = async ({
+    sentence,
+    framework,
+    modelRoute,
+    apiKey,
+    selectedModel,
+    providerLabel,
+    generate,
+    reasoningEffort: requestedReasoningEffort
+  }) => {
+    if (!apiKey) {
+      throw new ParseApiError('API_KEY_MISSING', `${providerLabel} API key is not configured on the server.`, 500);
+    }
+
+    const systemInstruction = buildSystemInstruction(framework, modelRoute);
+    const fullContents = buildParseContentsPrompt(sentence, framework, modelRoute);
+    const routeTemperature = resolveRouteTemperature(modelRoute);
+    const routeMaxOutputTokens = resolveRouteMaxOutputTokens(modelRoute, sentence);
+    const requestStartedAt = Date.now();
+    const reasoningEffort = normalizeProviderReasoningEffort(modelRoute, requestedReasoningEffort);
+
+    try {
+      const remainingBudgetMs = getRemainingRequestBudgetMs(requestStartedAt, modelRoute);
+      if (remainingBudgetMs <= 1200) {
+        throw new ParseApiError(
+          'PROVIDER_UNAVAILABLE',
+          `${providerLabel} is unavailable; please try again in a moment.`,
+          503
+        );
+      }
+
+      const generation = await withTimeout(
+        (abortSignal) => generate({
+          apiKey,
+          model: selectedModel,
+          contents: fullContents,
+          systemInstruction,
+          temperature: routeTemperature,
+          maxOutputTokens: routeMaxOutputTokens,
+          reasoningEffort,
+          effort: reasoningEffort,
+          abortSignal
+        }),
+        resolveRequestTimeoutMs({
+          baseTimeoutMs: resolveModelTimeoutMs(selectedModel, modelRoute),
+          remainingBudgetMs
+        }),
+        `Model generation (${selectedModel})`
+      );
+
+      const generationMeta = summarizeGeneration(generation);
+      const truncatedGeneration = isTruncatedGeneration(generation);
+      const primaryDebugPayloadPath = maybeWritePrimaryDebugPayload({
+        modelRoute,
+        model: selectedModel,
+        sentence,
+        rawText: generationMeta.rawText
+      });
+      let payload;
+      let payloadIntegrityFlags = [];
+
+      try {
+        const parsedPayload = parseModelJsonDetailed
+          ? parseModelJsonDetailed(generationMeta.rawText)
+          : { payload: parseModelJson(generationMeta.rawText), integrityFlags: [] };
+        payload = parsedPayload.payload;
+        payloadIntegrityFlags = Array.isArray(parsedPayload.integrityFlags)
+          ? parsedPayload.integrityFlags
+          : [];
+      } catch (error) {
+        const debugPayloadPath = writeDebugModelPayload({
+          stage: `${modelRoute}-json-parse`,
+          model: selectedModel,
+          sentence,
+          rawText: generationMeta.rawText
+        });
+        throw new ParseApiError(
+          'BAD_MODEL_RESPONSE',
+          truncatedGeneration ? 'Model output was truncated before JSON completion.' : (error?.message || 'Model returned invalid JSON.'),
+          422,
+          {
+            stage: 'json-parse',
+            model: selectedModel,
+            finishReason: generationMeta.finishReason || null,
+            textLength: generationMeta.textLength,
+            preview: generationMeta.preview || '',
+            debugPayloadPath
+          }
+        );
+      }
+
+      let normalized;
+      try {
+        normalized = normalizeParseBundle(
+          payload,
+          framework,
+          sentence,
+          modelRoute,
+          true,
+          { payloadIntegrityFlags }
+        );
+        if (normalized?.analyses?.[0]) {
+          normalized = {
+            ...normalized,
+            analyses: [
+            attachPrimaryParseProvenance(
+              normalized.analyses[0],
+              generationMeta,
+              primaryDebugPayloadPath ? { primaryDebugPayloadPath } : {}
+            )
+          ]
+        };
+          normalized = validateFinalProNoteBindings(normalized);
+        }
+      } catch (error) {
+        const debugPayloadPath = writeDebugModelPayload({
+          stage: `${modelRoute}-normalization`,
+          model: selectedModel,
+          sentence,
+          rawText: generationMeta.rawText
+        });
+        let payloadPreview = '<unserializable>';
+        try {
+          payloadPreview = JSON.stringify(payload).slice(0, 320);
+        } catch {
+          // keep fallback preview
+        }
+        const errorDetails = error instanceof ParseApiError && error.details && typeof error.details === 'object'
+          ? error.details
+          : {};
+        throw new ParseApiError(
+          error instanceof ParseApiError ? error.code : 'BAD_MODEL_RESPONSE',
+          error?.message || 'Model payload failed normalization.',
+          error instanceof ParseApiError ? error.status : 422,
+          {
+            ...errorDetails,
+            stage: 'normalization',
+            model: selectedModel,
+            finishReason: generationMeta.finishReason || null,
+            textLength: generationMeta.textLength,
+            preview: generationMeta.preview || '',
+            payloadPreview,
+            debugPayloadPath
+          }
+        );
+      }
+
+      return {
+        ...normalized,
+        requestedModelRoute: modelRoute,
+        requestedReasoningEffort: reasoningEffort,
+        modelUsed: selectedModel
+      };
+    } catch (error) {
+      throw classifyProviderRouteError({
+        error,
+        ParseApiError,
+        providerLabel,
+        model: selectedModel
+      });
+    }
+  };
+
+  const parseSentenceWithOpenAI = async (sentence, framework = 'xbar', modelRoute = 'gpt', options = {}) =>
+    parseSentenceWithExternalProvider({
+      sentence,
+      framework,
+      modelRoute,
+      apiKey: String(process.env.OPENAI_API_KEY || '').trim(),
+      selectedModel: OPENAI_MODEL,
+      providerLabel: 'OpenAI',
+      generate: generateOpenAIStructuredContent,
+      reasoningEffort: options.reasoningEffort
+    });
+
+  const parseSentenceWithClaude = async (sentence, framework = 'xbar', modelRoute = 'claude', options = {}) =>
+    parseSentenceWithExternalProvider({
+      sentence,
+      framework,
+      modelRoute,
+      apiKey: String(process.env.ANTHROPIC_API_KEY || '').trim(),
+      selectedModel: ANTHROPIC_MODEL,
+      providerLabel: 'Claude',
+      generate: generateAnthropicStructuredContent,
+      reasoningEffort: options.reasoningEffort
+    });
+
   return {
     parseSentenceWithLocalModel,
-    parseSentenceWithGemini
+    parseSentenceWithGemini,
+    parseSentenceWithOpenAI,
+    parseSentenceWithClaude
   };
 };

@@ -31,6 +31,7 @@ export interface ResolvedVisualRelation {
   operation?: string;
   renderFamily?: VisualRelationRenderFamily;
   trajectoryKind?: VisualRelationTrajectoryKind;
+  movedSurface?: string;
   chainId?: string;
   note?: string;
 

@@ -120,12 +120,13 @@ Switching theory changes the analysis behavior, tree style, replay, and explanat
 
 Babel includes a model switch in the header:
 
-- `Local Model`: your configured local runtime.
 - `Gemini 3.1 Pro`: the hosted benchmark route.
+- `GPT 5.5`: the OpenAI frontier route.
+- `Claude Opus`: the Anthropic frontier route.
 
 Click the active model pill in the header to switch routes.
 
-Additional frontier-model routes are planned so Babel can function as a cross-model benchmark environment rather than a single-provider syntax demo.
+Babel is now a cross-model benchmark environment rather than a single-provider syntax demo.
 
 ### 3) Constituent Glyphing toggle
 

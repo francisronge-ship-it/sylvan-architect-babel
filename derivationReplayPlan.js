@@ -20,6 +20,47 @@ const isSilentLeaf = (node) => {
   return !asText(node?.word) && isSilentLabel(node?.label);
 };
 
+const stripProjectionSuffix = (value) =>
+  asText(value)
+    .replace(/['′]+$/g, '')
+    .replace(/P$/i, '');
+
+const isHeadForParent = (parentLabel, child) => {
+  const parentCore = stripProjectionSuffix(parentLabel);
+  const childCore = stripProjectionSuffix(nodeLabel(child));
+  return Boolean(parentCore && childCore && parentCore.toLowerCase() === childCore.toLowerCase());
+};
+
+const COMPLEMENT_FIRST_FUNCTIONAL_PROJECTIONS = new Set(['CP', 'TP']);
+
+const orderChildrenForDerivation = (parent, children) => {
+  const indexed = children.map((child, index) => ({ child, index }));
+  if (children.length < 2) return indexed;
+  const parentLabel = nodeLabel(parent);
+  const headEntries = indexed.filter(({ child }) => isHeadForParent(parentLabel, child));
+  if (headEntries.length !== 1) return indexed;
+
+  const parentIsPhrase = /P$/i.test(parentLabel);
+  if (!parentIsPhrase) return indexed;
+
+  const headIndex = headEntries[0].index;
+  if (COMPLEMENT_FIRST_FUNCTIONAL_PROJECTIONS.has(parentLabel) && headIndex === 0) {
+    return [
+      ...indexed.filter(({ index }) => index !== headIndex),
+      headEntries[0]
+    ];
+  }
+
+  if (headIndex > 0) {
+    return [
+      headEntries[0],
+      ...indexed.filter(({ index }) => index !== headIndex)
+    ];
+  }
+
+  return indexed;
+};
+
 const flattenAnchorNodeIds = (anchors = {}) => {
   const ids = [];
   Object.values(anchors || {}).forEach((value) => {
@@ -121,7 +162,8 @@ const buildNodeMicrosteps = (node, stage, path = []) => {
     ];
   }
 
-  const childSteps = children.flatMap((child, childIndex) =>
+  const orderedChildren = orderChildrenForDerivation(node, children);
+  const childSteps = orderedChildren.flatMap(({ child, index: childIndex }) =>
     buildNodeMicrosteps(child, stage, [...path, id || label || String(childIndex)])
   );
   const childLabels = children.map(nodeLabel).filter(Boolean);
@@ -157,7 +199,8 @@ const buildRelationSteps = (stage) => stage.visualRelations.map((relation) => {
     'operator',
     'head_copy',
     'movedCopy',
-    'pronouncedCopy'
+    'pronouncedCopy',
+    'pronouncedOccurrence'
   ]);
   const sourceNodeIds = flattenAnchorNodeIds(anchors).filter((id) => id !== targetNodeId);
   return makeStep('relation', stage, {

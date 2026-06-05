@@ -166,8 +166,6 @@ export interface NoteBinding {
   order?: number;
 }
 
-export type DerivationCompleteness = 'minimal' | 'partial' | 'full';
-
 export interface ChainLedgerEntry {
   chainId: string;
   type?: OpenOntologyLabel;
@@ -544,7 +542,7 @@ export interface PredicationLedgerEntry extends LedgerSupportAnchors {
 }
 
 export interface Provenance {
-  modelRoute?: 'local' | 'pro';
+  modelRoute?: 'gemini' | 'gpt' | 'claude' | 'pro';
   framework?: 'xbar' | 'minimalism';
   language?: string;
   timestamp?: string;
@@ -593,7 +591,6 @@ export interface Provenance {
   providerThoughtsTokenCount?: number;
   notesSource?: string;
   notesCompiledFromDerivationStages?: boolean;
-  completenessStatus?: DerivationCompleteness;
 }
 
 export interface ParseResult {
@@ -631,13 +628,13 @@ export interface ParseResult {
   localityLedger?: LocalityLedgerEntry[];
   predicationLedger?: PredicationLedgerEntry[];
   provenance?: Provenance;
-  completenessStatus?: DerivationCompleteness;
 }
 
 export interface ParseBundle {
   analyses: ParseResult[];
   ambiguityDetected: boolean;
   ambiguityNote?: string;
-  requestedModelRoute?: 'local' | 'pro';
+  requestedModelRoute?: 'gemini' | 'gpt' | 'claude' | 'pro';
+  requestedReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   modelUsed?: string;
 }

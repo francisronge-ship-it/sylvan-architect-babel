@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server/index.js",
+    "verify:replay": "node scripts/verifyReplayRegression.mjs",
+    "verify:parse-contract": "node scripts/verifyParseContract.mjs",
     "audit": "npm audit"
   },
   "dependencies": {

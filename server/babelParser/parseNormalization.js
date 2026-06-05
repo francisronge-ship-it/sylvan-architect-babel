@@ -71,8 +71,6 @@ export const createParseNormalizationHelpers = ({
   validatePronouncedCopiesAgainstCommittedTree,
   validateNoteBindingsAgainstStructuredAnalysis,
   auditNoteConsistency,
-  computeCompletenessStatus,
-  collectCompletenessWarnings,
   deriveImplicitDerivationChainId,
   deriveChainTypeFromOperation,
   mergeChainTypes,
@@ -890,12 +888,35 @@ export const createParseNormalizationHelpers = ({
     return '';
   };
 
+  const firstResolvedRelationAnchorNodeIdMatching = (anchors, predicate) => {
+    for (const anchor of anchors) {
+      const roleKey = normalizeDerivationAnchorRoleKey(anchor?.role);
+      if (!roleKey || !predicate(roleKey)) continue;
+      const nodeId = normalizeOptionalStepText(anchor?.nodeId);
+      if (nodeId) return nodeId;
+    }
+    return '';
+  };
+
+  const isTrajectorySourceAnchorRole = (roleKey) => (
+    (
+      /(?:source|from|origin|lower|base|trace|gap|residue|copy)/.test(roleKey)
+      || /(?:embeddedphaseedge|objectcopy|thetaposition)/.test(roleKey)
+    )
+    && !/(?:higher|raised|moved|landing|target|destination|operator|highest|matrixphaseedge|phaseedgecopy|attract|probe|trigger)/.test(roleKey)
+  );
+
+  const isTrajectoryTargetAnchorRole = (roleKey) => (
+    /(?:landing|target|destination|higher|raised|moved|operator|highest|phaseedgecopy|matrixphaseedge|edgecopy|highersubject|highestcopy)/.test(roleKey)
+    && !/(?:lower|base|trace|gap|residue|source|from|origin|attract|probe|trigger)/.test(roleKey)
+  );
+
   const relationHasTrajectoryShape = ({ relation, sourceNodeId, targetNodeId, witnessNodeId }) => {
     if (!targetNodeId || (!sourceNodeId && !witnessNodeId)) return false;
     const relationKey = normalizeKey(relation);
     return (
       !relationKey
-      || /move|movement|raise|raising|lower|lowering|front|displac|extract|copy|trace|gap|chain|clitic|affix|scrambl|rollup|sideward|head/.test(relationKey)
+      || /move|movement|raise|raising|lower|lowering|front|displac|extract|copy|trace|gap|chain|dependency|wh|abar|clitic|affix|scrambl|rollup|sideward|head/.test(relationKey)
     );
   };
 
@@ -924,8 +945,10 @@ export const createParseNormalizationHelpers = ({
           || visualRelation.label
         ) || 'visual relation';
         const anchors = resolveVisualRelationAnchors(visualRelation.anchors, frameNodeById);
-        const sourceNodeId = firstResolvedRelationAnchorNodeId(anchors, VISUAL_RELATION_TRAJECTORY_SOURCE_ROLES);
-        const targetNodeId = firstResolvedRelationAnchorNodeId(anchors, VISUAL_RELATION_TRAJECTORY_TARGET_ROLES);
+        const sourceNodeId = firstResolvedRelationAnchorNodeId(anchors, VISUAL_RELATION_TRAJECTORY_SOURCE_ROLES)
+          || firstResolvedRelationAnchorNodeIdMatching(anchors, isTrajectorySourceAnchorRole);
+        const targetNodeId = firstResolvedRelationAnchorNodeId(anchors, VISUAL_RELATION_TRAJECTORY_TARGET_ROLES)
+          || firstResolvedRelationAnchorNodeIdMatching(anchors, isTrajectoryTargetAnchorRole);
         const witnessNodeId = firstResolvedRelationAnchorNodeId(anchors, VISUAL_RELATION_TRAJECTORY_WITNESS_ROLES);
         const hasUnresolvedAnchors = anchors.some((anchor) => !anchor.resolved);
         const hasTrajectoryShape = relationHasTrajectoryShape({
@@ -1417,7 +1440,7 @@ export const createParseNormalizationHelpers = ({
       ? options.payloadIntegrityFlags.slice()
       : [];
     const requireFullDerivationFrameContract = enforceDerivationRouteContract;
-    const minDerivationFrames = 3;
+    const sentenceTokens = tokenizeSentenceSurfaceOrder(sentence);
     const rawDerivationStages = Array.isArray(parsed.derivationStages) ? parsed.derivationStages : [];
     const usesDerivationStages = rawDerivationStages.length > 0;
     const rawDerivationFrames = normalizeDerivationStagesToDerivationFrames(rawDerivationStages, {
@@ -1434,18 +1457,6 @@ export const createParseNormalizationHelpers = ({
       rawDerivationSteps: undefined,
       payloadIntegrityFlags
     });
-    if (requireFullDerivationFrameContract && rawDerivationFrames.length < minDerivationFrames) {
-      throw new ParseApiError(
-        'BAD_MODEL_RESPONSE',
-        `Pro analysis must include at least ${minDerivationFrames} derivationStages.`,
-        502
-      );
-    }
-    if (requireFullDerivationFrameContract && rawDerivationFrames.length === minDerivationFrames) {
-      payloadIntegrityFlags.push('preferred_derivation_stage_count_underfilled:3');
-    }
-
-    const sentenceTokens = tokenizeSentenceSurfaceOrder(sentence);
     let derivationFrames = materializeImplicitPhrasalTraceShellsInDerivationFrames(
       normalizeDerivationFrames(rawDerivationFrames, framework, sentenceTokens, {
         integrityFlags: payloadIntegrityFlags
@@ -1919,48 +1930,6 @@ export const createParseNormalizationHelpers = ({
         eventStructureLedger
       });
     });
-    const rawCompletenessStatus = computeCompletenessStatus({
-      derivationFrames,
-      rawDerivationSteps: modelDerivationSteps,
-      chains: chainsWithFieldFallback,
-      commitmentGraph,
-      caseAssignments,
-      argumentStructure,
-      phaseLog,
-      morphologyRealization,
-      featureLedger,
-      selectionLedger,
-      linearizationLedger,
-      bindingLedger,
-      clausalDependencies,
-      agreementLedger,
-      predicateClassLedger,
-      probeLedger,
-      nullElementLedger,
-      diagnosticLedger,
-      parameterLedger,
-      informationStructureLedger,
-      operatorScopeLedger,
-      voiceValencyLedger,
-      localityLedger,
-      predicationLedger,
-      particleLedger,
-      evidentialityLedger,
-      mirativityLedger,
-      honorificityLedger,
-      switchReferenceLedger,
-      logophoraLedger,
-      eventStructureLedger
-    });
-    const validationWarnings = collectCompletenessWarnings({
-      noteBindings,
-      commitmentGraph,
-      derivationFrames,
-      chains: chainsWithFieldFallback
-    });
-    const completenessStatus = validationWarnings.length > 0 && rawCompletenessStatus === 'full'
-      ? 'partial'
-      : rawCompletenessStatus;
     const provenance = {
       modelRoute,
       framework,
@@ -1971,9 +1940,6 @@ export const createParseNormalizationHelpers = ({
       uiVersion: normalizeOptionalStepText(process.env.BABEL_UI_VERSION || process.env.VERCEL_GIT_COMMIT_SHA),
       payloadIntegrityFlags: payloadIntegrityFlags.length > 0
         ? Array.from(new Set(payloadIntegrityFlags))
-        : undefined,
-      validationWarnings: validationWarnings.length > 0
-        ? validationWarnings
         : undefined,
       hasCommitmentGraph: commitmentGraph.length > 0,
       hasCommitmentFacts: commitmentGraph.length > 0,
@@ -2006,8 +1972,7 @@ export const createParseNormalizationHelpers = ({
       hasLogophoraLedger: logophoraLedger.length > 0,
       hasEventStructureLedger: eventStructureLedger.length > 0,
       notesSource,
-      notesCompiledFromDerivationStages: usesDerivationStages && compiledDerivationFrameNoteBindings.length > 0,
-      completenessStatus
+      notesCompiledFromDerivationStages: usesDerivationStages && compiledDerivationFrameNoteBindings.length > 0
     };
 
     return {
@@ -2050,8 +2015,7 @@ export const createParseNormalizationHelpers = ({
       switchReferenceLedger,
       logophoraLedger,
       eventStructureLedger,
-      provenance,
-      completenessStatus
+      provenance
     };
   };
 

@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
+  ANTHROPIC_EFFORT,
+  ANTHROPIC_THINKING_CONFIG,
   DEFAULT_MAX_OUTPUT_TOKENS,
   LOCAL_MODEL_COMMAND,
   LOCAL_MODEL_MAX_OUTPUT_TOKENS,
@@ -10,6 +12,9 @@ import {
   LOCAL_MODEL_TIMEOUT_MS,
   LOCAL_MODEL_URL,
   MODEL_TEMPERATURE,
+  OPENAI_BACKGROUND_POLL_INTERVAL_MS,
+  OPENAI_BACKGROUND_RESPONSES,
+  OPENAI_REASONING_EFFORT,
   PRIMARY_MODEL,
   PRO_MODEL
 } from './routeConfig.js';
@@ -434,6 +439,233 @@ export const generateStructuredContent = async ({
       abortSignal
     }
   });
+};
+
+const readResponseText = async (response) => {
+  const text = await response.text();
+  try {
+    return { text, json: JSON.parse(text) };
+  } catch {
+    return { text, json: null };
+  }
+};
+
+const delayWithAbort = (ms, abortSignal) => new Promise((resolve, reject) => {
+  if (abortSignal?.aborted) {
+    reject(abortSignal.reason || new Error('Operation aborted.'));
+    return;
+  }
+  const timeout = setTimeout(resolve, Math.max(0, ms));
+  const onAbort = () => {
+    clearTimeout(timeout);
+    reject(abortSignal.reason || new Error('Operation aborted.'));
+  };
+  abortSignal?.addEventListener?.('abort', onAbort, { once: true });
+});
+
+const OPENAI_RESPONSE_TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'incomplete']);
+
+const fetchOpenAIResponseJson = async ({ apiKey, responseId, abortSignal }) => {
+  const response = await fetch(`https://api.openai.com/v1/responses/${encodeURIComponent(responseId)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${apiKey}`
+    },
+    signal: abortSignal
+  });
+  const payload = await readResponseText(response);
+  if (!response.ok) {
+    const error = new Error(String(payload.json?.error?.message || payload.text || `OpenAI response polling failed (${response.status})`));
+    error.status = response.status;
+    error.responseBody = payload.text;
+    throw error;
+  }
+  return payload;
+};
+
+const writeOpenAIDebugResponseState = ({ model, responseId, stage, payload }) => {
+  if (process.env.NODE_ENV === 'production') return null;
+  try {
+    const dir = path.resolve(process.cwd(), '.artifacts', 'debug-model-payloads');
+    fs.mkdirSync(dir, { recursive: true });
+    const safeModel = String(model || 'unknown').replace(/[^a-z0-9._-]+/gi, '-').toLowerCase();
+    const safeId = String(responseId || 'no-id').replace(/[^a-z0-9._-]+/gi, '-').toLowerCase();
+    const safeStage = String(stage || 'state').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = path.join(dir, `${timestamp}-openai-${safeStage}-${safeModel}-${safeId}.json`);
+    fs.writeFileSync(file, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+    return file;
+  } catch {
+    return null;
+  }
+};
+
+const waitForOpenAIResponseCompletion = async ({
+  apiKey,
+  initialPayload,
+  pollIntervalMs,
+  model,
+  abortSignal
+}) => {
+  let payload = initialPayload;
+  let json = payload.json;
+  const responseId = String(json?.id || '').trim();
+  if (!responseId) return payload;
+  writeOpenAIDebugResponseState({ model, responseId, stage: 'created', payload: json });
+
+  while (json && !OPENAI_RESPONSE_TERMINAL_STATUSES.has(String(json.status || '').toLowerCase())) {
+    await delayWithAbort(pollIntervalMs, abortSignal);
+    payload = await fetchOpenAIResponseJson({ apiKey, responseId, abortSignal });
+    json = payload.json;
+    writeOpenAIDebugResponseState({ model, responseId, stage: 'polled', payload: json });
+  }
+  return payload;
+};
+
+const extractOpenAIOutputText = (payloadJson) => String(payloadJson?.output_text || '').trim()
+  || (Array.isArray(payloadJson?.output)
+    ? payloadJson.output
+      .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
+      .map((part) => String(part?.text || ''))
+      .join('')
+      .trim()
+    : '');
+
+export const generateOpenAIStructuredContent = async ({
+  apiKey,
+  model,
+  contents,
+  systemInstruction,
+  temperature = MODEL_TEMPERATURE,
+  maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS,
+  reasoningEffort = OPENAI_REASONING_EFFORT,
+  background = OPENAI_BACKGROUND_RESPONSES,
+  pollIntervalMs = OPENAI_BACKGROUND_POLL_INTERVAL_MS,
+  abortSignal
+}) => {
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model,
+      instructions: systemInstruction,
+      input: contents,
+      text: { format: { type: 'json_object' } },
+      reasoning: { effort: reasoningEffort },
+      ...(background ? { background: true, store: true } : {}),
+      max_output_tokens: maxOutputTokens
+    }),
+    signal: abortSignal
+  });
+
+  const payload = await readResponseText(response);
+  if (!response.ok) {
+    const error = new Error(String(payload.json?.error?.message || payload.text || `OpenAI request failed (${response.status})`));
+    error.status = response.status;
+    error.responseBody = payload.text;
+    throw error;
+  }
+
+  if (background) {
+    const completedPayload = await waitForOpenAIResponseCompletion({
+      apiKey,
+      initialPayload: payload,
+      pollIntervalMs,
+      model,
+      abortSignal
+    });
+    payload.text = completedPayload.text;
+    payload.json = completedPayload.json;
+  }
+
+  if (payload.json?.status === 'incomplete') {
+    const reason = String(payload.json?.incomplete_details?.reason || 'unknown').trim();
+    const error = new Error(`OpenAI response incomplete: ${reason}`);
+    error.status = 422;
+    error.responseBody = payload.text;
+    throw error;
+  }
+
+  if (payload.json?.status === 'failed' || payload.json?.status === 'cancelled') {
+    const errorMessage = String(payload.json?.error?.message || `OpenAI response ${payload.json.status}.`);
+    const error = new Error(errorMessage);
+    error.status = 502;
+    error.responseBody = payload.text;
+    throw error;
+  }
+
+  const outputText = extractOpenAIOutputText(payload.json);
+
+  return {
+    text: outputText,
+    candidates: [{ finishReason: String(payload.json?.status || 'STOP').toUpperCase() }],
+    usageMetadata: {
+      inputTokenCount: payload.json?.usage?.input_tokens,
+      outputTokenCount: payload.json?.usage?.output_tokens,
+      totalTokenCount: payload.json?.usage?.total_tokens
+    }
+  };
+};
+
+export const generateAnthropicStructuredContent = async ({
+  apiKey,
+  model,
+  contents,
+  systemInstruction,
+  temperature = MODEL_TEMPERATURE,
+  maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS,
+  effort = ANTHROPIC_EFFORT,
+  thinking = ANTHROPIC_THINKING_CONFIG,
+  abortSignal
+}) => {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model,
+      system: `${systemInstruction}\n\nReturn exactly one valid JSON object and no prose.`,
+      messages: [{ role: 'user', content: contents }],
+      thinking,
+      output_config: { effort },
+      max_tokens: maxOutputTokens
+    }),
+    signal: abortSignal
+  });
+
+  const payload = await readResponseText(response);
+  if (!response.ok) {
+    const error = new Error(String(payload.json?.error?.message || payload.text || `Anthropic request failed (${response.status})`));
+    error.status = response.status;
+    error.responseBody = payload.text;
+    throw error;
+  }
+
+  const outputText = Array.isArray(payload.json?.content)
+    ? payload.json.content
+      .map((part) => String(part?.text || ''))
+      .join('')
+      .trim()
+    : '';
+
+  return {
+    text: outputText,
+    candidates: [{ finishReason: String(payload.json?.stop_reason || 'STOP').toUpperCase() }],
+    usageMetadata: {
+      inputTokenCount: payload.json?.usage?.input_tokens,
+      outputTokenCount: payload.json?.usage?.output_tokens,
+      totalTokenCount: (
+        Number(payload.json?.usage?.input_tokens || 0) +
+        Number(payload.json?.usage?.output_tokens || 0)
+      ) || undefined
+    }
+  };
 };
 
 export const isPrimaryModel = (model) => model === PRIMARY_MODEL;

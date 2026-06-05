@@ -1,10 +1,10 @@
-import { buildSystemInstruction } from './geminiParser/systemInstruction.js';
-import { MOVEMENT_INDEX_SUBSCRIPT_MAP } from './geminiParser/constants.js';
-import { ParseApiError } from './geminiParser/error.js';
+﻿import { buildSystemInstruction } from './babelParser/systemInstruction.js';
+import { MOVEMENT_INDEX_SUBSCRIPT_MAP } from './babelParser/constants.js';
+import { ParseApiError } from './babelParser/error.js';
 import {
   normalizeSurfaceToken,
   tokenizeSentenceSurfaceOrder
-} from './geminiParser/surfaceTokens.js';
+} from './babelParser/surfaceTokens.js';
 import {
   STRUCTURAL_LEAF_LABELS,
   PRIME_CATEGORY_LABEL_RE,
@@ -14,32 +14,32 @@ import {
   collectNodeReferencesById,
   addNodeAliasIds,
   getLabelProfile
-} from './geminiParser/treeBasics.js';
+} from './babelParser/treeBasics.js';
 import {
   buildParseContentsPrompt
-} from './geminiParser/prompts.js';
+} from './babelParser/prompts.js';
 import {
   estimateProOutputBudget,
   resolveRouteMaxOutputTokens
-} from './geminiParser/routeConfig.js';
+} from './babelParser/routeConfig.js';
 import {
   extractLocalModelResponseText,
   summarizeGeneration,
   summarizeProviderReasoningForDisplay
-} from './geminiParser/modelRuntime.js';
-import { createDerivationHelpers } from './geminiParser/derivationHelpers.js';
-import { createNoteBindingHelpers } from './geminiParser/noteBindings.js';
-import { createSemanticValidationHelpers } from './geminiParser/semanticValidation.js';
-import { createParseRoutes } from './geminiParser/parseRoutes.js';
-import { createAnalysisNormalizationHelpers } from './geminiParser/analysisNormalization.js';
-import { createParseNormalizationHelpers } from './geminiParser/parseNormalization.js';
-import { createDerivationCompilerHelpers } from './geminiParser/derivationCompiler.js';
-import { createNormalizationUtils } from './geminiParser/normalizationUtils.js';
-import { createStepNormalizationHelpers } from './geminiParser/stepNormalization.js';
-import { createSyntaxTreeHelpers } from './geminiParser/syntaxTree.js';
-import { parseStrictModelJson, parseStrictModelJsonDetailed } from './geminiParser/strictJson.js';
+} from './babelParser/modelRuntime.js';
+import { createDerivationHelpers } from './babelParser/derivationHelpers.js';
+import { createNoteBindingHelpers } from './babelParser/noteBindings.js';
+import { createSemanticValidationHelpers } from './babelParser/semanticValidation.js';
+import { createParseRoutes } from './babelParser/parseRoutes.js';
+import { createAnalysisNormalizationHelpers } from './babelParser/analysisNormalization.js';
+import { createParseNormalizationHelpers } from './babelParser/parseNormalization.js';
+import { createDerivationCompilerHelpers } from './babelParser/derivationCompiler.js';
+import { createNormalizationUtils } from './babelParser/normalizationUtils.js';
+import { createStepNormalizationHelpers } from './babelParser/stepNormalization.js';
+import { createSyntaxTreeHelpers } from './babelParser/syntaxTree.js';
+import { parseStrictModelJson, parseStrictModelJsonDetailed } from './babelParser/strictJson.js';
 
-export { ParseApiError } from './geminiParser/error.js';
+export { ParseApiError } from './babelParser/error.js';
 
 const {
   normalizeKey,
@@ -231,9 +231,7 @@ const {
   validatePronouncedCopiesAgainstCommittedTree,
   validateNoteBindingsAgainstStructuredAnalysis,
   runSemanticValidation,
-  auditNoteConsistency,
-  computeCompletenessStatus,
-  collectCompletenessWarnings
+  auditNoteConsistency
 } = createSemanticValidationHelpers({
   ParseApiError,
   cleanExplanationWhitespace,
@@ -369,8 +367,6 @@ const {
   validatePronouncedCopiesAgainstCommittedTree,
   validateNoteBindingsAgainstStructuredAnalysis,
   auditNoteConsistency,
-  computeCompletenessStatus,
-  collectCompletenessWarnings,
   deriveImplicitDerivationChainId,
   deriveChainTypeFromOperation,
   mergeChainTypes,
@@ -390,7 +386,9 @@ const parseModelJsonDetailed = (rawText) => parseStrictModelJsonDetailed(
 
 export const {
   parseSentenceWithLocalModel,
-  parseSentenceWithGemini
+  parseSentenceWithGemini,
+  parseSentenceWithOpenAI,
+  parseSentenceWithClaude
 } = createParseRoutes({
   ParseApiError,
   normalizeParseBundle,
@@ -422,6 +420,7 @@ export const __test__ = {
   estimateProOutputBudget,
   resolveRouteMaxOutputTokens,
   parseModelJson,
+  parseModelJsonDetailed,
   compileNoteBindingsFromDerivationFrames,
   normalizeCaseAssignments,
   normalizeSurfaceToken,
@@ -432,3 +431,4 @@ export const __test__ = {
   validatePronouncedCopiesAgainstCommittedTree,
   validateNoteBindingsAgainstStructuredAnalysis
 };
+

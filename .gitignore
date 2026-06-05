@@ -52,8 +52,8 @@ skills/
 !.env.example
 .codex-handoff/
 test/debug_reorder.mjs
-server/geminiParser/proPromptNeutralizationArchive.md
-server/geminiParser/proRouteRecoveryArchive.md
+server/babelParser/proPromptNeutralizationArchive.md
+server/babelParser/proRouteRecoveryArchive.md
 
 # Editor directories and files
 .vscode/*

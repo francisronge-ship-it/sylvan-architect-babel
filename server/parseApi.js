@@ -1,7 +1,13 @@
-import { ParseApiError, parseSentenceWithGemini, parseSentenceWithLocalModel } from './geminiParser.js';
+﻿import {
+  ParseApiError,
+  parseSentenceWithClaude,
+  parseSentenceWithGemini,
+  parseSentenceWithOpenAI
+} from './babelParser.js';
+import { normalizeProviderReasoningEffort } from './babelParser/routeConfig.js';
 
 const FRAMEWORKS = new Set(['xbar', 'minimalism']);
-const MODEL_ROUTES = new Set(['local', 'pro']);
+const MODEL_ROUTES = new Set(['gemini', 'gpt', 'claude', 'pro']);
 const MAX_SENTENCE_LENGTH = 600;
 const importAtRuntime = new Function('specifier', 'return import(specifier);');
 
@@ -37,7 +43,12 @@ export const validateParseBody = (body) => {
 
   const rawSentence = typeof body.sentence === 'string' ? body.sentence.trim() : '';
   const framework = typeof body.framework === 'string' ? body.framework.trim() : 'xbar';
-  const modelRoute = typeof body.modelRoute === 'string' ? body.modelRoute.trim().toLowerCase() : 'local';
+  const rawModelRoute = typeof body.modelRoute === 'string' ? body.modelRoute.trim().toLowerCase() : 'gemini';
+  const modelRoute = rawModelRoute === 'pro' ? 'gemini' : rawModelRoute;
+  const reasoningEffort = normalizeProviderReasoningEffort(
+    modelRoute,
+    typeof body.reasoningEffort === 'string' ? body.reasoningEffort : undefined
+  );
 
   if (!rawSentence) {
     throw new ParseApiError('INVALID_REQUEST', 'Sentence is required.', 400);
@@ -58,23 +69,22 @@ export const validateParseBody = (body) => {
   }
 
   if (!MODEL_ROUTES.has(modelRoute)) {
-    throw new ParseApiError('INVALID_REQUEST', 'Model route must be "local" or "pro".', 400);
+    throw new ParseApiError('INVALID_REQUEST', 'Model route must be "gemini", "gpt", or "claude".', 400);
   }
 
-  return { sentence, framework, modelRoute };
+  return { sentence, framework, modelRoute, reasoningEffort };
 };
 
 export const parseFromBodyWithProviders = async (
   body,
   providers = {
-    local: parseSentenceWithLocalModel,
-    gemini: parseSentenceWithGemini
+    gemini: parseSentenceWithGemini,
+    gpt: parseSentenceWithOpenAI,
+    claude: parseSentenceWithClaude
   }
 ) => {
-  const { sentence, framework, modelRoute } = validateParseBody(body);
-  const result = modelRoute === 'local'
-    ? await providers.local(sentence, framework, modelRoute)
-    : await providers.gemini(sentence, framework, modelRoute);
+  const { sentence, framework, modelRoute, reasoningEffort } = validateParseBody(body);
+  const result = await providers[modelRoute](sentence, framework, modelRoute, { reasoningEffort });
   await maybeRecordParseEvent({ sentence, framework, modelRoute, result });
   return result;
 };
@@ -102,3 +112,4 @@ export const formatApiError = (error) => {
     body: { error: { code: 'INTERNAL_ERROR', message: 'Unexpected server error.' } }
   };
 };
+

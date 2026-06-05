@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { parseSentence } from './services/geminiService';
+import { parseSentence } from './services/parseService';
 import { DerivationStage, DerivationStep, ParseBundle, ParseResult, ReplayLedgerBlock, SyntaxNode } from './types';
 import TreeVisualizer from './components/TreeVisualizer';
 import RootLogo from './components/RootLogo';
@@ -66,23 +66,21 @@ const resolveUiError = (err: unknown): { needsKey: boolean; keyPromptMode: KeyPr
 
 const formatModelLabel = (modelUsed?: string): string => {
   const model = String(modelUsed || '').trim();
-  if (!model) return 'Local Model';
-  if (/^local:/i.test(model)) {
-    const detail = model.replace(/^local:/i, '').trim();
-    return detail ? `Local Model (${detail})` : 'Local Model';
-  }
+  if (!model) return 'Gemini 3.1 Pro';
+  if (/^gpt/i.test(model)) return model.toUpperCase();
+  if (/^claude/i.test(model)) return model.replace(/^claude/i, 'Claude');
   if (model === 'gemini-3.1-pro-preview') return 'Gemini 3.1 Pro';
   if (model === 'gemini-3-pro-preview') return 'Gemini 3 Pro';
   return model.replace(/^gemini-/i, 'Gemini ').replace(/-preview$/i, '');
 };
 
-type ModelMode = 'local' | 'pro' | 'gpt-5.4' | 'claude-4.6';
+type ModelMode = 'gemini' | 'gpt' | 'claude';
+type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 const MODEL_ROUTE_LABELS: Record<ModelMode, string> = {
-  local: 'Local Model',
-  pro: 'Gemini 3.1 Pro',
-  'gpt-5.4': 'GPT 5.4',
-  'claude-4.6': 'Claude 4.6'
+  gemini: 'Gemini 3.1 Pro',
+  gpt: 'GPT 5.5',
+  claude: 'Claude Opus'
 };
 
 const MODEL_MODE_PILLS: Array<{
@@ -93,56 +91,98 @@ const MODEL_MODE_PILLS: Array<{
   keyRequired?: boolean;
 }> = [
   {
-    id: 'local',
-    label: 'Local',
-    className: 'border-sky-900/40 bg-sky-950/20 text-sky-200 hover:border-sky-600/50 hover:bg-sky-900/30',
-    activeClassName: 'border-sky-500/70 bg-sky-500/20 text-sky-100 shadow-[0_0_18px_rgba(56,189,248,0.22)]'
-  },
-  {
-    id: 'pro',
+    id: 'gemini',
     label: 'Gemini Pro',
     className: 'border-purple-900/40 bg-purple-950/20 text-purple-200 hover:border-purple-600/50 hover:bg-purple-900/30',
     activeClassName: 'border-purple-500/70 bg-purple-500/20 text-purple-100 shadow-[0_0_18px_rgba(168,85,247,0.22)]'
   },
   {
-    id: 'gpt-5.4',
-    label: 'GPT 5.4',
+    id: 'gpt',
+    label: 'GPT 5.5',
     className: 'border-blue-900/40 bg-blue-950/20 text-blue-200 hover:border-blue-600/50 hover:bg-blue-900/30',
-    activeClassName: 'border-blue-500/70 bg-blue-500/20 text-blue-100 shadow-[0_0_18px_rgba(59,130,246,0.24)]',
-    keyRequired: true
+    activeClassName: 'border-blue-500/70 bg-blue-500/20 text-blue-100 shadow-[0_0_18px_rgba(59,130,246,0.24)]'
   },
   {
-    id: 'claude-4.6',
-    label: 'Claude 4.6',
+    id: 'claude',
+    label: 'Claude Opus',
     className: 'border-orange-900/40 bg-orange-950/20 text-orange-200 hover:border-orange-600/50 hover:bg-orange-900/30',
-    activeClassName: 'border-orange-500/70 bg-orange-500/20 text-orange-100 shadow-[0_0_18px_rgba(249,115,22,0.24)]',
-    keyRequired: true
+    activeClassName: 'border-orange-500/70 bg-orange-500/20 text-orange-100 shadow-[0_0_18px_rgba(249,115,22,0.24)]'
   }
 ];
 
-const MODEL_MODE_SEQUENCE: ModelMode[] = ['local', 'pro', 'gpt-5.4', 'claude-4.6'];
+const MODEL_MODE_SEQUENCE: ModelMode[] = ['gemini', 'gpt', 'claude'];
 
-const isBackendModelMode = (value: ModelMode): value is 'local' | 'pro' =>
-  value === 'local' || value === 'pro';
+const REASONING_OPTIONS_BY_MODEL: Record<ModelMode, ReasoningEffort[]> = {
+  gemini: ['low', 'high'],
+  gpt: ['low', 'medium', 'high', 'xhigh'],
+  claude: ['low', 'medium', 'high', 'xhigh', 'max']
+};
 
-const isExternalApiModelMode = (value: ModelMode): value is 'gpt-5.4' | 'claude-4.6' =>
-  value === 'gpt-5.4' || value === 'claude-4.6';
+const REASONING_EFFORT_ORDER: ReasoningEffort[] = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+
+const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'XHigh',
+  max: 'Max'
+};
+
+const REASONING_PILL_STYLES: Record<ReasoningEffort, string> = {
+  minimal: 'border-slate-500/35 bg-slate-500/10 text-slate-200 shadow-[0_0_16px_rgba(148,163,184,0.12)]',
+  low: 'border-cyan-700/35 bg-cyan-950/20 text-cyan-200 shadow-[0_0_16px_rgba(8,145,178,0.14)]',
+  medium: 'border-teal-500/45 bg-teal-500/15 text-teal-200 shadow-[0_0_16px_rgba(20,184,166,0.16)]',
+  high: 'border-[#b7791f]/55 bg-[#b7791f]/24 text-[#f3c777] shadow-[0_0_18px_rgba(183,121,31,0.22)]',
+  xhigh: 'border-orange-500/60 bg-orange-500/20 text-orange-200 shadow-[0_0_20px_rgba(249,115,22,0.22)]',
+  max: 'border-[#dc2626]/70 bg-[#7f1d1d]/36 text-[#fecaca] shadow-[0_0_22px_rgba(220,38,38,0.28)]'
+};
+
+const normalizeReasoningEffort = (value?: string): ReasoningEffort | null => {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (normalized === 'extra_high' || normalized === 'extra') return 'xhigh';
+  if (normalized === 'minimal' || normalized === 'low' || normalized === 'medium' || normalized === 'high' || normalized === 'xhigh' || normalized === 'max') {
+    return normalized as ReasoningEffort;
+  }
+  return null;
+};
+
+const coerceReasoningEffortForRoute = (route: ModelMode, value?: string): ReasoningEffort => {
+  const options = REASONING_OPTIONS_BY_MODEL[route];
+  const requested = normalizeReasoningEffort(value) || 'high';
+  if (options.includes(requested)) return requested;
+
+  const requestedRank = REASONING_EFFORT_ORDER.indexOf(requested);
+  if (requestedRank >= 0) {
+    for (let index = requestedRank; index >= 0; index -= 1) {
+      const candidate = REASONING_EFFORT_ORDER[index];
+      if (options.includes(candidate)) return candidate;
+    }
+    for (let index = requestedRank + 1; index < REASONING_EFFORT_ORDER.length; index += 1) {
+      const candidate = REASONING_EFFORT_ORDER[index];
+      if (options.includes(candidate)) return candidate;
+    }
+  }
+  return options.includes('high') ? 'high' : options[0];
+};
+
+const reasoningControlLabelForRoute = (route: ModelMode): string =>
+  route === 'gpt' ? 'Reasoning' : 'Thinking';
 
 const coerceModelRoute = (value?: string): ModelMode => {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'pro') return 'pro';
-  if (normalized === 'gpt-5.4') return 'gpt-5.4';
-  if (normalized === 'claude-4.6') return 'claude-4.6';
-  return 'local';
+  if (normalized === 'pro' || normalized === 'gemini') return 'gemini';
+  if (normalized === 'gpt' || normalized === 'gpt-5.5' || normalized === 'gpt-5.4') return 'gpt';
+  if (normalized === 'claude' || normalized === 'claude-4.8' || normalized === 'claude-4.7' || normalized === 'claude-4.6') return 'claude';
+  return 'gemini';
 };
 
 const inferModelRouteFromModel = (modelUsed?: string): ModelMode => {
   const model = String(modelUsed || '').trim().toLowerCase();
-  if (!model) return 'local';
-  if (model.startsWith('local:') || model.includes('ollama') || model.includes('gemma')) return 'local';
-  if (model.includes('claude')) return 'claude-4.6';
-  if (model.includes('gpt-5.4') || model.includes('gpt-5')) return 'gpt-5.4';
-  return 'pro';
+  if (!model) return 'gemini';
+  if (model.includes('claude')) return 'claude';
+  if (model.includes('gpt')) return 'gpt';
+  return 'gemini';
 };
 
 type MilesMode = 'canopy' | 'derivation';
@@ -364,8 +404,8 @@ const removeTreeBankEntry = async (id: string): Promise<void> => {
   });
 };
 
-const NULL_SURFACE_RE = /^(âˆ…|Ã˜|Îµ|null|epsilon)$/i;
-const TRACE_SURFACE_RE = /^(?:t|trace|t\d+|trace\d+|t[_-][a-z0-9{}]+|trace[_-][a-z0-9{}]+|<[^>]+>|âŸ¨[^âŸ©]+âŸ©|\(t\)|\{t\})$/i;
+const NULL_SURFACE_RE = /^(?:∅|Ø|ε|null|epsilon)$/i;
+const TRACE_SURFACE_RE = /^(?:t|trace|t\d+|trace\d+|t[_-][a-z0-9{}]+|trace[_-][a-z0-9{}]+|<[^>]+>|⟨[^⟩]+⟩|\(t\)|\{t\})$/i;
 const KNOWN_CATEGORY_LABELS = new Set([
   'A',
   "A'",
@@ -409,7 +449,7 @@ const KNOWN_CATEGORY_LABELS = new Set([
 const normalizeCategoryToken = (token: string): string =>
   token
     .trim()
-    .replace(/â€™/g, "'")
+    .replace(/’/g, "'")
     .replace(/\s+/g, '')
     .toUpperCase();
 
@@ -534,7 +574,7 @@ const summarizeProviderReasoningForDisplay = (summary: string, raw: string, maxC
   if (!base) return '';
 
   const metaIntroRe =
-    /^(?:analysis of[^:]*:\s*|deep dive into[^:]*:?|okay[, ]+|here(?:'|â€™)s how i(?:'|â€™)m thinking(?: about this sentence)?[, ]*|my immediate thought\??|first[, ]+|let(?:'|â€™)s\s+)/i;
+    /^(?:analysis of[^:]*:\s*|deep dive into[^:]*:?|okay[, ]+|here(?:'|’)s how i(?:'|’)m thinking(?: about this sentence)?[, ]*|my immediate thought\??|first[, ]+|let(?:'|’)s\s+)/i;
   const sentenceParts = base
     .replace(/\bSHOW FULL RAW THINKING TRACE\b/gi, '')
     .split(/(?<=[.!?])\s+/)
@@ -626,7 +666,7 @@ const normalizeToken = (value?: string): string =>
     .trim()
     .toLowerCase()
     .replace(/^<|>$/g, '')
-    .replace(/^âŸ¨|âŸ©$/g, '')
+    .replace(/^⟨|⟩$/g, '')
     .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 
 const buildReadableNodeResolvers = (tree?: SyntaxNode | null) => {
@@ -672,7 +712,7 @@ const buildReadableNodeResolvers = (tree?: SyntaxNode | null) => {
       const label = stringifyLedgerAtom(node.label);
       const surface = word || (!isStructuralLeafLabel(label) ? label : '');
       if (!surface) return [];
-      if (/^(âˆ…|Ã˜|Îµ|null|epsilon)$/i.test(surface)) return [];
+      if (/^(?:∅|Ø|ε|null|epsilon)$/i.test(surface)) return [];
       if (/^(?:t|trace)(?:[_-]?[A-Za-z0-9]+)?$/i.test(surface)) return [];
       return [surface];
     }
@@ -1128,7 +1168,8 @@ const App: React.FC = () => {
   const [keyPromptMode, setKeyPromptMode] = useState<KeyPromptMode>('none');
   const [abstractionMode, setAbstractionMode] = useState(false);
   const [framework, setFramework] = useState<'xbar' | 'minimalism'>('xbar');
-  const [modelRoute, setModelRoute] = useState<ModelMode>('local');
+  const [modelRoute, setModelRoute] = useState<ModelMode>('gemini');
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high');
   const [copiedCodeKey, setCopiedCodeKey] = useState<CopyCodeKey | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [parsedSentence, setParsedSentence] = useState('The farmer eats the pig');
@@ -1147,6 +1188,12 @@ const App: React.FC = () => {
   const nextModelOption = MODEL_MODE_PILLS[
     (MODEL_MODE_SEQUENCE.indexOf(activeModelOption.id) + 1 + MODEL_MODE_SEQUENCE.length) % MODEL_MODE_SEQUENCE.length
   ] || MODEL_MODE_PILLS[0];
+  const activeReasoningEffort = coerceReasoningEffortForRoute(modelRoute, reasoningEffort);
+  const activeReasoningOptions = REASONING_OPTIONS_BY_MODEL[modelRoute];
+  const nextReasoningEffort = activeReasoningOptions[
+    (activeReasoningOptions.indexOf(activeReasoningEffort) + 1 + activeReasoningOptions.length) % activeReasoningOptions.length
+  ] || activeReasoningOptions[0];
+  const reasoningControlLabel = reasoningControlLabelForRoute(modelRoute);
   const isTreeBankView = workspaceView === 'treeBank';
   const hideShowcaseInput = showcaseMode && Boolean(activeParse);
   const replayDerivationSteps = useMemo(() => ensureReplaySpelloutStep(activeParse), [activeParse]);
@@ -1184,6 +1231,7 @@ const App: React.FC = () => {
       sentence?: string;
       framework?: 'xbar' | 'minimalism';
       modelRoute?: ModelMode;
+      reasoningEffort?: ReasoningEffort;
     } = {}) => {
       setAnalysisBundle(bundle);
       const nextSentence = String(options.sentence || '').trim();
@@ -1192,7 +1240,13 @@ const App: React.FC = () => {
         setInput(nextSentence);
       }
       if (options.framework) setFramework(options.framework);
-      if (options.modelRoute) setModelRoute(coerceModelRoute(options.modelRoute));
+      if (options.modelRoute) {
+        const nextRoute = coerceModelRoute(options.modelRoute);
+        setModelRoute(nextRoute);
+        setReasoningEffort(coerceReasoningEffortForRoute(nextRoute, options.reasoningEffort || reasoningEffort));
+      } else if (options.reasoningEffort) {
+        setReasoningEffort(coerceReasoningEffortForRoute(modelRoute, options.reasoningEffort));
+      }
       setActiveParseIndex(0);
       setActiveTab('tree');
       setError(null);
@@ -1222,7 +1276,11 @@ const App: React.FC = () => {
       delete target.__BABEL_DEV_SET_INPUT_VISIBILITY__;
       delete target.__BABEL_DEV_SET_CAPTURE_MODE__;
     };
-  }, []);
+  }, [modelRoute, reasoningEffort]);
+
+  useEffect(() => {
+    setReasoningEffort((current) => coerceReasoningEffortForRoute(modelRoute, current));
+  }, [modelRoute]);
 
   useEffect(() => {
     const checkKeyStatus = async () => {
@@ -1273,12 +1331,15 @@ const App: React.FC = () => {
         const nextModelRoute =
           String(requestRecord.modelRoute || savedRecord.requestedRoute || bundle.requestedModelRoute || '').trim()
           || inferModelRouteFromModel(bundle.modelUsed);
+        const coercedModelRoute = coerceModelRoute(nextModelRoute);
+        const nextReasoningEffort = String(requestRecord.reasoningEffort || bundle.requestedReasoningEffort || '').trim();
 
         setAnalysisBundle(bundle);
         setParsedSentence(nextSentence);
         setInput(nextSentence);
         setFramework(nextFramework);
-        setModelRoute(coerceModelRoute(nextModelRoute));
+        setModelRoute(coercedModelRoute);
+        setReasoningEffort(coerceReasoningEffortForRoute(coercedModelRoute, nextReasoningEffort || reasoningEffort));
         setActiveParseIndex(0);
         setActiveTab(devBundleConfig.tab);
         setError(null);
@@ -1301,7 +1362,7 @@ const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [devBundleConfig, showcaseMode]);
+  }, [devBundleConfig, showcaseMode, reasoningEffort]);
 
   useEffect(() => {
     if (!devBundleConfig || devBundleConfig.replayStep === null || typeof window === 'undefined' || !analysisBundle) {
@@ -1419,16 +1480,11 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      if (isExternalApiModelMode(modelRoute)) {
-        setNeedsKey(true);
-        setKeyPromptMode('external');
-        setError(`${MODEL_ROUTE_LABELS[modelRoute]} requires an API key. This frontend mode is not wired yet.`);
-        return;
-      }
-
-      const data = await parseSentence(input, framework, modelRoute);
+      const data = await parseSentence(input, framework, modelRoute, activeReasoningEffort);
       setAnalysisBundle(data);
-      setModelRoute(coerceModelRoute(data.requestedModelRoute || modelRoute));
+      const nextModelRoute = coerceModelRoute(data.requestedModelRoute || modelRoute);
+      setModelRoute(nextModelRoute);
+      setReasoningEffort(coerceReasoningEffortForRoute(nextModelRoute, data.requestedReasoningEffort || activeReasoningEffort));
       setParsedSentence(input.trim());
       setActiveParseIndex(0);
       setActiveTab('tree');
@@ -1497,7 +1553,9 @@ const App: React.FC = () => {
     setParsedSentence(entry.sentence);
     setInput(entry.sentence);
     setFramework(entry.framework);
-    setModelRoute(coerceModelRoute(entry.bundle.requestedModelRoute || inferModelRouteFromModel(entry.bundle.modelUsed)));
+    const nextModelRoute = coerceModelRoute(entry.bundle.requestedModelRoute || inferModelRouteFromModel(entry.bundle.modelUsed));
+    setModelRoute(nextModelRoute);
+    setReasoningEffort(coerceReasoningEffortForRoute(nextModelRoute, entry.bundle.requestedReasoningEffort || reasoningEffort));
     setActiveParseIndex(nextParseIndex);
     setActiveTab('tree');
     setError(null);
@@ -1671,7 +1729,9 @@ const App: React.FC = () => {
                     >
                       <button
                         onClick={() => {
-                          setModelRoute(nextModelOption.id);
+                          const nextRoute = nextModelOption.id;
+                          setModelRoute(nextRoute);
+                          setReasoningEffort((current) => coerceReasoningEffortForRoute(nextRoute, current));
                           setError(null);
                           setNeedsKey(false);
                           setKeyPromptMode('none');
@@ -1679,8 +1739,19 @@ const App: React.FC = () => {
                         className={`flex items-center gap-2 text-[9px] font-black px-3.5 md:px-4 py-2 rounded-full border tracking-[0.18em] md:tracking-widest uppercase shadow-inner whitespace-nowrap transition-all ${activeModelOption.activeClassName}`}
                         title={`Current route: ${MODEL_ROUTE_LABELS[activeModelOption.id]}. Click to switch to ${MODEL_ROUTE_LABELS[nextModelOption.id]}.`}
                       >
-                        {activeModelOption.keyRequired ? <Key size={10} /> : <Zap size={10} className="fill-current" />}
+                        <Zap size={10} className="fill-current" />
                         {MODEL_ROUTE_LABELS[activeModelOption.id]}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setReasoningEffort(nextReasoningEffort);
+                          setError(null);
+                        }}
+                        className={`flex items-center gap-2 text-[9px] font-black px-3.5 md:px-4 py-2 rounded-full border tracking-[0.18em] md:tracking-widest uppercase shadow-inner whitespace-nowrap transition-all ${REASONING_PILL_STYLES[activeReasoningEffort]}`}
+                        title={`${reasoningControlLabel}: ${REASONING_EFFORT_LABELS[activeReasoningEffort]}. Click to switch to ${REASONING_EFFORT_LABELS[nextReasoningEffort]}.`}
+                      >
+                        <Brain size={10} className="fill-current" />
+                        {reasoningControlLabel}: {REASONING_EFFORT_LABELS[activeReasoningEffort]}
                       </button>
                     </div>
                   )}
@@ -2279,3 +2350,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
