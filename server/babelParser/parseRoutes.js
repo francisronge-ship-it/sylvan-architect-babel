@@ -47,7 +47,7 @@ import {
 export const classifyGeminiRouteError = ({
   error,
   ParseApiError,
-  modelRoute = 'pro',
+  modelRoute = 'gemini',
   model
 }) => {
   if (error instanceof ParseApiError) {
@@ -206,8 +206,8 @@ export const createParseRoutes = ({
     'Return raw JSON only. ' +
     'You are Babel\'s structural payload transcriber. ' +
     'Your job is to repair transport or field-placement problems without changing the linguistic analysis. ' +
-    'Preserve all overt terminals, node ids, step ids, frame.after, frame.change, visualRelations, compatibility chains or commitmentGraph mirrors if they are present, token indices, and structural relations. ' +
-    'Do not invent movement, do not invent change content, do not reorder terminals, do not add or remove nodes, do not change case, theta roles, selection, locality, or any authored change/commitmentGraph content. ' +
+    'Preserve every derivationStage statement, stageRecord, visualRelations entry, workspaceForest node, token index, and structural relation. ' +
+    'Do not invent movement, do not reorder terminals, do not add or remove nodes, and do not change authored derivationStages content. ' +
     'If the payload is already parseable JSON, preserve that authored content exactly apart from harmless transport-canonical notation repair and mechanical field-placement repair. ' +
     'Output exactly one top-level JSON object and nothing else.'
   );
@@ -235,11 +235,9 @@ export const createParseRoutes = ({
       'Forbidden repairs:\n' +
       '- changing tree shape\n' +
       '- changing derivationSteps\n' +
-      '- changing frame.after\n' +
-      '- changing frame.change\n' +
+      '- changing statement or stageRecord\n' +
+      '- changing workspaceForest\n' +
       '- changing visualRelations\n' +
-      '- changing chains\n' +
-      '- changing commitmentGraph when present\n' +
       '- changing overt terminal order or token indices\n' +
       `${originalPayloadText}` +
       'Original raw payload:\n' +
@@ -454,7 +452,7 @@ export const createParseRoutes = ({
   };
 
   const parseSentenceWithLocalModel = async (sentence, framework = 'xbar') => {
-    const promptRoute = 'pro';
+    const promptRoute = 'gemini';
     const requestStartedAt = Date.now();
     const systemInstruction = buildSystemInstruction(framework, promptRoute);
     const prompt = buildParseContentsPrompt(
@@ -540,7 +538,7 @@ export const createParseRoutes = ({
     }
   };
 
-  const parseSentenceWithGemini = async (sentence, framework = 'xbar', modelRoute = 'pro', options = {}) => {
+  const parseSentenceWithGemini = async (sentence, framework = 'xbar', modelRoute = 'gemini', options = {}) => {
     const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
     if (!apiKey) {
       throw new ParseApiError('API_KEY_MISSING', 'Gemini API key is not configured on the server.', 500);

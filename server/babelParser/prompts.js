@@ -28,13 +28,13 @@ export const buildDerivationStagesFirstContentsPrompt = (
 export const buildSingleParseContentsPrompt = (
   sentence,
   framework = 'xbar',
-  modelRoute = 'pro'
+  modelRoute = 'gemini'
 ) => buildDerivationStagesFirstContentsPrompt(sentence, framework);
 
 export const buildParseContentsPrompt = (
   sentence,
   framework = 'xbar',
-  modelRoute = 'pro'
+  modelRoute = 'gemini'
 ) => {
   const basePrompt = buildSingleParseContentsPrompt(sentence, framework, modelRoute);
   return basePrompt;

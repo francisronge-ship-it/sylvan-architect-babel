@@ -144,7 +144,7 @@ General rules for this route:
 
 export const buildSystemInstruction = (
   framework = 'xbar',
-  modelRoute = 'pro'
+  modelRoute = 'gemini'
 ) =>
   (framework === 'xbar' ? XBAR_INSTRUCTION : MINIMALISM_INSTRUCTION) +
   '\n\n' +

@@ -4,10 +4,10 @@ import { DerivationStage, DerivationStep, ParseBundle, ParseResult, ReplayLedger
 import TreeVisualizer from './components/TreeVisualizer';
 import RootLogo from './components/RootLogo';
 import {
-  stringifyLedgerAtom,
-  normalizeLedgerDisplay,
-  humanizeLedgerFallbackId
-} from './replayLedgerDisplay';
+  stringifyDerivationAtom,
+  normalizeDerivationDisplay,
+  humanizeDerivationId
+} from './derivationRecordDisplay';
 import { 
   RotateCcw, 
   Sparkles,
@@ -171,7 +171,7 @@ const reasoningControlLabelForRoute = (route: ModelMode): string =>
 
 const coerceModelRoute = (value?: string): ModelMode => {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'pro' || normalized === 'gemini') return 'gemini';
+  if (normalized === 'gemini') return 'gemini';
   if (normalized === 'gpt' || normalized === 'gpt-5.5' || normalized === 'gpt-5.4') return 'gpt';
   if (normalized === 'claude' || normalized === 'claude-4.8' || normalized === 'claude-4.7' || normalized === 'claude-4.6') return 'claude';
   return 'gemini';
@@ -656,8 +656,6 @@ const truncateReasoningSummary = (summary: string, limit = 900): string => {
 
 const getPreferredDerivationSteps = (parse: ParseResult | null): DerivationStep[] => {
   if (!parse) return [];
-  const raw = Array.isArray(parse.rawDerivationSteps) ? parse.rawDerivationSteps : [];
-  if (raw.length > 0) return raw;
   return Array.isArray(parse.derivationSteps) ? parse.derivationSteps : [];
 };
 
@@ -673,9 +671,9 @@ const buildReadableNodeResolvers = (tree?: SyntaxNode | null) => {
   const isStructuralLeafLabel = (value: string) =>
     /^(?:c|c'|cp|infl|infl'|inflp|i|i'|ip|t|t'|tp|v|v'|vp|d|d'|dp|n|n'|np|p|p'|pp|a|a'|ap|q|q'|qp)$/i.test(value);
   const stripStageSuffixes = (value: string) =>
-    stringifyLedgerAtom(value).replace(/(?:_(?:base|landing|trace|copy|infl|c|t|v|head|low|high|intermediate))+$/i, '');
+    stringifyDerivationAtom(value).replace(/(?:_(?:base|landing|trace|copy|infl|c|t|v|head|low|high|intermediate))+$/i, '');
   const lexicalHintFromId = (value: string) => {
-    const raw = stringifyLedgerAtom(value);
+    const raw = stringifyDerivationAtom(value);
     if (!raw) return '';
     const compact = stripStageSuffixes(raw);
     const pieces = compact.split('_').filter(Boolean);
@@ -687,7 +685,7 @@ const buildReadableNodeResolvers = (tree?: SyntaxNode | null) => {
   const aliasToNodeId = new Map<string, string>();
   const visit = (node?: SyntaxNode | null) => {
     if (!node || typeof node !== 'object') return;
-    const id = stringifyLedgerAtom(node.id);
+    const id = stringifyDerivationAtom(node.id);
     if (id) {
       nodeById.set(id, node);
       const alias = stripStageSuffixes(id);
@@ -699,7 +697,7 @@ const buildReadableNodeResolvers = (tree?: SyntaxNode | null) => {
   visit(tree);
 
   const getNodeByReference = (reference?: string) => {
-    const raw = stringifyLedgerAtom(reference);
+    const raw = stringifyDerivationAtom(reference);
     if (!raw) return null;
     return nodeById.get(raw) || nodeById.get(aliasToNodeId.get(stripStageSuffixes(raw)) || '') || null;
   };
@@ -708,8 +706,8 @@ const buildReadableNodeResolvers = (tree?: SyntaxNode | null) => {
     if (!node) return [];
     const children = Array.isArray(node.children) ? node.children : [];
     if (children.length === 0) {
-      const word = stringifyLedgerAtom(node.word);
-      const label = stringifyLedgerAtom(node.label);
+      const word = stringifyDerivationAtom(node.word);
+      const label = stringifyDerivationAtom(node.label);
       const surface = word || (!isStructuralLeafLabel(label) ? label : '');
       if (!surface) return [];
       if (/^(?:∅|Ø|ε|null|epsilon)$/i.test(surface)) return [];
@@ -720,49 +718,48 @@ const buildReadableNodeResolvers = (tree?: SyntaxNode | null) => {
   };
 
   const resolveSurfaceRef = (reference?: string): string => {
-    const raw = stringifyLedgerAtom(reference);
+    const raw = stringifyDerivationAtom(reference);
     if (!raw) return '';
     const node = getNodeByReference(raw);
     if (!node) {
       const lexicalHint = lexicalHintFromId(raw);
-      return lexicalHint || humanizeLedgerFallbackId(normalizeLedgerDisplay(raw, { preferInner: true }));
+      return lexicalHint || humanizeDerivationId(normalizeDerivationDisplay(raw, { preferInner: true }));
     }
     const visibleYield = collectVisibleYield(node).join(' ').trim();
     if (visibleYield) return visibleYield;
-    const label = stringifyLedgerAtom(node.label);
+    const label = stringifyDerivationAtom(node.label);
     if (label) return label;
     const lexicalHint = lexicalHintFromId(raw);
-    return lexicalHint || humanizeLedgerFallbackId(normalizeLedgerDisplay(raw, { preferInner: true }));
+    return lexicalHint || humanizeDerivationId(normalizeDerivationDisplay(raw, { preferInner: true }));
   };
 
   const resolveStructuralRef = (reference?: string): string => {
-    const raw = stringifyLedgerAtom(reference);
+    const raw = stringifyDerivationAtom(reference);
     if (!raw) return '';
     const node = getNodeByReference(raw);
     if (!node) {
       const lexicalHint = lexicalHintFromId(raw);
       if (lexicalHint) {
-        const head = humanizeLedgerStructuralHead(raw);
-        return head ? `${head} (${lexicalHint})` : lexicalHint;
+        return lexicalHint;
       }
-      return humanizeLedgerFallbackId(normalizeLedgerDisplay(raw, { preferInner: false }));
+      return humanizeDerivationId(normalizeDerivationDisplay(raw, { preferInner: false }));
     }
-    const label = stringifyLedgerAtom(node.label);
+    const label = stringifyDerivationAtom(node.label);
     const visibleYield = collectVisibleYield(node).join(' ').trim();
     if (label && visibleYield && normalizeToken(label) !== normalizeToken(visibleYield)) {
       return `${label} (${visibleYield})`;
     }
-    return label || visibleYield || humanizeLedgerFallbackId(normalizeLedgerDisplay(raw, { preferInner: false }));
+    return label || visibleYield || humanizeDerivationId(normalizeDerivationDisplay(raw, { preferInner: false }));
   };
 
   const resolveReadableReference = (preferred?: string, fallbackNodeRef?: string, { structural = false } = {}): string => {
     const resolver = structural ? resolveStructuralRef : resolveSurfaceRef;
-    const preferredRaw = stringifyLedgerAtom(preferred);
-    const fallbackRaw = stringifyLedgerAtom(fallbackNodeRef);
+    const preferredRaw = stringifyDerivationAtom(preferred);
+    const fallbackRaw = stringifyDerivationAtom(fallbackNodeRef);
 
     if (preferredRaw) {
       const resolvedPreferred = resolver(preferredRaw);
-      if (resolvedPreferred && resolvedPreferred !== humanizeLedgerFallbackId(preferredRaw)) {
+      if (resolvedPreferred && resolvedPreferred !== humanizeDerivationId(preferredRaw)) {
         return resolvedPreferred;
       }
       if (!/[A-Za-z]+_[A-Za-z0-9_]+/.test(preferredRaw)) {
@@ -796,14 +793,13 @@ const COMMITMENT_FACT_HIDDEN_FIELDS = new Set([
   'kind',
   'family',
   'frameworkLabel',
-  'kindValue',
   'chainId',
   'stepIds',
   'nodeIds'
 ]);
 
 const humanizeOpenOntologyLabel = (value?: string): string => {
-  const raw = stringifyLedgerAtom(value);
+  const raw = stringifyDerivationAtom(value);
   if (!raw) return 'Derivational Record';
   return raw
     .replace(/[_-]+/g, ' ')
@@ -818,10 +814,10 @@ const formatCommitmentFactFieldLabel = (key: string): string =>
     .replace(/\b\w/g, (ch) => ch.toUpperCase());
 
 const formatCommitmentParticipant = (participant: Record<string, unknown>): string => {
-  const role = stringifyLedgerAtom(participant.role);
-  const label = stringifyLedgerAtom(participant.label);
-  const value = stringifyLedgerAtom(participant.value);
-  const nodeId = stringifyLedgerAtom(participant.nodeId);
+  const role = stringifyDerivationAtom(participant.role);
+  const label = stringifyDerivationAtom(participant.label);
+  const value = stringifyDerivationAtom(participant.value);
+  const nodeId = stringifyDerivationAtom(participant.nodeId);
   const referent = label || value || nodeId;
   if (!referent) return '';
   return role ? `${formatCommitmentFactFieldLabel(role)}: ${referent}` : referent;
@@ -834,7 +830,7 @@ const collectCommitmentFactFieldLines = (
   const consumed = new Set<string>();
   const lines: string[] = [];
   const pushLine = (label: string, value: string) => {
-    const cleanedValue = stringifyLedgerAtom(value);
+    const cleanedValue = stringifyDerivationAtom(value);
     if (!cleanedValue) return;
     lines.push(`${label}: ${cleanedValue}`);
   };
@@ -855,12 +851,12 @@ const collectCommitmentFactFieldLines = (
     if (rawValue === undefined || rawValue === null) return;
 
     if (key.endsWith('Label')) {
-      const labelValue = stringifyLedgerAtom(rawValue);
+      const labelValue = stringifyDerivationAtom(rawValue);
       if (!labelValue) return;
       const nodeIdKey = `${key.slice(0, -5)}NodeId`;
       const resolvedValue = resolveReadableReference(
         labelValue,
-        stringifyLedgerAtom(entry[nodeIdKey]),
+        stringifyDerivationAtom(entry[nodeIdKey]),
         { structural: true }
       ) || labelValue;
       pushLine(formatCommitmentFactFieldLabel(key), resolvedValue);
@@ -871,7 +867,7 @@ const collectCommitmentFactFieldLines = (
 
     if (Array.isArray(rawValue)) {
       const values = rawValue
-        .map((item) => stringifyLedgerAtom(item))
+        .map((item) => stringifyDerivationAtom(item))
         .filter(Boolean);
       if (values.length === 0) return;
       pushLine(
@@ -892,7 +888,7 @@ const collectCommitmentFactFieldLines = (
     }
 
     if (typeof rawValue === 'string') {
-      const text = stringifyLedgerAtom(rawValue);
+      const text = stringifyDerivationAtom(rawValue);
       if (!text) return;
       pushLine(formatCommitmentFactFieldLabel(key), text);
     }
@@ -906,9 +902,9 @@ const formatCommitmentFactReplayEntry = (
   resolveReadableReference: (preferred?: string, fallbackNodeRef?: string, options?: { structural?: boolean }) => string
 ): string => {
   const family = humanizeOpenOntologyLabel(
-    stringifyLedgerAtom(entry.frameworkLabel) || stringifyLedgerAtom(entry.family) || stringifyLedgerAtom(entry.kind)
+    stringifyDerivationAtom(entry.frameworkLabel) || stringifyDerivationAtom(entry.family) || stringifyDerivationAtom(entry.kind)
   );
-  const subtype = stringifyLedgerAtom(entry.subtype);
+  const subtype = stringifyDerivationAtom(entry.subtype);
   const detailLines = collectCommitmentFactFieldLines(entry, resolveReadableReference)
     .filter((line) => !/^Subtype:/i.test(line));
   const summary = detailLines.slice(0, 3).join('; ');
@@ -918,39 +914,27 @@ const formatCommitmentFactReplayEntry = (
 };
 
 const fallbackReadableReference = (preferred?: string, fallbackNodeRef?: string): string =>
-  stringifyLedgerAtom(preferred) || stringifyLedgerAtom(fallbackNodeRef) || '';
+  stringifyDerivationAtom(preferred) || stringifyDerivationAtom(fallbackNodeRef) || '';
 
 const buildCommitmentFactSupportBadges = (entry: Record<string, unknown>): Array<{ label: string; value: string }> => {
   const badges = [
-    { label: 'Fact', value: stringifyLedgerAtom(entry.factId) },
-    { label: 'Chain', value: stringifyLedgerAtom(entry.chainId) },
+    { label: 'Fact', value: stringifyDerivationAtom(entry.factId) },
+    { label: 'Chain', value: stringifyDerivationAtom(entry.chainId) },
     {
       label: 'Steps',
       value: Array.isArray(entry.stepIds)
-        ? entry.stepIds.map((stepId) => stringifyLedgerAtom(stepId)).filter(Boolean).join(', ')
+        ? entry.stepIds.map((stepId) => stringifyDerivationAtom(stepId)).filter(Boolean).join(', ')
         : ''
     },
     {
       label: 'Nodes',
       value: Array.isArray(entry.nodeIds)
-        ? entry.nodeIds.map((nodeId) => stringifyLedgerAtom(nodeId)).filter(Boolean).join(', ')
+        ? entry.nodeIds.map((nodeId) => stringifyDerivationAtom(nodeId)).filter(Boolean).join(', ')
         : ''
     }
   ].filter((badge) => badge.value);
   return badges;
 };
-
-const REPLAY_LEDGER_OPERATIONS = new Set<DerivationStep['operation']>([
-  'FeatureLedger',
-  'CaseAssignment',
-  'ThetaAssignment',
-  'Selection',
-  'Binding',
-  'ClausalDependency'
-]);
-
-const isReplayLedgerOperation = (operation?: DerivationStep['operation'] | string): boolean =>
-  REPLAY_LEDGER_OPERATIONS.has(String(operation || '').trim() as DerivationStep['operation']);
 
 const buildReplayLedgerAttachments = (
   parse: ParseResult,
@@ -968,10 +952,10 @@ const buildReplayLedgerAttachments = (
     lines: string[],
     preferredStepId?: string
   ) => {
-    const cleanedLines = lines.map((line) => stringifyLedgerAtom(line)).filter(Boolean);
+    const cleanedLines = lines.map((line) => stringifyDerivationAtom(line)).filter(Boolean);
     if (cleanedLines.length === 0) return;
     ledgerAttachments.push({
-      preferredStepId: stringifyLedgerAtom(preferredStepId) || undefined,
+      preferredStepId: stringifyDerivationAtom(preferredStepId) || undefined,
       block: { title, lines: cleanedLines }
     });
   };
@@ -985,10 +969,10 @@ const buildReplayLedgerAttachments = (
     const unanchoredLines: string[] = [];
 
     entries.forEach((entry) => {
-      const line = stringifyLedgerAtom(formatEntry(entry));
+      const line = stringifyDerivationAtom(formatEntry(entry));
       if (!line) return;
       const preferredStepIds = Array.isArray(entry.stepIds)
-        ? entry.stepIds.map((stepId) => stringifyLedgerAtom(stepId)).filter(Boolean)
+        ? entry.stepIds.map((stepId) => stringifyDerivationAtom(stepId)).filter(Boolean)
         : [];
       if (preferredStepIds.length === 0) {
         unanchoredLines.push(line);
@@ -1007,7 +991,7 @@ const buildReplayLedgerAttachments = (
 
   appendAnchoredLedgerEntries(
     'Derivational Record',
-    (parse.commitmentFacts || parse.commitmentGraph || []) as Array<{ stepIds?: string[] } & Record<string, unknown>>,
+    (parse.commitmentFacts || []) as Array<{ stepIds?: string[] } & Record<string, unknown>>,
     (entry) => formatCommitmentFactReplayEntry(entry, resolveReadableReference)
   );
 
@@ -1029,7 +1013,7 @@ const attachReplayLedgerBlocksToStructuralSteps = (
   }));
   const stepIndexById = new Map<string, number>();
   normalizedStructuralSteps.forEach((step, index) => {
-    const stepId = stringifyLedgerAtom(step.stepId);
+    const stepId = stringifyDerivationAtom(step.stepId);
     if (stepId) stepIndexById.set(stepId, index);
   });
   const fallbackStructuralIndex = normalizedStructuralSteps.length > 0 ? normalizedStructuralSteps.length - 1 : -1;
@@ -1059,7 +1043,7 @@ const ensureReplaySpelloutStep = (parse: ParseResult | null): DerivationStep[] |
   const spelloutSteps = existing.filter((step) => String(step?.operation || '').trim() === 'SpellOut');
   const structuralSteps = existing.filter((step) => {
     const operation = String(step?.operation || '').trim();
-    return operation !== 'SpellOut' && !isReplayLedgerOperation(operation);
+    return operation !== 'SpellOut';
   });
   const lastStructural = structuralSteps[structuralSteps.length - 1];
   const rootId = String(parse.tree?.id || '').trim() || undefined;
@@ -1995,7 +1979,7 @@ const App: React.FC = () => {
                       )}
                   </div>
 
-                  {((activeParse.commitmentFacts || activeParse.commitmentGraph || []).length > 0) && (
+                  {((activeParse.commitmentFacts || []).length > 0) && (
                     <div className="glass-dark p-6 md:p-12 rounded-[2rem] md:rounded-[3rem] shadow-2xl">
                       <div className="flex items-center gap-4 md:gap-5 mb-6 md:mb-8">
                         <div className="w-10 h-10 md:w-12 md:h-12 bg-white/5 rounded-2xl flex items-center justify-center text-emerald-400 border border-white/10">
@@ -2007,16 +1991,16 @@ const App: React.FC = () => {
                         </div>
                       </div>
                       <div className="grid grid-cols-1 gap-4">
-                        {((activeParse.commitmentFacts || activeParse.commitmentGraph || []) as Array<Record<string, unknown>>).map((fact, index) => {
+                        {((activeParse.commitmentFacts || []) as Array<Record<string, unknown>>).map((fact, index) => {
                           const familyLabel = humanizeOpenOntologyLabel(
-                            stringifyLedgerAtom(fact.frameworkLabel) || stringifyLedgerAtom(fact.family) || stringifyLedgerAtom(fact.kind)
+                            stringifyDerivationAtom(fact.frameworkLabel) || stringifyDerivationAtom(fact.family) || stringifyDerivationAtom(fact.kind)
                           );
-                          const subtype = stringifyLedgerAtom(fact.subtype);
+                          const subtype = stringifyDerivationAtom(fact.subtype);
                           const fieldLines = collectCommitmentFactFieldLines(fact, fallbackReadableReference);
                           const supportBadges = buildCommitmentFactSupportBadges(fact);
                           return (
                             <div
-                              key={stringifyLedgerAtom(fact.factId) || `commitment-fact-${index}`}
+                              key={stringifyDerivationAtom(fact.factId) || `commitment-fact-${index}`}
                               className="rounded-[1.5rem] border border-white/10 bg-black/35 p-5 md:p-6 shadow-inner"
                             >
                               <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
@@ -2030,9 +2014,9 @@ const App: React.FC = () => {
                                     </p>
                                   )}
                                 </div>
-                                {stringifyLedgerAtom(fact.factId) && (
+                                {stringifyDerivationAtom(fact.factId) && (
                                   <span className="px-3 py-1.5 rounded-full border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-[0.22em] text-white/55">
-                                    {stringifyLedgerAtom(fact.factId)}
+                                    {stringifyDerivationAtom(fact.factId)}
                                   </span>
                                 )}
                               </div>
@@ -2040,7 +2024,7 @@ const App: React.FC = () => {
                                 <div className="space-y-2">
                                   {fieldLines.map((line, lineIndex) => (
                                     <p
-                                      key={`${stringifyLedgerAtom(fact.factId) || index}-${lineIndex}`}
+                                      key={`${stringifyDerivationAtom(fact.factId) || index}-${lineIndex}`}
                                       className="text-emerald-50/85 leading-relaxed text-sm md:text-base"
                                     >
                                       {line}
@@ -2052,7 +2036,7 @@ const App: React.FC = () => {
                                 <div className="mt-5 flex flex-wrap gap-2">
                                   {supportBadges.map((badge) => (
                                     <span
-                                      key={`${stringifyLedgerAtom(fact.factId) || index}-${badge.label}`}
+                                      key={`${stringifyDerivationAtom(fact.factId) || index}-${badge.label}`}
                                       className="px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300/80"
                                     >
                                       {badge.label}: {badge.value}

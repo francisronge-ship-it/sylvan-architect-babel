@@ -90,14 +90,14 @@ const normalizeReasoningAlias = (value) => {
 };
 
 const defaultReasoningEffortForRoute = (modelRoute) => {
-  const route = String(modelRoute || '').toLowerCase() === 'pro' ? 'gemini' : String(modelRoute || '').toLowerCase();
+  const route = String(modelRoute || '').toLowerCase();
   if (route === 'gpt') return OPENAI_REASONING_EFFORT;
   if (route === 'claude') return ANTHROPIC_EFFORT;
   return String(GEMINI_THINKING_LEVEL || 'HIGH').toLowerCase();
 };
 
 export const normalizeProviderReasoningEffort = (modelRoute = 'gemini', value) => {
-  const route = String(modelRoute || '').toLowerCase() === 'pro' ? 'gemini' : String(modelRoute || '').toLowerCase();
+  const route = String(modelRoute || '').toLowerCase();
   const allowed = PROVIDER_REASONING_EFFORTS[route] || PROVIDER_REASONING_EFFORTS.gemini;
   const requested = normalizeReasoningAlias(value) || normalizeReasoningAlias(defaultReasoningEffortForRoute(route)) || 'high';
   if (allowed.includes(requested)) return requested;
@@ -169,14 +169,14 @@ export const resolveRouteTemperature = () => PRO_MODEL_TEMPERATURE;
 
 export const estimateProOutputBudget = () => PRO_MAX_OUTPUT_TOKENS;
 
-export const resolveRouteMaxOutputTokens = (modelRoute = 'pro', sentence = '') => {
+export const resolveRouteMaxOutputTokens = (modelRoute = 'gemini', sentence = '') => {
   const route = String(modelRoute || '').toLowerCase();
   if (route === 'gpt') return OPENAI_MAX_OUTPUT_TOKENS;
   if (route === 'claude') return ANTHROPIC_MAX_OUTPUT_TOKENS;
   return estimateProOutputBudget(sentence);
 };
 
-export const resolveModelTimeoutMs = (model, modelRoute = 'pro') => {
+export const resolveModelTimeoutMs = (model, modelRoute = 'gemini') => {
   if (modelRoute !== 'local' && PRO_ROUTE_TIMEOUT_MS > 0) {
     return PRO_ROUTE_TIMEOUT_MS;
   }
@@ -196,7 +196,7 @@ export const resolveModelTimeoutMs = (model, modelRoute = 'pro') => {
   return modelRoute !== 'local' ? DEFAULT_PRO_MODEL_TIMEOUT_MS : DEFAULT_PRIMARY_MODEL_TIMEOUT_MS;
 };
 
-export const getRemainingRequestBudgetMs = (requestStartedAt, modelRoute = 'pro') => {
+export const getRemainingRequestBudgetMs = (requestStartedAt, modelRoute = 'gemini') => {
   if (['gpt', 'claude'].includes(String(modelRoute || '').toLowerCase())) {
     return Math.max(0, EXTERNAL_PROVIDER_REQUEST_BUDGET_MS - (Date.now() - requestStartedAt));
   }

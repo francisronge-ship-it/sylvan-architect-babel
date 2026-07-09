@@ -7,21 +7,8 @@
 import { normalizeProviderReasoningEffort } from './babelParser/routeConfig.js';
 
 const FRAMEWORKS = new Set(['xbar', 'minimalism']);
-const MODEL_ROUTES = new Set(['gemini', 'gpt', 'claude', 'pro']);
+const MODEL_ROUTES = new Set(['gemini', 'gpt', 'claude']);
 const MAX_SENTENCE_LENGTH = 600;
-const importAtRuntime = new Function('specifier', 'return import(specifier);');
-
-const maybeRecordParseEvent = async ({ sentence, framework, modelRoute, result }) => {
-  try {
-    const { recordParseEvent } = await importAtRuntime('./parseLogStore.js');
-    await recordParseEvent({ sentence, framework, modelRoute, result });
-  } catch (error) {
-    const code = String(error?.code || '').trim();
-    if (code === 'ERR_MODULE_NOT_FOUND') return;
-    if (String(error?.message || '').includes("Cannot find package 'postgres'")) return;
-    throw error;
-  }
-};
 
 /**
  * Strip characters and patterns commonly used in prompt-injection attacks
@@ -43,8 +30,7 @@ export const validateParseBody = (body) => {
 
   const rawSentence = typeof body.sentence === 'string' ? body.sentence.trim() : '';
   const framework = typeof body.framework === 'string' ? body.framework.trim() : 'xbar';
-  const rawModelRoute = typeof body.modelRoute === 'string' ? body.modelRoute.trim().toLowerCase() : 'gemini';
-  const modelRoute = rawModelRoute === 'pro' ? 'gemini' : rawModelRoute;
+  const modelRoute = typeof body.modelRoute === 'string' ? body.modelRoute.trim().toLowerCase() : 'gemini';
   const reasoningEffort = normalizeProviderReasoningEffort(
     modelRoute,
     typeof body.reasoningEffort === 'string' ? body.reasoningEffort : undefined
@@ -82,11 +68,9 @@ export const parseFromBodyWithProviders = async (
     gpt: parseSentenceWithOpenAI,
     claude: parseSentenceWithClaude
   }
-) => {
+  ) => {
   const { sentence, framework, modelRoute, reasoningEffort } = validateParseBody(body);
-  const result = await providers[modelRoute](sentence, framework, modelRoute, { reasoningEffort });
-  await maybeRecordParseEvent({ sentence, framework, modelRoute, result });
-  return result;
+  return providers[modelRoute](sentence, framework, modelRoute, { reasoningEffort });
 };
 
 export const parseFromBody = async (body) => parseFromBodyWithProviders(body);
@@ -112,4 +96,3 @@ export const formatApiError = (error) => {
     body: { error: { code: 'INTERNAL_ERROR', message: 'Unexpected server error.' } }
   };
 };
-

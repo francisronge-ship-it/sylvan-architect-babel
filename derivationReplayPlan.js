@@ -105,19 +105,14 @@ const normalizeVisualRelations = (value) => asArray(value)
   .filter(Boolean);
 
 const normalizeStage = (stage, index) => {
-  const details = stage?.change?.details && typeof stage.change.details === 'object'
-    ? stage.change.details
-    : {};
   return {
     stageIndex: index,
     stageNumber: index + 1,
-    stepId: asText(stage?.stepId || stage?.frameId || `stage-${index + 1}`),
-    statement: asText(stage?.statement || stage?.change?.statement),
-    stageRecord: asText(stage?.stageRecord || details.stageRecord || details.note || stage?.note),
-    visualRelations: normalizeVisualRelations(
-      stage?.visualRelations || details.derivationStageVisualRelations
-    ),
-    workspaceForest: asArray(stage?.workspaceForest || stage?.after?.workspaceForest)
+    stepId: `stage-${index + 1}`,
+    statement: asText(stage?.statement),
+    stageRecord: asText(stage?.stageRecord),
+    visualRelations: normalizeVisualRelations(stage?.visualRelations),
+    workspaceForest: asArray(stage?.workspaceForest)
   };
 };
 

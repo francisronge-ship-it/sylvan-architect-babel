@@ -1,6 +1,5 @@
 const normalizeParsedRoot = (value) => {
-  if (Array.isArray(value)) return { analyses: value };
-  if (value && typeof value === 'object') return value;
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
   return null;
 };
 
@@ -78,30 +77,6 @@ const repairDelimiterDamage = (candidate) => {
   return repaired ? output : null;
 };
 
-const flattenSingleNestedDerivationStages = (payload) => {
-  const analyses = Array.isArray(payload?.analyses)
-    ? payload.analyses
-    : payload && typeof payload === 'object'
-      ? [payload]
-      : [];
-  let repaired = false;
-
-  for (const analysis of analyses) {
-    const stages = analysis?.derivationStages;
-    if (
-      Array.isArray(stages) &&
-      stages.length === 1 &&
-      Array.isArray(stages[0]) &&
-      stages[0].every((stage) => stage && typeof stage === 'object' && !Array.isArray(stage))
-    ) {
-      analysis.derivationStages = stages[0];
-      repaired = true;
-    }
-  }
-
-  return repaired;
-};
-
 const createBadJsonError = (createError) => {
   if (typeof createError === 'function') {
     return createError('BAD_MODEL_RESPONSE', 'Model returned malformed JSON.', 502);
@@ -129,9 +104,6 @@ const parseStrictJsonCandidate = (candidate, createError, integrityFlags = []) =
   const normalized = normalizeParsedRoot(parsed);
   if (!normalized) {
     throw createBadJsonError(createError);
-  }
-  if (flattenSingleNestedDerivationStages(normalized)) {
-    integrityFlags.push('single_nested_derivation_stages_flattened');
   }
   return normalized;
 };

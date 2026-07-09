@@ -3,46 +3,12 @@ export const createNoteBindingHelpers = ({
   cleanExplanationWhitespace,
   ensureExplanationTerminator
 }) => {
-  // Notes are canonical-fact-first now. These legacy per-ledger fields are
-  // accepted only as transport aliases and are folded back into generic supportIds.
-  const LEGACY_NOTE_SUPPORT_FIELDS = [
-    'featureEntryIds',
-    'phaseIds',
-    'morphologyIds',
-    'realizationIds',
-    'caseAssignmentIds',
-    'argumentIds',
-    'selectionIds',
-    'bindingIds',
-    'dependencyIds',
-    'agreementIds',
-    'predicateClassIds',
-    'probeIds',
-    'nullElementIds',
-    'diagnosticIds',
-    'parameterIds',
-    'informationStructureIds',
-    'operatorScopeIds',
-    'voiceValencyIds',
-    'linearizationIds',
-    'localityIds',
-    'predicationIds',
-    'particleIds',
-    'evidentialityIds',
-    'mirativityIds',
-    'honorificityIds',
-    'switchReferenceIds',
-    'logophoraIds',
-    'eventStructureIds'
-  ];
-
   const normalizeNoteBindings = (
     value,
     {
       stepIds,
       nodeIds,
       chainIds,
-      chainIdAliases,
       commitmentFactIds,
       supportIds
     } = {}
@@ -51,7 +17,6 @@ export const createNoteBindingHelpers = ({
     const allowedStepIds = stepIds instanceof Set ? stepIds : null;
     const allowedNodeIds = nodeIds instanceof Set ? nodeIds : null;
     const allowedChainIds = chainIds instanceof Set ? chainIds : null;
-    const aliasMap = chainIdAliases instanceof Map ? chainIdAliases : null;
     const allowedCommitmentFactIds = commitmentFactIds instanceof Set ? commitmentFactIds : null;
     const allowedSupportIds = supportIds instanceof Set ? supportIds : null;
 
@@ -73,17 +38,12 @@ export const createNoteBindingHelpers = ({
     return value
       .map((item, index) => {
         if (!item || typeof item !== 'object') return null;
-        const noteId = normalizeOptionalStepText(item.noteId || item.id);
-        const rawKindValue = normalizeOptionalStepText(item.kind || item.noteType || item.category);
-        const rawKind = rawKindValue === 'movement'
-          ? 'chain'
-          : rawKindValue;
-        const text = cleanExplanationWhitespace(String(item.text || item.explanation || item.content || item.note || ''));
+        const noteId = normalizeOptionalStepText(item.noteId);
+        const rawKind = normalizeOptionalStepText(item.kind);
+        const text = cleanExplanationWhitespace(String(item.text || ''));
         if (!text) return null;
 
-        let chainId = normalizeOptionalStepText(
-          item.chainId || (Array.isArray(item.chainIds) ? item.chainIds[0] : undefined)
-        );
+        const chainId = normalizeOptionalStepText(item.chainId);
         const stepIdsValue = Array.isArray(item.stepIds)
           ? item.stepIds
               .map((stepId) => normalizeOptionalStepText(stepId))
@@ -98,15 +58,7 @@ export const createNoteBindingHelpers = ({
           const merged = groups.flat().filter(Boolean);
           return merged.length > 0 ? [...new Set(merged)] : undefined;
         };
-        const legacySupportIdsValue = mergeUniqueIds(
-          ...Object.entries(item)
-            .filter(([field]) => LEGACY_NOTE_SUPPORT_FIELDS.includes(field))
-            .map(([, fieldValue]) => normalizeLinkedIds(fieldValue, allowedSupportIds))
-        );
-        const supportIdsValue = mergeUniqueIds(
-          normalizeSupportIds(item.supportIds),
-          legacySupportIdsValue
-        );
+        const supportIdsValue = mergeUniqueIds(normalizeSupportIds(item.supportIds));
         const commitmentFactIdsValue = mergeUniqueIds(
           normalizeLinkedIds(item.commitmentFactIds, allowedCommitmentFactIds),
           Array.isArray(supportIdsValue)
@@ -114,16 +66,13 @@ export const createNoteBindingHelpers = ({
             : undefined
         );
 
-        if (allowedChainIds && allowedChainIds.size > 0 && chainId && !allowedChainIds.has(chainId)) {
-          const aliasedChainId = aliasMap?.get(chainId);
-          if (aliasedChainId && allowedChainIds.has(aliasedChainId)) {
-            chainId = aliasedChainId;
-          }
-        }
+        const normalizedChainId = !chainId || !allowedChainIds || allowedChainIds.has(chainId)
+          ? chainId
+          : undefined;
 
         const inferNoteKind = () => {
           if (rawKind) return rawKind;
-          if (chainId) return 'chain';
+          if (normalizedChainId) return 'chain';
           if ((commitmentFactIdsValue && commitmentFactIdsValue.length > 0) || (supportIdsValue && supportIdsValue.length > 0)) {
             return 'licensing';
           }
@@ -136,7 +85,7 @@ export const createNoteBindingHelpers = ({
           ...(noteId ? { noteId } : {}),
           kind,
           text,
-          chainId: chainId || undefined,
+          chainId: normalizedChainId || undefined,
           ...(stepIdsValue && stepIdsValue.length > 0 ? { stepIds: stepIdsValue } : {}),
           ...(nodeIdsValue && nodeIdsValue.length > 0 ? { nodeIds: nodeIdsValue } : {}),
           ...(supportIdsValue && supportIdsValue.length > 0 ? { supportIds: supportIdsValue } : {}),
@@ -153,7 +102,6 @@ export const createNoteBindingHelpers = ({
       stepIds,
       nodeIds,
       chainIds,
-      chainIdAliases,
       commitmentFacts,
       commitmentFactIds,
       supportIds
@@ -163,7 +111,6 @@ export const createNoteBindingHelpers = ({
     const allowedStepIds = stepIds instanceof Set ? stepIds : null;
     const allowedNodeIds = nodeIds instanceof Set ? nodeIds : null;
     const allowedChainIds = chainIds instanceof Set ? chainIds : null;
-    const aliasMap = chainIdAliases instanceof Map ? chainIdAliases : null;
     const allowedCommitmentFactIds = commitmentFactIds instanceof Set ? commitmentFactIds : null;
     const allowedSupportIds = supportIds instanceof Set ? supportIds : null;
     const facts = Array.isArray(commitmentFacts) ? commitmentFacts : [];
@@ -241,11 +188,7 @@ export const createNoteBindingHelpers = ({
         || details.headMovement?.continuityId
       ) || continuityIds[0];
       if (!rawChainId) return undefined;
-      if (!allowedChainIds || allowedChainIds.has(rawChainId)) return rawChainId;
-      const aliasedChainId = aliasMap?.get(rawChainId);
-      return aliasedChainId && allowedChainIds.has(aliasedChainId)
-        ? aliasedChainId
-        : undefined;
+      return !allowedChainIds || allowedChainIds.has(rawChainId) ? rawChainId : undefined;
     };
 
     const factIdsForStep = (stepId) => Array.from(new Set(
@@ -299,7 +242,6 @@ export const createNoteBindingHelpers = ({
       stepIds,
       nodeIds,
       chainIds,
-      chainIdAliases,
       commitmentFactIds,
       supportIds
     });

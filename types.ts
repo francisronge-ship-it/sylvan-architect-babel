@@ -2,6 +2,8 @@ export interface SyntaxNode {
   label: string;
   children?: SyntaxNode[];
   word?: string;
+  tokenIndex?: number;
+  silent?: boolean;
   surfaceSpan?: [number, number];
   id?: string; // Optional ID for D3 indexing
   aliasIds?: string[];
@@ -21,12 +23,6 @@ export type KnownDerivationOperation =
   | 'HeadMove'
   | 'A-Move'
   | 'AbarMove'
-  | 'CaseAssignment'
-  | 'ThetaAssignment'
-  | 'Selection'
-  | 'Binding'
-  | 'ClausalDependency'
-  | 'FeatureLedger'
   | 'Project'
   | 'Label'
   | 'Move'
@@ -72,7 +68,6 @@ export interface DerivationFrameChange {
 
 export interface DerivationFrameAfterState {
   workspaceForest?: SyntaxNode[];
-  reusePreviousWorkspace?: boolean;
 }
 
 export interface DerivationStep {
@@ -113,7 +108,6 @@ export interface DerivationFrame {
 }
 
 export interface DerivationStage {
-  stepId?: string;
   statement: string;
   stageRecord: string;
   visualRelations: DerivationStageVisualRelation[];
@@ -166,7 +160,7 @@ export interface NoteBinding {
   order?: number;
 }
 
-export interface ChainLedgerEntry {
+export interface DerivationChain {
   chainId: string;
   type?: OpenOntologyLabel;
   family?: 'A' | 'A-bar' | 'head' | 'other';
@@ -177,13 +171,6 @@ export interface ChainLedgerEntry {
   note?: string;
 }
 
-export interface LedgerSupportAnchors {
-  stepIds?: string[];
-  nodeIds?: string[];
-}
-
-export type CommitmentKind = OpenOntologyLabel;
-
 export interface CommitmentFactParticipant {
   role?: string;
   nodeId?: string;
@@ -191,358 +178,22 @@ export interface CommitmentFactParticipant {
   value?: string;
 }
 
-export interface CommitmentGraphEntry extends LedgerSupportAnchors {
+export interface CommitmentFact {
   factId?: string;
-  kind: CommitmentKind;
-  family?: string;
+  kind: OpenOntologyLabel;
+  family?: OpenOntologyLabel;
   frameworkLabel?: string;
+  subtype?: string;
+  statement?: string;
   participants?: CommitmentFactParticipant[];
   chainId?: string;
-  nodeId?: string;
-  label?: string;
-  nodeLabel?: string;
-  assigneeLabel?: string;
-  case?: string;
-  assigner?: string;
-  mechanism?: string;
-  overt?: boolean;
-  position?: string;
-  role?: string;
-  introducer?: string;
-  predicate?: string;
-  referent?: string;
-  phaseHead?: string;
-  complementDomain?: string;
-  transferredNodes?: string[];
-  edgeNodes?: string[];
-  spelloutDomain?: string;
-  surfaceExponent?: string;
-  featuresRealized?: string[];
-  hostHead?: string;
-  isPortmanteau?: boolean;
-  feature?: string;
-  value?: string;
-  status?: string;
-  sourceStepId?: string;
-  selectorNodeId?: string;
-  selectorHead?: string;
-  selectedNodeId?: string;
-  selectedCategory?: string;
-  selectorLabel?: string;
-  selectedLabel?: string;
-  relation?: string;
-  domainNodeId?: string;
-  antecedentNodeId?: string;
-  dependentNodeId?: string;
-  antecedentLabel?: string;
-  dependentLabel?: string;
-  principle?: string;
-  type?: string;
-  subtype?: string;
-  predicateNodeId?: string;
-  clauseNodeId?: string;
-  controllerNodeId?: string;
-  controllerLabel?: string;
-  clauseLabel?: string;
-  probeNodeId?: string;
-  goalNodeId?: string;
-  probeLabel?: string;
-  goalLabel?: string;
-  morphology?: string;
-  direction?: string;
-  domain?: string;
-  defaultValue?: boolean;
-  classification?: string;
-  diagnostics?: string[];
-  locality?: string;
-  outcome?: string;
-  kindLabel?: string;
-  kindValue?: string;
-  licensing?: string;
-  parameter?: string;
-  language?: string;
-  operatorNodeId?: string;
-  scopeNodeId?: string;
-  operatorLabel?: string;
-  scopeLabel?: string;
-  operatorType?: string;
-  voice?: string;
-  valency?: string;
-  externalArgument?: string;
-  internalArgument?: string;
-  order?: string[];
-  effect?: string;
-  movingNodeId?: string;
-  landingNodeId?: string;
-  movingLabel?: string;
-  landingLabel?: string;
-  subjectNodeId?: string;
-  subjectLabel?: string;
-  particleLabel?: string;
-  particleType?: string;
-  function?: string;
-  clauseType?: string;
-  markerLabel?: string;
-  evidentialType?: string;
-  sourceType?: string;
-  mirativityType?: string;
-  honorificType?: string;
-  target?: string;
-  markerNodeId?: string;
-  controllerClauseNodeId?: string;
-  dependentClauseNodeId?: string;
-  logophoricLabel?: string;
-  eventType?: string;
-  lexicalAspect?: string;
-  viewpointAspect?: string;
-  boundedness?: string;
-  telicity?: string;
-  evidence?: string;
-  note?: string;
+  stepIds?: string[];
+  nodeIds?: string[];
   [key: string]: unknown;
 }
 
-export interface CaseAssignment extends LedgerSupportAnchors {
-  assignmentId?: string;
-  nodeId?: string;
-  assigneeLabel?: string;
-  case?: string;
-  assigner?: string;
-  mechanism?: string;
-  evidence?: string;
-  overt?: boolean;
-  position?: string;
-}
-
-export interface ArgumentStructureEntry extends LedgerSupportAnchors {
-  argumentId?: string;
-  nodeId?: string;
-  role?: string;
-  introducer?: string;
-  predicate?: string;
-  referent?: string;
-  position?: string;
-  note?: string;
-}
-
-export interface PhaseLogEntry extends LedgerSupportAnchors {
-  phaseId?: string;
-  phaseHead?: string;
-  complementDomain?: string;
-  transferredNodes?: string[];
-  edgeNodes?: string[];
-  spelloutDomain?: string;
-}
-
-export interface MorphologyRealizationEntry extends LedgerSupportAnchors {
-  realizationId?: string;
-  nodeId: string;
-  surfaceExponent?: string;
-  featuresRealized?: string[];
-  hostHead?: string;
-  isPortmanteau?: boolean;
-  note?: string;
-}
-
-export interface FeatureLedgerEntry extends LedgerSupportAnchors {
-  entryId?: string;
-  nodeId?: string;
-  feature: string;
-  value?: string;
-  status?: string;
-  sourceStepId?: string;
-  note?: string;
-}
-
-export interface SelectionLedgerEntry extends LedgerSupportAnchors {
-  selectionId?: string;
-  selectorNodeId?: string;
-  selectorHead?: string;
-  selectedNodeId?: string;
-  selectedCategory?: string;
-  selectorLabel?: string;
-  selectedLabel?: string;
-  relation?: 'complement' | 'specifier' | 'adjunct' | 'clausal-complement' | 'small-clause' | 'other';
-  note?: string;
-}
-
-export interface BindingLedgerEntry extends LedgerSupportAnchors {
-  bindingId?: string;
-  domainNodeId?: string;
-  antecedentNodeId?: string;
-  dependentNodeId?: string;
-  antecedentLabel?: string;
-  dependentLabel?: string;
-  relation?: 'anaphor' | 'pronoun' | 'r-expression' | 'variable' | 'other';
-  principle?: 'A' | 'B' | 'C' | 'other';
-  status?: 'satisfied' | 'violated' | 'irrelevant' | 'other';
-  note?: string;
-}
-
-export interface ClausalDependencyEntry extends LedgerSupportAnchors {
-  dependencyId?: string;
-  type?: 'raising' | 'control' | 'ecm' | 'finite-complement' | 'small-clause' | 'other';
-  subtype?: string;
-  predicateNodeId?: string;
-  clauseNodeId?: string;
-  controllerNodeId?: string;
-  dependentNodeId?: string;
-  predicateLabel?: string;
-  clauseLabel?: string;
-  controllerLabel?: string;
-  dependentLabel?: string;
-  evidence?: string;
-  note?: string;
-}
-
-export interface AgreementLedgerEntry extends LedgerSupportAnchors {
-  agreementId?: string;
-  probeNodeId?: string;
-  goalNodeId?: string;
-  probeLabel?: string;
-  goalLabel?: string;
-  feature?: string;
-  value?: string;
-  morphology?: string;
-  status?: 'valued' | 'matched' | 'default' | 'failed' | 'other';
-  direction?: string;
-  domain?: string;
-  defaultValue?: boolean;
-  evidence?: string;
-  note?: string;
-}
-
-export interface PredicateClassLedgerEntry extends LedgerSupportAnchors {
-  predicateClassId?: string;
-  predicateNodeId?: string;
-  predicateLabel?: string;
-  classification?: 'raising' | 'control' | 'ecm' | 'unaccusative' | 'unergative' | 'transitive' | 'weather' | 'expletive' | 'other';
-  subtype?: string;
-  diagnostics?: string[];
-  evidence?: string;
-  note?: string;
-}
-
-export interface ProbeLedgerEntry extends LedgerSupportAnchors {
-  probeId?: string;
-  probeNodeId?: string;
-  goalNodeId?: string;
-  probeLabel?: string;
-  goalLabel?: string;
-  feature?: string;
-  direction?: string;
-  domain?: string;
-  locality?: string;
-  outcome?: 'matched' | 'valued' | 'failed' | 'blocked' | 'default' | 'other';
-  evidence?: string;
-  note?: string;
-}
-
-export interface NullElementLedgerEntry extends LedgerSupportAnchors {
-  nullElementId?: string;
-  nodeId?: string;
-  label?: string;
-  kind?: 'PRO' | 'pro' | 'expletive' | 'silent-head' | 'silent-complementizer' | 'operator' | 'trace' | 'copy' | 'other';
-  controllerNodeId?: string;
-  controllerLabel?: string;
-  antecedentNodeId?: string;
-  antecedentLabel?: string;
-  licensing?: string;
-  evidence?: string;
-  note?: string;
-}
-
-export interface DiagnosticLedgerEntry extends LedgerSupportAnchors {
-  diagnosticId?: string;
-  diagnostic?: string;
-  observation?: string;
-  supports?: string;
-  status?: 'supported' | 'undermined' | 'neutral' | 'other';
-  evidence?: string;
-  note?: string;
-}
-
-export interface ParameterLedgerEntry extends LedgerSupportAnchors {
-  parameterId?: string;
-  parameter?: string;
-  value?: string;
-  domain?: string;
-  language?: string;
-  evidence?: string;
-  note?: string;
-}
-
-export interface InformationStructureLedgerEntry extends LedgerSupportAnchors {
-  informationStructureId?: string;
-  nodeId?: string;
-  label?: string;
-  role?: 'topic' | 'focus' | 'background' | 'comment' | 'contrastive-topic' | 'contrastive-focus' | 'given' | 'new' | 'other';
-  scope?: string;
-  evidence?: string;
-  note?: string;
-}
-
-export interface OperatorScopeLedgerEntry extends LedgerSupportAnchors {
-  operatorScopeId?: string;
-  operatorNodeId?: string;
-  scopeNodeId?: string;
-  operatorLabel?: string;
-  scopeLabel?: string;
-  operatorType?: string;
-  relation?: string;
-  evidence?: string;
-  note?: string;
-}
-
-export interface VoiceValencyLedgerEntry extends LedgerSupportAnchors {
-  voiceValencyId?: string;
-  predicateNodeId?: string;
-  predicateLabel?: string;
-  voice?: 'active' | 'passive' | 'middle' | 'antipassive' | 'causative' | 'applicative' | 'reflexive' | 'reciprocal' | 'other';
-  valency?: string;
-  externalArgument?: string;
-  internalArgument?: string;
-  evidence?: string;
-  note?: string;
-}
-
-export interface LinearizationLedgerEntry extends LedgerSupportAnchors {
-  linearizationId?: string;
-  domainNodeId?: string;
-  domainLabel?: string;
-  order?: string[];
-  mechanism?: string;
-  effect?: string;
-  evidence?: string;
-  note?: string;
-}
-
-export interface LocalityLedgerEntry extends LedgerSupportAnchors {
-  localityId?: string;
-  dependencyType?: string;
-  movingNodeId?: string;
-  landingNodeId?: string;
-  movingLabel?: string;
-  landingLabel?: string;
-  boundary?: string;
-  status?: 'licensed' | 'successive-cyclic' | 'blocked' | 'violated' | 'other';
-  evidence?: string;
-  note?: string;
-}
-
-export interface PredicationLedgerEntry extends LedgerSupportAnchors {
-  predicationId?: string;
-  predicateNodeId?: string;
-  subjectNodeId?: string;
-  predicateLabel?: string;
-  subjectLabel?: string;
-  relation?: 'primary' | 'secondary' | 'depictive' | 'resultative' | 'copular' | 'small-clause' | 'other';
-  evidence?: string;
-  note?: string;
-}
-
 export interface Provenance {
-  modelRoute?: 'gemini' | 'gpt' | 'claude' | 'pro';
+  modelRoute?: 'gemini' | 'gpt' | 'claude' | 'local';
   framework?: 'xbar' | 'minimalism';
   language?: string;
   timestamp?: string;
@@ -557,29 +208,9 @@ export interface Provenance {
   payloadTranscriberOutputTokenCount?: number;
   payloadTranscriberTotalTokenCount?: number;
   payloadTranscriberThoughtsTokenCount?: number;
-  hasCommitmentGraph?: boolean;
   hasCommitmentFacts?: boolean;
   hasDerivationStages?: boolean;
   hasResolvedVisualRelations?: boolean;
-  hasCaseAssignments?: boolean;
-  hasArgumentStructure?: boolean;
-  hasPhaseLog?: boolean;
-  hasMorphologyRealization?: boolean;
-  hasSelectionLedger?: boolean;
-  hasBindingLedger?: boolean;
-  hasClausalDependencies?: boolean;
-  hasAgreementLedger?: boolean;
-  hasPredicateClassLedger?: boolean;
-  hasProbeLedger?: boolean;
-  hasNullElementLedger?: boolean;
-  hasDiagnosticLedger?: boolean;
-  hasParameterLedger?: boolean;
-  hasInformationStructureLedger?: boolean;
-  hasOperatorScopeLedger?: boolean;
-  hasVoiceValencyLedger?: boolean;
-  hasLinearizationLedger?: boolean;
-  hasLocalityLedger?: boolean;
-  hasPredicationLedger?: boolean;
   parsePromptTokenCount?: number;
   parseOutputTokenCount?: number;
   parseTotalTokenCount?: number;
@@ -602,31 +233,10 @@ export interface ParseResult {
   derivationStages?: DerivationStage[];
   resolvedVisualRelations?: ResolvedVisualRelationRecord[];
   noteBindings?: NoteBinding[];
-  rawDerivationSteps?: DerivationStep[];
   derivationSteps?: DerivationStep[];
-  chains?: ChainLedgerEntry[];
-  commitmentFacts?: CommitmentGraphEntry[];
-  commitmentGraph?: CommitmentGraphEntry[];
-  caseAssignments?: CaseAssignment[];
-  argumentStructure?: ArgumentStructureEntry[];
-  phaseLog?: PhaseLogEntry[];
-  morphologyRealization?: MorphologyRealizationEntry[];
-  featureLedger?: FeatureLedgerEntry[];
-  selectionLedger?: SelectionLedgerEntry[];
-  bindingLedger?: BindingLedgerEntry[];
-  clausalDependencies?: ClausalDependencyEntry[];
-  agreementLedger?: AgreementLedgerEntry[];
-  predicateClassLedger?: PredicateClassLedgerEntry[];
-  probeLedger?: ProbeLedgerEntry[];
-  nullElementLedger?: NullElementLedgerEntry[];
-  diagnosticLedger?: DiagnosticLedgerEntry[];
-  parameterLedger?: ParameterLedgerEntry[];
-  informationStructureLedger?: InformationStructureLedgerEntry[];
-  operatorScopeLedger?: OperatorScopeLedgerEntry[];
-  voiceValencyLedger?: VoiceValencyLedgerEntry[];
-  linearizationLedger?: LinearizationLedgerEntry[];
-  localityLedger?: LocalityLedgerEntry[];
-  predicationLedger?: PredicationLedgerEntry[];
+  chains?: DerivationChain[];
+  // Compiler-owned open facts derived from derivationStages; never model-authored input.
+  commitmentFacts?: CommitmentFact[];
   provenance?: Provenance;
 }
 
@@ -634,7 +244,8 @@ export interface ParseBundle {
   analyses: ParseResult[];
   ambiguityDetected: boolean;
   ambiguityNote?: string;
-  requestedModelRoute?: 'gemini' | 'gpt' | 'claude' | 'pro';
+  sentence?: string;
+  requestedModelRoute?: 'gemini' | 'gpt' | 'claude';
   requestedReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   modelUsed?: string;
 }

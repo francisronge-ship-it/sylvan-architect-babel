@@ -59,40 +59,6 @@ export const createDerivationCompilerHelpers = ({
           .filter((item) => typeof item !== 'undefined')
       : value;
 
-  const normalizeFeatureChecking = (value, nodeIds) => {
-    const parsedValue = normalizeTransportJsonArray(value);
-    if (!Array.isArray(parsedValue)) return undefined;
-
-    const entries = parsedValue
-      .map((item) => {
-        if (!item || typeof item !== 'object') return null;
-        const feature = String(item.feature || '').trim();
-        if (!feature) return null;
-
-        const valueText = String(item.value || '').trim();
-        const status = String(item.status || '').trim().toLowerCase();
-        const probeNodeId = String(item.probeNodeId || '').trim();
-        const goalNodeId = String(item.goalNodeId || '').trim();
-        const probeLabel = String(item.probeLabel || '').trim();
-        const goalLabel = String(item.goalLabel || '').trim();
-        const note = String(item.note || '').trim();
-
-        return {
-          feature,
-          value: valueText || undefined,
-          status: status || undefined,
-          probeNodeId: probeNodeId && nodeIds.has(probeNodeId) ? probeNodeId : undefined,
-          goalNodeId: goalNodeId && nodeIds.has(goalNodeId) ? goalNodeId : undefined,
-          probeLabel: probeLabel || undefined,
-          goalLabel: goalLabel || undefined,
-          note: note || undefined
-        };
-      })
-      .filter(Boolean);
-
-    return entries.length > 0 ? entries : undefined;
-  };
-
   const normalizeDerivationFrameAnchors = (value, nodeIds) => {
     const parsedValue = normalizeTransportJsonArray(value);
     if (!Array.isArray(parsedValue)) return undefined;
@@ -183,12 +149,7 @@ export const createDerivationCompilerHelpers = ({
       ? parsedValue
       : {};
     const workspaceForest = normalizeWorkspaceForestInput(after.workspaceForest);
-    const reusePreviousWorkspace = after.reusePreviousWorkspace === true;
-    if (workspaceForest.length === 0 && !reusePreviousWorkspace) return undefined;
-    return {
-      ...(workspaceForest.length > 0 ? { workspaceForest } : {}),
-      ...(reusePreviousWorkspace ? { reusePreviousWorkspace: true } : {})
-    };
+    return workspaceForest.length > 0 ? { workspaceForest } : undefined;
   };
 
   const normalizeStageRecordTextKey = (value) =>
@@ -235,20 +196,7 @@ export const createDerivationCompilerHelpers = ({
 
   const normalizeVisualRelationAnchors = (value) => {
     const parsedValue = parseTransportJsonValue(value);
-    if (Array.isArray(parsedValue)) {
-      const entries = parsedValue
-        .map((item, index) => {
-          if (Array.isArray(item)) {
-            const anchorValues = item.map((entry) => normalizeOptionalStepText(entry)).filter(Boolean);
-            return anchorValues.length > 0 ? [`anchor${index + 1}`, anchorValues] : null;
-          }
-          const anchorValue = normalizeOptionalStepText(item);
-          return anchorValue ? [`anchor${index + 1}`, anchorValue] : null;
-        })
-        .filter(Boolean);
-      return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-    }
-    if (!parsedValue || typeof parsedValue !== 'object') return undefined;
+    if (!parsedValue || typeof parsedValue !== 'object' || Array.isArray(parsedValue)) return undefined;
     const entries = Object.entries(parsedValue)
       .map(([key, rawAnchor]) => {
         const anchorKey = normalizeOptionalStepText(key);
@@ -274,6 +222,15 @@ export const createDerivationCompilerHelpers = ({
         const item = parseTransportJsonValue(rawRelation);
         if (!item || typeof item !== 'object' || Array.isArray(item)) {
           integrityFlags.push(`visual_relation_item_invalid:${stageId}:${relationIndex + 1}`);
+          return null;
+        }
+        const authoredFields = Object.keys(item);
+        if (
+          authoredFields.length !== 2
+          || !Object.prototype.hasOwnProperty.call(item, 'relation')
+          || !Object.prototype.hasOwnProperty.call(item, 'anchors')
+        ) {
+          integrityFlags.push(`visual_relation_contract_fields_invalid:${stageId}:${relationIndex + 1}`);
           return null;
         }
         const relation = normalizeOptionalStepText(item.relation);
@@ -460,12 +417,21 @@ export const createDerivationCompilerHelpers = ({
   const normalizeDerivationStagesToDerivationFrames = (value, options = {}) => {
     if (!Array.isArray(value)) return [];
     const integrityFlags = Array.isArray(options?.integrityFlags) ? options.integrityFlags : [];
+    const requiredStageFields = ['statement', 'stageRecord', 'visualRelations', 'workspaceForest'];
 
     return value
       .map((rawItem, frameIndex) => {
         const item = parseTransportJsonValue(rawItem);
         if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
-        const stageId = normalizeOptionalStepText(item.stepId || item.frameId) || `d${frameIndex + 1}`;
+        const stageId = `d${frameIndex + 1}`;
+        const authoredFields = Object.keys(item);
+        if (
+          authoredFields.length !== requiredStageFields.length
+          || requiredStageFields.some((field) => !Object.prototype.hasOwnProperty.call(item, field))
+        ) {
+          integrityFlags.push(`derivation_stage_contract_fields_invalid:${stageId}`);
+          return null;
+        }
         const statement = normalizeOptionalStepText(item.statement);
         if (!statement) {
           integrityFlags.push(`statement_missing_on_derivation_stage:${stageId}`);
@@ -482,14 +448,8 @@ export const createDerivationCompilerHelpers = ({
           frameIndex,
           integrityFlags
         );
-        const after = item.after && typeof item.after === 'object' && !Array.isArray(item.after)
-          ? item.after
-          : {};
-        const workspaceForest = typeof item.workspaceForest !== 'undefined'
-          ? item.workspaceForest
-          : after.workspaceForest;
-        const reusePreviousWorkspace = item.reusePreviousWorkspace === true || after.reusePreviousWorkspace === true;
-        if (typeof workspaceForest === 'undefined' && !reusePreviousWorkspace) {
+        const workspaceForest = item.workspaceForest;
+        if (typeof workspaceForest === 'undefined') {
           integrityFlags.push(`workspace_forest_missing_on_derivation_stage:${stageId}`);
           return null;
         }
@@ -498,8 +458,7 @@ export const createDerivationCompilerHelpers = ({
           frameId: stageId,
           stepId: stageId,
           after: {
-            ...(typeof workspaceForest !== 'undefined' ? { workspaceForest } : {}),
-            ...(reusePreviousWorkspace ? { reusePreviousWorkspace: true } : {})
+            workspaceForest
           },
           change: {
             statement,
@@ -644,8 +603,6 @@ export const createDerivationCompilerHelpers = ({
     const after = getFrameAfterState(frame);
     return Array.isArray(after.workspaceForest) ? after.workspaceForest : [];
   };
-
-  const frameReusesPreviousWorkspace = (frame) => getFrameAfterState(frame).reusePreviousWorkspace === true;
 
   const getFrameChange = (frame) =>
     frame?.change && typeof frame.change === 'object' && !Array.isArray(frame.change)
@@ -1964,7 +1921,6 @@ export const createDerivationCompilerHelpers = ({
         if (!item || typeof item !== 'object') return null;
         const normalizedAfter = normalizeDerivationFrameAfter(item.after);
         if (!normalizedAfter) return null;
-        const reusePreviousWorkspace = normalizedAfter.reusePreviousWorkspace === true;
         const workspaceForestValue = expandSameStageSubtreeRefs(
           normalizeWorkspaceForestInput(normalizedAfter.workspaceForest),
           integrityFlags,
@@ -1995,8 +1951,6 @@ export const createDerivationCompilerHelpers = ({
               path: `frame[${frameIndex}].after.workspaceForest[${rootIndex}]`
             }))
             .filter(Boolean);
-        } else if (reusePreviousWorkspace && Array.isArray(previousWorkspaceForest) && previousWorkspaceForest.length > 0) {
-          workspaceForest = previousWorkspaceForest.map((root) => cloneSyntaxNodeDeep(root));
         }
         if (workspaceForest.length === 0) return null;
         const rawChange = parseTransportJsonValue(item.change);
@@ -2039,21 +1993,10 @@ export const createDerivationCompilerHelpers = ({
           frameId: normalizeOptionalStepText(item.frameId) || `f${frameIndex + 1}`,
           stepId: normalizeOptionalStepText(item.stepId),
           after: {
-            ...(reusePreviousWorkspace ? { reusePreviousWorkspace: true } : {}),
             workspaceForest
           },
           change: normalizedChange,
-          note: normalizeOptionalStepText(item.note),
-          ...(Array.isArray(item.visualRelationEvents) ? { visualRelationEvents: item.visualRelationEvents } : {}),
-          ...(item.featureChecking ? {
-            change: {
-              ...(normalizedChange || {}),
-              details: {
-                ...((normalizedChange?.details && typeof normalizedChange.details === 'object') ? normalizedChange.details : {}),
-                featureChecking: normalizeFeatureChecking(item.featureChecking, frameNodeIds)
-              }
-            }
-          } : {})
+          ...(Array.isArray(item.visualRelationEvents) ? { visualRelationEvents: item.visualRelationEvents } : {})
         };
       })
       .filter(Boolean);
@@ -2486,9 +2429,6 @@ export const createDerivationCompilerHelpers = ({
           : (isMoveFrame ? undefined : (workspaceLabels.length > 0 ? workspaceLabels : undefined)),
         recipe: normalizeOptionalStepText(change?.statement) || `${operation} frame ${index + 1}`,
         workspaceAfter: workspaceLabels.length > 0 ? workspaceLabels : undefined,
-        featureChecking: Array.isArray(change?.details?.featureChecking) && change.details.featureChecking.length > 0
-          ? change.details.featureChecking
-          : undefined,
         chainId: findChangeContinuityId(change) || undefined,
         note: normalizeOptionalStepText(frame.note)
       };

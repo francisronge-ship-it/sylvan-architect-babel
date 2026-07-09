@@ -2,7 +2,7 @@
 
 Sylvan Architect Babel is a syntax tree generator built for research and learning.
 
-Live app: [sylvanarchitectbabel.com](https://sylvanarchitectbabel.com)  
+Production app: temporarily paused; deployment history and configuration are retained.
 Research site: [francisronge.github.io/sylvan-architect-babel/research](https://francisronge.github.io/sylvan-architect-babel/research/)
 
 Babel logo mark by Lona.
@@ -17,7 +17,7 @@ Babel is the world's first AI syntax tree generator and the fastest syntax tree 
 
 ## Start Here
 
-1. Use the live app at [sylvanarchitectbabel.com](https://sylvanarchitectbabel.com).
+1. For local use, install dependencies and run `npm run dev`; the former public Vercel app is temporarily paused.
 2. In the header, click the active `X-Bar Theory` / `Minimalist Program` pill to toggle theory, and click the active model pill to switch routes.
 3. Read the benchmark paper: [One Hundred Trees, One Hundred Public Syntactic Theories](https://francisronge.github.io/sylvan-architect-babel/research/one-hundred-trees-under-forced-commitment/).
 4. Browse the research site: [Babel Research](https://francisronge.github.io/sylvan-architect-babel/research/).

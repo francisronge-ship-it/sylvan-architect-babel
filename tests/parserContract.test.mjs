@@ -1,0 +1,227 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { buildDerivationReplayPlan } from '../derivationReplayPlan.js';
+import { __test__ } from '../server/babelParser.js';
+
+const buildCurrentContractPayload = () => ({
+  derivationStages: [
+    {
+      statement: 'The noun Mia enters the derivation.',
+      stageRecord: 'Lexical selection introduces the proper noun Mia, which projects a noun phrase that will serve as the external argument of the predicate.',
+      visualRelations: [],
+      workspaceForest: [
+        {
+          id: 'np_mia',
+          label: 'NP',
+          children: [
+            {
+              id: 'n_mia',
+              label: 'N',
+              children: [
+                { id: 'leaf_mia', label: 'Mia', word: 'Mia', tokenIndex: 0, children: [] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      statement: 'The intransitive verb laughed projects a verb phrase.',
+      stageRecord: 'The unergative verb laughed is selected and projects a verb phrase; its single theta role is assigned to the external argument position, which the noun phrase Mia will occupy.',
+      visualRelations: [],
+      workspaceForest: [
+        { refId: 'np_mia' },
+        {
+          id: 'vp_laughed',
+          label: 'VP',
+          children: [
+            {
+              id: 'vbar_laughed',
+              label: "V'",
+              children: [
+                {
+                  id: 'v_laughed',
+                  label: 'V',
+                  children: [
+                    { id: 'leaf_laughed', label: 'laughed', word: 'laughed', tokenIndex: 1, children: [] }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      statement: 'Tense combines with the verb phrase.',
+      stageRecord: 'A finite past tense head selects the verb phrase as its complement, projecting the inflectional layer that licenses the subject position of the clause.',
+      visualRelations: [],
+      workspaceForest: [
+        { refId: 'np_mia' },
+        {
+          id: 'tbar_1',
+          label: "T'",
+          children: [
+            { id: 't_past', label: 'T', children: [{ id: 'leaf_t', label: '∅', children: [] }] },
+            { refId: 'vp_laughed' }
+          ]
+        }
+      ]
+    },
+    {
+      statement: 'The subject occupies the specifier of TP and the clause converges.',
+      stageRecord: 'The noun phrase Mia merges as the specifier of the tense projection, and the tense head bears an open agreement relation to that subject; the derivation converges with the surface order Mia laughed.',
+      visualRelations: [
+        {
+          relation: 'bespoke-open-agreement',
+          anchors: {
+            'unbounded-probe-role': 't_past',
+            'bespoke-goal-role': 'np_mia'
+          }
+        }
+      ],
+      workspaceForest: [
+        {
+          id: 'tp_root',
+          label: 'TP',
+          children: [{ refId: 'np_mia' }, { refId: 'tbar_1' }]
+        }
+      ]
+    }
+  ]
+});
+
+test('normalizes the current four-field derivation contract without provider calls', () => {
+  const bundle = __test__.normalizeParseBundle(
+    buildCurrentContractPayload(),
+    'xbar',
+    'Mia laughed.',
+    'gemini',
+    true,
+    { payloadIntegrityFlags: [] }
+  );
+
+  assert.equal(bundle.analyses.length, 1);
+  const analysis = bundle.analyses[0];
+
+  assert.deepEqual(analysis.surfaceOrder, ['Mia', 'laughed']);
+  assert.equal(analysis.derivationStages.length, 4);
+  analysis.derivationStages.forEach((stage) => {
+    assert.deepEqual(Object.keys(stage), [
+      'statement',
+      'stageRecord',
+      'visualRelations',
+      'workspaceForest'
+    ]);
+    assert.equal(typeof stage.statement, 'string');
+    assert.equal(typeof stage.stageRecord, 'string');
+    assert.ok(Array.isArray(stage.visualRelations));
+    assert.ok(Array.isArray(stage.workspaceForest));
+  });
+
+  assert.equal(analysis.derivationStages[3].visualRelations[0].relation, 'bespoke-open-agreement');
+  assert.deepEqual(analysis.derivationStages[3].visualRelations[0].anchors, {
+    'unbounded-probe-role': 't_past',
+    'bespoke-goal-role': 'np_mia'
+  });
+  assert.equal(
+    analysis.resolvedVisualRelations.find((relation) => relation.relation === 'bespoke-open-agreement')?.renderFamily,
+    'unknown'
+  );
+  assert.ok(analysis.commitmentFacts.length >= analysis.derivationStages.length);
+  assert.ok(analysis.noteBindings.length >= analysis.derivationStages.length);
+  assert.match(analysis.explanation, /Mia/i);
+  assert.equal(analysis.provenance.treeSource, 'derivationStages');
+  const replayPlan = buildDerivationReplayPlan({ derivationStages: analysis.derivationStages });
+  assert.equal(replayPlan.stages.length, 4);
+  assert.equal(replayPlan.stages[0].stepId, 'stage-1');
+  assert.equal(
+    replayPlan.stages[3].relationSteps[0].relation,
+    'bespoke-open-agreement'
+  );
+  assert.deepEqual(
+    replayPlan.stages[3].macroStep.workspaceForest,
+    analysis.derivationStages[3].workspaceForest
+  );
+  const removedResultFields = [
+    'commitmentGraph',
+    'featureLedger',
+    'caseAssignments',
+    'argumentStructure',
+    'phaseLog',
+    'morphologyRealization',
+    'selectionLedger',
+    'bindingLedger',
+    'clausalDependencies',
+    'agreementLedger',
+    'predicateClassLedger',
+    'probeLedger',
+    'nullElementLedger',
+    'diagnosticLedger',
+    'parameterLedger',
+    'informationStructureLedger',
+    'operatorScopeLedger',
+    'voiceValencyLedger',
+    'linearizationLedger',
+    'localityLedger',
+    'predicationLedger',
+    'particleLedger',
+    'evidentialityLedger',
+    'mirativityLedger',
+    'honorificityLedger',
+    'switchReferenceLedger',
+    'logophoraLedger',
+    'eventStructureLedger',
+    'rawDerivationSteps'
+  ];
+
+  removedResultFields.forEach((field) => assert.equal(field in analysis, false, field));
+});
+
+test('rejects legacy top-level parser views', () => {
+  const payload = {
+    ...buildCurrentContractPayload(),
+    commitmentGraph: [{ factId: 'legacy-fact', kind: 'case', nodeIds: ['np_mia'] }],
+    featureLedger: [{ entryId: 'legacy-feature', feature: 'legacy' }]
+  };
+
+  assert.throws(
+    () => __test__.normalizeParseBundle(
+      payload,
+      'xbar',
+      'Mia laughed.',
+      'gemini',
+      true,
+      { payloadIntegrityFlags: [] }
+    ),
+    (error) => error?.code === 'BAD_MODEL_RESPONSE'
+  );
+});
+
+test('rejects derivation stages that add a fifth authored field', () => {
+  const payload = buildCurrentContractPayload();
+  payload.derivationStages = payload.derivationStages.map((stage, index) => ({
+    ...stage,
+    stepId: `legacy-stage-${index + 1}`
+  }));
+
+  assert.throws(
+    () => __test__.normalizeParseBundle(
+      payload,
+      'xbar',
+      'Mia laughed.',
+      'gemini',
+      true,
+      { payloadIntegrityFlags: [] }
+    ),
+    (error) => error?.code === 'BAD_MODEL_RESPONSE'
+  );
+});
+
+test('rejects the legacy top-level analyses array at JSON ingress', () => {
+  assert.throws(
+    () => __test__.parseModelJson(JSON.stringify([buildCurrentContractPayload()])),
+    (error) => error?.code === 'BAD_MODEL_RESPONSE'
+  );
+});

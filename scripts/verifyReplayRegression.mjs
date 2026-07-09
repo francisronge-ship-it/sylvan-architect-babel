@@ -838,11 +838,15 @@ const assertDerivationContract = (errors, dirName, bundleWrapper) => {
   analyses.forEach((analysis, analysisIndex) => {
     const stages = Array.isArray(analysis?.derivationStages) ? analysis.derivationStages : [];
     stages.forEach((stage, stageIndex) => {
-      ['statement', 'stageRecord', 'visualRelations', 'workspaceForest'].forEach((field) => {
+      const requiredFields = ['statement', 'stageRecord', 'visualRelations', 'workspaceForest'];
+      requiredFields.forEach((field) => {
         if (!(field in (stage || {}))) {
           fail(errors, dirName, `stage ${stageIndex + 1} missing ${field}`);
         }
       });
+      if (Object.keys(stage || {}).length !== requiredFields.length) {
+        fail(errors, dirName, `stage ${stageIndex + 1} must contain exactly the four authored contract fields`);
+      }
       if (!String(stage?.statement || '').trim()) {
         fail(errors, dirName, `stage ${stageIndex + 1} has empty statement`);
       }

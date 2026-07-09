@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { DerivationStage, DerivationStep, FeatureCheckEvent, ReplayLedgerBlock, SyntaxNode } from '../types';
+import { DerivationStage, DerivationStep, ReplayLedgerBlock, SyntaxNode } from '../types';
 import { ResolvedVisualRelation, ResolvedVisualRelationAnchor } from '../visualRelationLinks';
 import { buildDerivationReplayPlan } from '../derivationReplayPlan.js';
 import RootLogo from './RootLogo';
@@ -36,7 +36,6 @@ interface PlaybackStep {
   recipe?: string;
   workspaceAfter?: string[];
   spelloutOrder?: string[];
-  featureChecking?: FeatureCheckEvent[];
   ledgerBlocks?: ReplayLedgerBlock[];
   stepId?: string;
   trigger?: string;
@@ -132,7 +131,6 @@ interface ReplayDerivationFrame {
   chainId?: string;
   spelloutDomain?: string;
   spelloutOrder?: string[];
-  featureChecking?: FeatureCheckEvent[];
   microOperations?: DerivationStep['operation'][];
   movement?: ReplayDerivationMovementPayload | null;
   publicFacts?: Record<string, unknown>[];
@@ -404,15 +402,13 @@ const adaptDerivationStagesForReplay = (stages?: DerivationStage[] | null): Repl
           ...(hostNodeId ? { hostNodeId } : {}),
           ...(traceNodeId ? { traceNodeId } : {}),
           ...(chainId ? { chainId } : {}),
-          ...(String(change?.statement || '').trim() ? { note: String(change?.statement || '').trim() } : {}),
-          ...(String(details?.serializationStatus || '').trim() ? { serializationStatus: String(details?.serializationStatus || '').trim() as ReplayDerivationMovementPayload['serializationStatus'] } : {}),
-          ...(Array.isArray(details?.diagnostics) ? { diagnostics: details.diagnostics.filter(Boolean).map((value) => String(value)) } : {})
+          ...(String(change?.statement || '').trim() ? { note: String(change?.statement || '').trim() } : {})
         }
       : null;
 
     return {
-      frameId: String(stage.stepId || '').trim() || `stage-${index + 1}`,
-      stepId: String(stage.stepId || '').trim() || `stage-${index + 1}`,
+      frameId: `stage-${index + 1}`,
+      stepId: `stage-${index + 1}`,
       statement: String(stage.statement || '').trim(),
       stageRecord: String(stage.stageRecord || '').trim(),
       visualRelations,
@@ -422,17 +418,6 @@ const adaptDerivationStagesForReplay = (stages?: DerivationStage[] | null): Repl
       operation,
       recipe: String(change?.statement || '').trim() || undefined,
       chainId,
-      spelloutDomain: String(details?.spelloutDomain || '').trim() || undefined,
-      spelloutOrder: Array.isArray(details?.spelloutOrder)
-        ? details.spelloutOrder.map((value) => String(value || '').trim()).filter(Boolean)
-        : undefined,
-      featureChecking: Array.isArray(details?.featureChecking)
-        ? details.featureChecking as FeatureCheckEvent[]
-        : undefined,
-      microOperations: Array.isArray(details?.microOperations)
-        ? details.microOperations as DerivationStep['operation'][]
-        : undefined,
-      trigger: String(details?.trigger || '').trim() || undefined,
       movement,
       publicFacts: undefined
     };
@@ -1261,7 +1246,6 @@ const buildReplayProgressLabel = (
 const stripSemanticPayloadFromMicrostep = (step: PlaybackStep): PlaybackStep => ({
   ...step,
   sourceKind: 'microstep',
-  featureChecking: undefined,
   ledgerBlocks: undefined,
   note: undefined,
   movementSerializationStatus: undefined,
@@ -1356,8 +1340,6 @@ const buildPlaybackStepsFromDerivationFrames = (
     );
     const carriesStructuredAuditPayload =
       (Array.isArray(frame.spelloutOrder) && frame.spelloutOrder.length > 0) ||
-      (Array.isArray(frame.featureChecking) && frame.featureChecking.length > 0) ||
-      (Array.isArray(alignedStep?.featureChecking) && alignedStep.featureChecking.length > 0) ||
       (Array.isArray(alignedStep?.ledgerBlocks) && alignedStep.ledgerBlocks.length > 0);
     const frameCarriesAuthoredEffect =
       Boolean(String(getDerivationFrameChange(frame)?.statement || '').trim())
@@ -1566,9 +1548,6 @@ const buildPlaybackStepsFromDerivationFrames = (
         ? alignedStep.workspaceAfter
         : rootLabels,
       spelloutOrder: frame.spelloutOrder || alignedStep?.spelloutOrder,
-      featureChecking: Array.isArray(frame.featureChecking) && frame.featureChecking.length > 0
-        ? frame.featureChecking
-        : alignedStep?.featureChecking,
       ledgerBlocks: mergedFrameLedgerBlocks,
       replayKind: plannedStage ? 'macro' : undefined,
       stageRecord: getFrameStageRecordText(frame, plannedStage),
@@ -2654,7 +2633,6 @@ const buildPlaybackStepsFromDerivationFrames = (
           : buildStructuralReplayFallback(operation, step.targetLabel, readableWorkspace || []),
         workspaceAfter: isFinalMicroStep ? step.workspaceAfter : undefined,
         spelloutOrder: isFinalMicroStep ? step.spelloutOrder : undefined,
-        featureChecking: isFinalMicroStep ? step.featureChecking : undefined,
         ledgerBlocks: isFinalMicroStep ? step.ledgerBlocks : undefined,
         note: isFinalMicroStep ? step.note : undefined
       };
@@ -2722,10 +2700,6 @@ const squashAdjacentStructuralReplayDuplicates = (steps: PlaybackStep[]): Playba
           (Array.isArray(previous.sourceLabels) ? previous.sourceLabels : []).length > 0
             ? previous.sourceLabels
             : step.sourceLabels,
-        featureChecking:
-          (Array.isArray(step.featureChecking) && step.featureChecking.length > 0)
-            ? step.featureChecking
-            : previous.featureChecking,
         ledgerBlocks:
           (Array.isArray(step.ledgerBlocks) && step.ledgerBlocks.length > 0)
             ? step.ledgerBlocks
@@ -2804,10 +2778,6 @@ const collapseZeroDeltaReplaySteps = (steps: PlaybackStep[]): PlaybackStep[] => 
         (Array.isArray(step.workspaceAfter) && step.workspaceAfter.length > 0)
           ? step.workspaceAfter
           : previous.workspaceAfter,
-      featureChecking:
-        (Array.isArray(step.featureChecking) && step.featureChecking.length > 0)
-          ? step.featureChecking
-          : previous.featureChecking,
       ledgerBlocks: mergeReplayLedgerBlocks(previous.ledgerBlocks, step.ledgerBlocks),
       spelloutOrder:
         (Array.isArray(step.spelloutOrder) && step.spelloutOrder.length > 0)
@@ -6204,7 +6174,6 @@ const buildPlaybackSteps = (
     recipe: provided.recipe,
     workspaceAfter: provided.workspaceAfter,
     spelloutOrder: provided.spelloutOrder,
-    featureChecking: provided.featureChecking,
     ledgerBlocks: provided.ledgerBlocks,
     note: provided.note
   }));
@@ -6222,7 +6191,6 @@ const buildPlaybackSteps = (
       recipe: step.recipe || 'SpellOut',
       workspaceAfter: step.workspaceAfter,
       spelloutOrder: step.spelloutOrder,
-      featureChecking: step.featureChecking,
       ledgerBlocks: step.ledgerBlocks,
       note: step.note
     }));
@@ -8072,17 +8040,6 @@ const buildReplayDisplayLedgerBlocks = (
   return byStep;
 };
 
-const formatFeatureCheckingEntry = (entry: FeatureCheckEvent): string => {
-  const probe = entry.probeLabel || entry.probeNodeId || '';
-  const goal = entry.goalLabel || entry.goalNodeId || '';
-  const status = entry.status ? `[${entry.status}]` : '';
-  const value = entry.value ? `=${entry.value}` : '';
-  const relation = probe && goal ? `${probe} -> ${goal}` : (probe || goal || '');
-  const core = `${entry.feature}${value}`;
-  const base = relation ? `${core} @ ${relation}` : core;
-  return status ? `${base} ${status}` : base;
-};
-
 const getTerminalWords = (node: SyntaxNode): string[] => {
   if (!node.children || node.children.length === 0) {
     return node.word ? [node.word] : [node.label];
@@ -8307,7 +8264,6 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
     const stages = Array.isArray(derivationStages) ? derivationStages : [];
     return stages.map((stage, index) => JSON.stringify({
       index,
-      stepId: stage.stepId,
       statement: stage.statement,
       stageRecord: stage.stageRecord,
       visualRelations: stage.visualRelations || [],
@@ -8330,18 +8286,6 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
         (step.sourceLabels || []).join(','),
         step.recipe || '',
         (step.spelloutOrder || []).join(','),
-        (step.featureChecking || [])
-          .map((entry) => [
-            entry.feature || '',
-            entry.value || '',
-            entry.status || '',
-            entry.probeNodeId || '',
-            entry.goalNodeId || '',
-            entry.probeLabel || '',
-            entry.goalLabel || '',
-            entry.note || ''
-          ].join(','))
-          .join(';'),
         (step.ledgerBlocks || [])
           .map((block) => [
             block.title || '',
@@ -9724,23 +9668,8 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
                   </div>
                 </div>
               )}
-            {((activeStep?.featureChecking && activeStep.featureChecking.length > 0) || activeDisplayLedgerBlocks.length > 0) && (
+            {activeDisplayLedgerBlocks.length > 0 && (
               <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
-                {activeStep?.featureChecking && activeStep.featureChecking.length > 0 && (
-                  <div>
-                    <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-300/90 mb-2">
-                      Feature Checking
-                    </div>
-                    <div className="space-y-1">
-                      {activeStep.featureChecking.map((entry, idx) => (
-                        <div key={`${entry.feature}-${idx}`} className="text-[11px] text-white/90 leading-relaxed">
-                          {formatFeatureCheckingEntry(entry)}
-                          {entry.note ? ` - ${entry.note}` : ''}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 {activeDisplayLedgerBlocks.map((block, blockIndex) => (
                   <div key={`${block.title}-${blockIndex}`}>
                     <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-300/90 mb-2">

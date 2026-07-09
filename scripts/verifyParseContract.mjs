@@ -90,12 +90,28 @@ const validateFile = (filePath) => {
 
     stages.forEach((stage, stageIndex) => {
       const stageLabel = `${prefix} stage ${stageIndex + 1}`;
+      const stageFields = Object.keys(stage || {});
+      const requiredStageFields = ['statement', 'stageRecord', 'visualRelations', 'workspaceForest'];
+      if (
+        stageFields.length !== requiredStageFields.length
+        || requiredStageFields.some((field) => !Object.prototype.hasOwnProperty.call(stage || {}, field))
+      ) {
+        errors.push(`${stageLabel}: must contain exactly statement, stageRecord, visualRelations, and workspaceForest`);
+      }
       if (!asText(stage.statement)) errors.push(`${stageLabel}: missing statement`);
       if (!asText(stage.stageRecord)) errors.push(`${stageLabel}: missing stageRecord`);
       if (asArray(stage.workspaceForest).length === 0) errors.push(`${stageLabel}: missing workspaceForest`);
 
       asArray(stage.visualRelations).forEach((relation, relationIndex) => {
-        const relationLabel = asText(relation.relation || relation.kind || relation.type || relation.label)
+        const relationFields = Object.keys(relation || {});
+        if (
+          relationFields.length !== 2
+          || !Object.prototype.hasOwnProperty.call(relation || {}, 'relation')
+          || !Object.prototype.hasOwnProperty.call(relation || {}, 'anchors')
+        ) {
+          errors.push(`${stageLabel} visualRelation ${relationIndex + 1}: must contain exactly relation and anchors`);
+        }
+        const relationLabel = asText(relation.relation)
           || `visualRelation ${relationIndex + 1}`;
         const anchors = relationAnchorEntries(relation);
         if (anchors.length === 0) {

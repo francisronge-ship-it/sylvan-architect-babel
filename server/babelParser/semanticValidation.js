@@ -192,188 +192,35 @@ export const createSemanticValidationHelpers = ({
     noteBindings = [],
     visualRelationEvents = [],
     chains = [],
-    commitmentGraph = [],
-    clausalDependencies = [],
-    caseAssignments = [],
-    argumentStructure = [],
-    phaseLog = [],
-    morphologyRealization = [],
-    featureLedger = [],
-    selectionLedger = [],
-    bindingLedger = [],
-    agreementLedger = [],
-    predicateClassLedger = [],
-    probeLedger = [],
-    nullElementLedger = [],
-    diagnosticLedger = [],
-    parameterLedger = [],
-    informationStructureLedger = [],
-    operatorScopeLedger = [],
-    voiceValencyLedger = [],
-    linearizationLedger = [],
-    localityLedger = [],
-    predicationLedger = [],
-    particleLedger = [],
-    evidentialityLedger = [],
-    mirativityLedger = [],
-    honorificityLedger = [],
-    switchReferenceLedger = [],
-    logophoraLedger = [],
-    eventStructureLedger = []
+    commitmentFacts = []
   }) => {
     if (!Array.isArray(noteBindings) || noteBindings.length === 0) return;
     const NOTE_TEXT_BANNED_BOILERPLATE_RE = /\b(?:initial logic and parameters are validated|standard processing applied|final transformation)\b/i;
 
-    const buildLedgerIdSet = (entries, ...fields) => new Set(
-      (Array.isArray(entries) ? entries : [])
-        .flatMap((entry) => fields.map((field) => normalizeOptionalStepText(entry?.[field])))
-        .filter(Boolean)
-    );
-    const commitmentFactMetaById = new Map(
-      (Array.isArray(commitmentGraph) ? commitmentGraph : [])
-        .map((entry) => {
-          const factId = normalizeOptionalStepText(entry?.factId || entry?.id);
-          const kind = normalizeKey(entry?.kind);
-          const subtype = normalizeKey(entry?.subtype);
-          return factId && kind ? [factId, { kind, subtype }] : null;
-        })
-        .filter(Boolean)
-    );
-    const commitmentKinds = new Set(
-      Array.from(commitmentFactMetaById.values())
-        .map((entry) => entry?.kind)
-        .filter(Boolean)
-    );
-    const commitmentSubtypes = new Set(
-      Array.from(commitmentFactMetaById.values())
-        .map((entry) => entry?.subtype)
+    const commitmentFactIds = new Set(
+      (Array.isArray(commitmentFacts) ? commitmentFacts : [])
+        .map((entry) => normalizeOptionalStepText(entry?.factId))
         .filter(Boolean)
     );
     const supportIdsForBinding = (binding) =>
       Array.isArray(binding?.supportIds)
         ? binding.supportIds.map((value) => normalizeOptionalStepText(value)).filter(Boolean)
         : [];
-    const explicitIdsForBinding = (binding, field) =>
-      Array.isArray(binding?.[field])
-        ? binding[field].map((value) => normalizeOptionalStepText(value)).filter(Boolean)
+    const explicitCommitmentFactIdsForBinding = (binding) =>
+      Array.isArray(binding?.commitmentFactIds)
+        ? binding.commitmentFactIds.map((value) => normalizeOptionalStepText(value)).filter(Boolean)
         : [];
-    const hasIdsFromSet = (ids, allowedIds) =>
-      ids.some((id) => allowedIds instanceof Set && allowedIds.has(id));
-    const hasTypedSupport = (binding, fields = [], supportSets = []) => {
-      const explicit = fields.some((field) => explicitIdsForBinding(binding, field).length > 0);
-      if (explicit) return true;
-      const supportIds = supportIdsForBinding(binding);
-      return supportSets.some((allowedIds) => hasIdsFromSet(supportIds, allowedIds));
-    };
-    const hasCommitmentFactSupport = (binding, ...kinds) => {
-      const allowedKinds = new Set(kinds.map((kind) => normalizeKey(kind)).filter(Boolean));
-      if (allowedKinds.size === 0) return false;
-      const ids = [
-        ...explicitIdsForBinding(binding, 'commitmentFactIds'),
-        ...supportIdsForBinding(binding)
-      ];
-      return ids.some((id) => allowedKinds.has(commitmentFactMetaById.get(id)?.kind));
-    };
-    const hasAnyCommitmentFactSupport = (binding) => {
-      const ids = [
-        ...explicitIdsForBinding(binding, 'commitmentFactIds'),
-        ...supportIdsForBinding(binding)
-      ];
-      return ids.some((id) => commitmentFactMetaById.has(id));
-    };
-    const caseAssignmentIdSet = buildLedgerIdSet(caseAssignments, 'assignmentId', 'caseAssignmentId', 'id');
-    const featureEntryIdSet = buildLedgerIdSet(featureLedger, 'entryId', 'id');
-    const phaseIdSet = buildLedgerIdSet(phaseLog, 'phaseId', 'id');
-    const morphologyIdSet = buildLedgerIdSet(morphologyRealization, 'realizationId', 'morphologyId', 'id');
-    const argumentIdSet = buildLedgerIdSet(argumentStructure, 'argumentId', 'id');
-    const selectionIdSet = buildLedgerIdSet(selectionLedger, 'selectionId', 'id');
-    const bindingIdSet = buildLedgerIdSet(bindingLedger, 'bindingId', 'id');
-    const dependencyIdSet = buildLedgerIdSet(clausalDependencies, 'dependencyId', 'id');
-    const agreementIdSet = buildLedgerIdSet(agreementLedger, 'agreementId', 'id');
-    const predicateClassIdSet = buildLedgerIdSet(predicateClassLedger, 'predicateClassId', 'id');
-    const probeIdSet = buildLedgerIdSet(probeLedger, 'probeId', 'id');
-    const nullElementIdSet = buildLedgerIdSet(nullElementLedger, 'nullElementId', 'id');
-    const diagnosticIdSet = buildLedgerIdSet(diagnosticLedger, 'diagnosticId', 'id');
-    const parameterIdSet = buildLedgerIdSet(parameterLedger, 'parameterId', 'id');
-    const informationStructureIdSet = buildLedgerIdSet(informationStructureLedger, 'informationStructureId', 'id');
-    const operatorScopeIdSet = buildLedgerIdSet(operatorScopeLedger, 'operatorScopeId', 'id');
-    const voiceValencyIdSet = buildLedgerIdSet(voiceValencyLedger, 'voiceValencyId', 'id');
-    const linearizationIdSet = buildLedgerIdSet(linearizationLedger, 'linearizationId', 'id');
-    const localityIdSet = buildLedgerIdSet(localityLedger, 'localityId', 'id');
-    const predicationIdSet = buildLedgerIdSet(predicationLedger, 'predicationId', 'id');
-    const particleIdSet = buildLedgerIdSet(particleLedger, 'particleId', 'id');
-    const evidentialityIdSet = buildLedgerIdSet(evidentialityLedger, 'evidentialityId', 'id');
-    const mirativityIdSet = buildLedgerIdSet(mirativityLedger, 'mirativityId', 'id');
-    const honorificityIdSet = buildLedgerIdSet(honorificityLedger, 'honorificityId', 'id');
-    const switchReferenceIdSet = buildLedgerIdSet(switchReferenceLedger, 'switchReferenceId', 'id');
-    const logophoraIdSet = buildLedgerIdSet(logophoraLedger, 'logophoraId', 'id');
-    const eventStructureIdSet = buildLedgerIdSet(eventStructureLedger, 'eventStructureId', 'id');
-    const hasPhaseLog = Array.isArray(phaseLog) && phaseLog.length > 0;
-    const hasMorphologyRealization = Array.isArray(morphologyRealization) && morphologyRealization.length > 0;
-    const hasFeatureLedger = Array.isArray(featureLedger) && featureLedger.length > 0;
-    const hasCaseLedger = Array.isArray(caseAssignments) && caseAssignments.length > 0;
-    const hasArgumentLedger = Array.isArray(argumentStructure) && argumentStructure.length > 0;
-    const hasSelectionLedger = Array.isArray(selectionLedger) && selectionLedger.length > 0;
-    const hasBindingLedger = Array.isArray(bindingLedger) && bindingLedger.length > 0;
-    const hasAgreementLedger = Array.isArray(agreementLedger) && agreementLedger.length > 0;
-    const hasPredicateClassLedger = Array.isArray(predicateClassLedger) && predicateClassLedger.length > 0;
-    const hasProbeLedger = Array.isArray(probeLedger) && probeLedger.length > 0;
-    const hasNullElementLedger = Array.isArray(nullElementLedger) && nullElementLedger.length > 0;
-    const hasDiagnosticLedger = Array.isArray(diagnosticLedger) && diagnosticLedger.length > 0;
-    const hasParameterLedger = Array.isArray(parameterLedger) && parameterLedger.length > 0;
-    const hasInformationStructureLedger = Array.isArray(informationStructureLedger) && informationStructureLedger.length > 0;
-    const hasOperatorScopeLedger = Array.isArray(operatorScopeLedger) && operatorScopeLedger.length > 0;
-    const hasVoiceValencyLedger = Array.isArray(voiceValencyLedger) && voiceValencyLedger.length > 0;
-    const hasLinearizationLedger = Array.isArray(linearizationLedger) && linearizationLedger.length > 0;
-    const hasLocalityLedger = Array.isArray(localityLedger) && localityLedger.length > 0;
-    const hasPredicationLedger = Array.isArray(predicationLedger) && predicationLedger.length > 0;
-    const hasParticleLedger = Array.isArray(particleLedger) && particleLedger.length > 0;
-    const hasEvidentialityLedger = Array.isArray(evidentialityLedger) && evidentialityLedger.length > 0;
-    const hasMirativityLedger = Array.isArray(mirativityLedger) && mirativityLedger.length > 0;
-    const hasHonorificityLedger = Array.isArray(honorificityLedger) && honorificityLedger.length > 0;
-    const hasSwitchReferenceLedger = Array.isArray(switchReferenceLedger) && switchReferenceLedger.length > 0;
-    const hasLogophoraLedger = Array.isArray(logophoraLedger) && logophoraLedger.length > 0;
-    const hasEventStructureLedger = Array.isArray(eventStructureLedger) && eventStructureLedger.length > 0;
+    const hasAnyCommitmentFactSupport = (binding) => [
+      ...explicitCommitmentFactIdsForBinding(binding),
+      ...supportIdsForBinding(binding)
+    ].some((id) => commitmentFactIds.has(id));
     const hasBindingLinks = (binding, ...fields) =>
       fields.some((field) => Array.isArray(binding?.[field]) && binding[field].some((value) => normalizeOptionalStepText(value)));
     const hasStructuralAnchor = (binding) =>
       Boolean(normalizeOptionalStepText(binding?.chainId))
       || hasBindingLinks(binding, 'stepIds', 'nodeIds');
-    const legacyTypedSupportSpecs = [
-      { fields: ['caseAssignmentIds'], supportSets: [caseAssignmentIdSet] },
-      { fields: ['featureEntryIds'], supportSets: [featureEntryIdSet] },
-      { fields: ['phaseIds'], supportSets: [phaseIdSet] },
-      { fields: ['morphologyIds'], supportSets: [morphologyIdSet] },
-      { fields: ['argumentIds'], supportSets: [argumentIdSet] },
-      { fields: ['selectionIds'], supportSets: [selectionIdSet] },
-      { fields: ['bindingIds'], supportSets: [bindingIdSet] },
-      { fields: ['dependencyIds'], supportSets: [dependencyIdSet] },
-      { fields: ['agreementIds'], supportSets: [agreementIdSet] },
-      { fields: ['predicateClassIds'], supportSets: [predicateClassIdSet] },
-      { fields: ['probeIds'], supportSets: [probeIdSet] },
-      { fields: ['nullElementIds'], supportSets: [nullElementIdSet] },
-      { fields: ['diagnosticIds'], supportSets: [diagnosticIdSet] },
-      { fields: ['parameterIds'], supportSets: [parameterIdSet] },
-      { fields: ['informationStructureIds'], supportSets: [informationStructureIdSet] },
-      { fields: ['operatorScopeIds'], supportSets: [operatorScopeIdSet] },
-      { fields: ['voiceValencyIds'], supportSets: [voiceValencyIdSet] },
-      { fields: ['linearizationIds'], supportSets: [linearizationIdSet] },
-      { fields: ['localityIds'], supportSets: [localityIdSet] },
-      { fields: ['predicationIds'], supportSets: [predicationIdSet] },
-      { fields: ['particleIds'], supportSets: [particleIdSet] },
-      { fields: ['evidentialityIds'], supportSets: [evidentialityIdSet] },
-      { fields: ['mirativityIds'], supportSets: [mirativityIdSet] },
-      { fields: ['honorificityIds'], supportSets: [honorificityIdSet] },
-      { fields: ['switchReferenceIds'], supportSets: [switchReferenceIdSet] },
-      { fields: ['logophoraIds'], supportSets: [logophoraIdSet] },
-      { fields: ['eventStructureIds'], supportSets: [eventStructureIdSet] }
-    ];
-    const hasAnyLegacyTypedSupport = (binding) =>
-      legacyTypedSupportSpecs.some((spec) => hasTypedSupport(binding, spec.fields, spec.supportSets));
-    const hasAnyTheorySupport = (binding) =>
-      hasAnyLegacyTypedSupport(binding) || hasAnyCommitmentFactSupport(binding);
     const hasAnyCanonicalSupport = (binding) =>
-      hasStructuralAnchor(binding) || hasAnyTheorySupport(binding);
+      hasStructuralAnchor(binding) || hasAnyCommitmentFactSupport(binding);
     const noteMentionsGenericTheoryClaim = (text) =>
       NOTE_TEXT_CASE_RE.test(text)
       || NOTE_TEXT_THETA_RE.test(text)
