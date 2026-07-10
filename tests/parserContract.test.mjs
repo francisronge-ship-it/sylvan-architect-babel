@@ -129,9 +129,10 @@ test('normalizes the current four-field derivation contract without provider cal
     analysis.resolvedVisualRelations.find((relation) => relation.relation === 'bespoke-open-agreement')?.renderFamily,
     'unknown'
   );
-  assert.ok(analysis.commitmentFacts.length >= analysis.derivationStages.length);
-  assert.ok(analysis.noteBindings.length >= analysis.derivationStages.length);
-  assert.match(analysis.explanation, /Mia/i);
+  assert.deepEqual(
+    analysis.derivationStages.map((stage) => stage.stageRecord),
+    buildCurrentContractPayload().derivationStages.map((stage) => stage.stageRecord)
+  );
   assert.equal(analysis.provenance.treeSource, 'derivationStages');
   const replayPlan = buildDerivationReplayPlan({ derivationStages: analysis.derivationStages });
   assert.equal(replayPlan.stages.length, 4);
@@ -173,7 +174,10 @@ test('normalizes the current four-field derivation contract without provider cal
     'switchReferenceLedger',
     'logophoraLedger',
     'eventStructureLedger',
-    'rawDerivationSteps'
+    'rawDerivationSteps',
+    'commitmentFacts',
+    'noteBindings',
+    'explanation'
   ];
 
   removedResultFields.forEach((field) => assert.equal(field in analysis, false, field));

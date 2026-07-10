@@ -275,7 +275,7 @@ export const summarizeProviderReasoningForDisplay = (text, maxChars = 520) => {
   if (!cleaned) return '';
   if (
     /^[{\[]/.test(cleaned) &&
-    /"(?:analyses|analysis|derivationStages|stageRecord|workspaceForest|visualRelations|noteBindings|tree)"/.test(cleaned)
+    /"(?:analyses|analysis|derivationStages|stageRecord|workspaceForest|visualRelations|tree)"/.test(cleaned)
   ) {
     return '';
   }

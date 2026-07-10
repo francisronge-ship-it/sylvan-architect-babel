@@ -133,7 +133,6 @@ interface ReplayDerivationFrame {
   spelloutOrder?: string[];
   microOperations?: DerivationStep['operation'][];
   movement?: ReplayDerivationMovementPayload | null;
-  publicFacts?: Record<string, unknown>[];
 }
 
 interface DerivationReplayPlanStep {
@@ -418,8 +417,7 @@ const adaptDerivationStagesForReplay = (stages?: DerivationStage[] | null): Repl
       operation,
       recipe: String(change?.statement || '').trim() || undefined,
       chainId,
-      movement,
-      publicFacts: undefined
+      movement
     };
   });
 };
@@ -1195,34 +1193,6 @@ const mergeReplayLedgerBlocks = (
   return merged.length > 0 ? merged : undefined;
 };
 
-const attachReplayLedgerBlocksToLastStep = (
-  steps: PlaybackStep[],
-  ledgerBlocks?: ReplayLedgerBlock[]
-): PlaybackStep[] => {
-  if (!Array.isArray(steps) || steps.length === 0 || !Array.isArray(ledgerBlocks) || ledgerBlocks.length === 0) {
-    return steps;
-  }
-  const lastIndex = steps.length - 1;
-  return steps.map((step, index) => (
-    index === lastIndex
-      ? {
-          ...step,
-          ledgerBlocks: mergeReplayLedgerBlocks(step.ledgerBlocks, ledgerBlocks)
-        }
-      : step
-  ));
-};
-
-const stripReplayLedgerBlocksByTitles = (
-  blocks: ReplayLedgerBlock[] | undefined,
-  titles: string[]
-): ReplayLedgerBlock[] | undefined => {
-  const normalizedTitles = new Set(titles.map((title) => normalizeReplayBlockTitleKey(title)).filter(Boolean));
-  const filtered = (Array.isArray(blocks) ? blocks : [])
-    .filter((block) => !normalizedTitles.has(normalizeReplayBlockTitleKey(block?.title)));
-  return filtered.length > 0 ? filtered : undefined;
-};
-
 const getReplayPlanStage = (
   plan: DerivationReplayPlan | null | undefined,
   stageIndex: number
@@ -1338,12 +1308,11 @@ const buildPlaybackStepsFromDerivationFrames = (
       || String(frame.movement?.traceNodeId || '').trim()
       || String(frame.chainId || alignedStep?.chainId || '').trim()
     );
-    const carriesStructuredAuditPayload =
-      (Array.isArray(frame.spelloutOrder) && frame.spelloutOrder.length > 0) ||
-      (Array.isArray(alignedStep?.ledgerBlocks) && alignedStep.ledgerBlocks.length > 0);
+    const carriesStructuredReplayPayload =
+      Array.isArray(frame.spelloutOrder) && frame.spelloutOrder.length > 0;
     const frameCarriesAuthoredEffect =
       Boolean(String(getDerivationFrameChange(frame)?.statement || '').trim())
-      || carriesStructuredAuditPayload;
+      || carriesStructuredReplayPayload;
     const movementRecipe = pickPreferredReplayText(
       frame.movement?.note,
       alignedStep?.note,
@@ -1353,7 +1322,7 @@ const buildPlaybackStepsFromDerivationFrames = (
       if (String(fallbackOperation || '').trim() === 'SpellOut') {
         return preferredRecipe || structuralFallbackRecipe;
       }
-      if (carriesStructuredAuditPayload) {
+      if (carriesStructuredReplayPayload) {
         return preferredRecipe || structuralFallbackRecipe;
       }
       if (isMoveLikeOperation(fallbackOperation) || frameHasMovementPayload) {
@@ -1408,14 +1377,14 @@ const buildPlaybackStepsFromDerivationFrames = (
       undefined,
       frames
     );
-    const frameCommitmentBlocks = buildFrameCommitmentLedgerBlocks(
+    const frameReplayBlocks = buildFrameReplayBlocks(
       frame,
       frameReplaySnapshot.canvasData,
       plannedStage
     );
     const frameStageRecordBlocks = plannedStage
       ? buildStageRecordReplayBlocks(frame, plannedStage)
-      : frameCommitmentBlocks;
+      : frameReplayBlocks;
     const frameRelationRelationLinks = plannedStage
       ? authoredCumulativeRelationRelationLinks.filter((link) => Number(link?.stepIndex) === index)
       : [];
@@ -1424,19 +1393,8 @@ const buildPlaybackStepsFromDerivationFrames = (
       : workspaceRoots;
     const frameMacroBlocks = plannedStage
       ? frameStageRecordBlocks
-      : frameCommitmentBlocks;
-    const alignedLedgerBlocks = frameCommitmentBlocks && frameCommitmentBlocks.length > 0
-      ? stripReplayLedgerBlocksByTitles(alignedStep?.ledgerBlocks, [
-          'Commitment Fact',
-          'Derivational Record',
-          'Stage Record',
-          'Visual Relations'
-        ])
-      : alignedStep?.ledgerBlocks;
-    const mergedFrameLedgerBlocks = mergeReplayLedgerBlocks(
-      alignedLedgerBlocks,
-      frameMacroBlocks
-    );
+      : frameReplayBlocks;
+    const mergedFrameLedgerBlocks = mergeReplayLedgerBlocks(frameMacroBlocks);
     const currentFrameVisibleNodeIds = collectVisibleDerivationNodeIds(
       workspaceRoots,
       frameReplaySnapshot.relationLinks
@@ -2416,7 +2374,7 @@ const buildPlaybackStepsFromDerivationFrames = (
       if (frameCarriesAuthoredEffect) {
         return [...structuralSteps, frameSemanticStep];
       }
-        return attachReplayLedgerBlocksToLastStep(structuralSteps, frameCommitmentBlocks);
+      return structuralSteps;
     };
 
     const rootIntroductionMicrosteps =
@@ -2474,7 +2432,7 @@ const buildPlaybackStepsFromDerivationFrames = (
       if (packsInternalBaseGeneration && structuralMicrosteps.length > 1) {
         previousWorkspaceRootIds = currentWorkspaceRootIds;
         previousVisibleNodeIds = currentFrameVisibleNodeIds;
-        return attachReplayLedgerBlocksToLastStep(structuralMicrosteps, frameCommitmentBlocks);
+        return finalizeStructuralReplayForFrame(structuralMicrosteps);
       }
       if (newlySelectedRoots.length > 0) {
         const projectedRootIds = new Set(previousWorkspaceRootIds);
@@ -6878,9 +6836,6 @@ const replaceReplayIdentifiersInText = (value?: string): string => {
 const formatReplayBlockTitle = (title?: string): string => {
   const trimmed = String(title || '').trim();
   if (!trimmed) return '';
-  const normalizedTitle = normalizeReplayBlockTitleKey(trimmed);
-  if (normalizedTitle === 'COMMITMENT FACT') return 'Derivational Record';
-  if (normalizedTitle === 'PUBLIC FACT') return 'Derivational Record';
   return toReplayTitleCase(trimmed.replace(/[_-]+/g, ' ').toLowerCase());
 };
 
@@ -7138,76 +7093,6 @@ const getReplayNodeCategoryFromCanvas = (
   return formatReplaySupportValue(String(node.label || '').trim());
 };
 
-const humanizeReplayCommitmentField = (value?: string): string => {
-  const trimmed = String(value || '').trim();
-  if (!trimmed) return '';
-  return formatOperationLabel(trimmed as DerivationStep['operation']);
-};
-
-const formatReplayCommitmentParticipantRole = (value?: string): string =>
-  toReplayTitleCase(
-    String(value || '')
-      .trim()
-      .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .replace(/[_-]+/g, ' ')
-  );
-
-const formatReplayCommitmentFactHeading = (fact?: Record<string, any> | null): string => {
-  if (!fact || typeof fact !== 'object') return '';
-  const kind = humanizeReplayCommitmentField(String(fact.kind || fact.family || '').trim());
-  const detail = humanizeReplayCommitmentField(
-    String(fact.frameworkLabel || fact.subtype || fact.type || '').trim()
-  );
-  const normalizedKind = normalizeReplayTargetLabel(kind);
-  const normalizedDetail = normalizeReplayTargetLabel(detail);
-  if (normalizeReplayTargetLabel(String(fact.kind || '').trim()) === 'MOVEMENT' && detail) {
-    return detail;
-  }
-  if (kind && detail && normalizedKind !== normalizedDetail) {
-    return `${kind} (${detail})`;
-  }
-  return kind || detail;
-};
-
-const buildReplayCommitmentFactLine = (
-  fact?: Record<string, any> | null,
-  replayCanvasData?: SyntaxNode | null
-): string => {
-  if (!fact || typeof fact !== 'object') return '';
-
-  const heading = formatReplayCommitmentFactHeading(fact);
-  const participantParts = (Array.isArray(fact.participants) ? fact.participants : [])
-    .map((participant) => {
-      if (!participant || typeof participant !== 'object') return '';
-      const role = formatReplayCommitmentParticipantRole(participant.role);
-      const explicitLabel = formatReplaySupportValue(String(participant.label || '').trim());
-      const category = getReplayNodeCategoryFromCanvas(replayCanvasData, participant.nodeId);
-      const nodeDisplay = getReplayNodeDisplayFromCanvas(replayCanvasData, participant.nodeId);
-      const value = formatReplaySupportValue(String(participant.value || '').trim());
-      const display = explicitLabel || category || nodeDisplay || value || formatReplayIdentifier(participant.nodeId);
-      if (!display) return '';
-      return role ? `${role} ${display}` : display;
-    })
-    .filter(Boolean);
-
-  const nodeDisplays = Array.from(new Set(
-    (Array.isArray(fact.nodeIds) ? fact.nodeIds : [])
-      .map((nodeId) => getReplayNodeCategoryFromCanvas(replayCanvasData, nodeId) || formatReplayIdentifier(nodeId))
-      .filter(Boolean)
-  ));
-
-  const details: string[] = [];
-  const statement = formatReplaySupportValue(String(fact.statement || fact.note || '').trim());
-  if (statement) details.push(statement);
-  if (participantParts.length > 0) details.push(`Participants: ${participantParts.join('; ')}`);
-  else if (nodeDisplays.length > 0) details.push(`Nodes: ${nodeDisplays.join(', ')}`);
-  if (String(fact.chainId || '').trim()) details.push(`Chain: ${formatReplayIdentifier(String(fact.chainId || '').trim())}`);
-
-  if (heading && details.length > 0) return `${heading}:\n${details.join('\n')}`;
-  if (heading) return heading;
-  return details.join('\n');
-};
-
 const getFrameDetailsRecord = (frame?: ReplayDerivationFrame | null): Record<string, unknown> => (
   frame?.change?.details && typeof frame.change.details === 'object' && !Array.isArray(frame.change.details)
     ? frame.change.details as Record<string, unknown>
@@ -7222,8 +7107,6 @@ const getFrameStageRecordText = (
   return String(
     plannedStage?.stageRecord
     || details.stageRecord
-    || details.note
-    || frame?.note
     || ''
   ).trim();
 };
@@ -7647,87 +7530,16 @@ const buildVisualRelationReplayBlocks = (
   return [{ title: 'Visual Relations', lines }];
 };
 
-const buildFrameCommitmentLedgerBlocks = (
+const buildFrameReplayBlocks = (
   frame?: ReplayDerivationFrame | null,
   replayCanvasData?: SyntaxNode | null,
   plannedStage?: DerivationReplayPlanStage | null
-): ReplayLedgerBlock[] | undefined => {
-  const stageRecordBlocks = buildStageRecordReplayBlocks(frame, plannedStage);
-  const visualRelationBlocks = buildVisualRelationReplayBlocks(
-    getFrameVisualRelations(frame, plannedStage),
-    replayCanvasData
-  );
-  if (stageRecordBlocks || visualRelationBlocks) {
-    return mergeReplayLedgerBlocks(stageRecordBlocks, visualRelationBlocks);
-  }
-
-  const buildCompatibilityFactsFromChange = (): Record<string, any>[] => {
-    const change = getDerivationFrameChange(frame);
-    if (!change) return [];
-    const anchors = Array.isArray(change?.anchors) ? change.anchors : [];
-    return [{
-      kind: 'transition',
-      statement: String(change?.statement || '').trim() || undefined,
-      note: String(change?.statement || '').trim() || undefined,
-      nodeIds: Array.from(new Set(
-        anchors
-          .map((anchor) => String(anchor?.nodeId || '').trim())
-          .filter(Boolean)
-      )),
-      participants: anchors
-        .map((anchor) => ({
-          role: String(anchor?.role || '').trim() || undefined,
-          nodeId: String(anchor?.nodeId || '').trim() || undefined,
-          value: String(anchor?.value || '').trim() || undefined,
-          label: String(anchor?.text || '').trim() || undefined
-        }))
-        .filter((anchor) => anchor.role || anchor.nodeId || anchor.value || anchor.label),
-      chainId: getDerivationChangeContinuityId(change) || undefined
-    }];
-  };
-
-  const bindMovementFactDisplayAnchors = (fact?: Record<string, any> | null): Record<string, any> | null => {
-    if (!fact || typeof fact !== 'object') return fact || null;
-    const normalizedKind = normalizeReplayTargetLabel(String(fact.kind || fact.family || '').trim());
-    if (normalizedKind !== 'MOVEMENT') return fact;
-    const movement = frame?.movement;
-    if (!movement || typeof movement !== 'object') return fact;
-
-    const sourceNodeId = String(movement.sourceNodeId || '').trim();
-    const landingNodeId = getMovementLandingNodeId(movement);
-    const traceNodeId = String(movement.traceNodeId || '').trim();
-    const hostNodeId = String(movement.hostNodeId || '').trim();
-    const derivedNodeIds = Array.from(new Set(
-      [sourceNodeId, landingNodeId, traceNodeId, hostNodeId]
-        .filter(Boolean)
-    ));
-    const derivedParticipants = [
-      landingNodeId ? { role: 'landing', nodeId: landingNodeId } : null,
-      traceNodeId ? { role: 'trace', nodeId: traceNodeId } : null,
-      sourceNodeId ? { role: 'source', nodeId: sourceNodeId } : null,
-      hostNodeId && hostNodeId !== landingNodeId ? { role: 'host', nodeId: hostNodeId } : null
-    ].filter(Boolean);
-
-    return {
-      ...fact,
-      chainId: String(fact.chainId || movement.chainId || '').trim() || undefined,
-      nodeIds: derivedNodeIds.length > 0 ? derivedNodeIds : fact.nodeIds,
-      participants: derivedParticipants.length > 0 ? derivedParticipants : fact.participants
-    };
-  };
-
-  const facts = Array.isArray(frame?.publicFacts) && frame.publicFacts.length > 0
-    ? frame.publicFacts
-    : buildCompatibilityFactsFromChange();
-  const lines = facts
-    .map((fact) => buildReplayCommitmentFactLine(
-      bindMovementFactDisplayAnchors(fact),
-      replayCanvasData
-    ))
-    .filter(Boolean);
-  if (lines.length === 0) return undefined;
-  return [{ title: 'Derivational Record', lines }];
-};
+): ReplayLedgerBlock[] | undefined => (
+  mergeReplayLedgerBlocks(
+    buildStageRecordReplayBlocks(frame, plannedStage),
+    buildVisualRelationReplayBlocks(getFrameVisualRelations(frame, plannedStage), replayCanvasData)
+  )
+);
 
 const combineReplayNodeDisplayWithPosition = (nodeDisplay: string, positionDisplay: string): string => {
   if (!positionDisplay) return nodeDisplay;

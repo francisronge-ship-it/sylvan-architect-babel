@@ -1,13 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parseSentence } from './services/parseService';
-import { DerivationStage, DerivationStep, ParseBundle, ParseResult, ReplayLedgerBlock, SyntaxNode } from './types';
+import { DerivationStep, ParseBundle, ParseResult, SyntaxNode } from './types';
 import TreeVisualizer from './components/TreeVisualizer';
 import RootLogo from './components/RootLogo';
-import {
-  stringifyDerivationAtom,
-  normalizeDerivationDisplay,
-  humanizeDerivationId
-} from './derivationRecordDisplay';
+import { collectDerivationStageRecords } from './derivationNotes.js';
+import { createTreeBankBundleSnapshot } from './treeBankSnapshot.js';
 import { 
   RotateCcw, 
   Sparkles,
@@ -502,32 +499,6 @@ const buildMilesNotation = (
   return serializeMilesNode(tree).trim();
 };
 
-const cleanExplanationWhitespace = (text: string): string =>
-  String(text || '')
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([,.;:!?])/g, '$1')
-    .trim();
-
-const ensureExplanationTerminator = (text: string): string => {
-  const value = cleanExplanationWhitespace(text);
-  if (!value) return '';
-  return /[.!?]$/.test(value) ? value : `${value}.`;
-};
-
-const buildDerivationalNoteParagraphs = (
-  stages: DerivationStage[] | undefined,
-  fallbackExplanation: string
-): string[] => {
-  const stageParagraphs = (Array.isArray(stages) ? stages : [])
-    .map((stage) => ensureExplanationTerminator(String(stage?.stageRecord || '')))
-    .filter(Boolean);
-
-  if (stageParagraphs.length > 0) return stageParagraphs;
-
-  const fallback = ensureExplanationTerminator(String(fallbackExplanation || ''));
-  return [fallback || 'No explanation provided.'];
-};
-
 const unwrapQuotedProviderText = (value: string): string => {
   let text = String(value || '').trim();
   if (!text) return '';
@@ -555,7 +526,7 @@ const normalizeProviderSummaryForDisplay = (summary: string): string => {
   if (!text) return '';
   if (
     /^[{\[]/.test(text) &&
-    /"(?:analyses|analysis|derivationStages|stageRecord|visualRelations|workspaceForest|noteBindings|tree)"/.test(text)
+    /"(?:analyses|analysis|derivationStages|stageRecord|visualRelations|workspaceForest|tree)"/.test(text)
   ) {
     return '';
   }
@@ -630,7 +601,7 @@ const normalizeProviderRawForDisplay = (summary: string): string => {
   if (!text) return '';
   if (
     /^[{\[]/.test(text) &&
-    /"(?:analyses|analysis|derivationStages|stageRecord|visualRelations|workspaceForest|noteBindings|tree)"/.test(text)
+    /"(?:analyses|analysis|derivationStages|stageRecord|visualRelations|workspaceForest|tree)"/.test(text)
   ) {
     return '';
   }
@@ -659,384 +630,6 @@ const getPreferredDerivationSteps = (parse: ParseResult | null): DerivationStep[
   return Array.isArray(parse.derivationSteps) ? parse.derivationSteps : [];
 };
 
-const normalizeToken = (value?: string): string =>
-  String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/^<|>$/g, '')
-    .replace(/^⟨|⟩$/g, '')
-    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
-
-const buildReadableNodeResolvers = (tree?: SyntaxNode | null) => {
-  const isStructuralLeafLabel = (value: string) =>
-    /^(?:c|c'|cp|infl|infl'|inflp|i|i'|ip|t|t'|tp|v|v'|vp|d|d'|dp|n|n'|np|p|p'|pp|a|a'|ap|q|q'|qp)$/i.test(value);
-  const stripStageSuffixes = (value: string) =>
-    stringifyDerivationAtom(value).replace(/(?:_(?:base|landing|trace|copy|infl|c|t|v|head|low|high|intermediate))+$/i, '');
-  const lexicalHintFromId = (value: string) => {
-    const raw = stringifyDerivationAtom(value);
-    if (!raw) return '';
-    const compact = stripStageSuffixes(raw);
-    const pieces = compact.split('_').filter(Boolean);
-    if (pieces.length < 2) return '';
-    const lexicalPieces = pieces.slice(1).filter((piece) => !/^(?:subj|obj|spec|comp|head|bar|root|matrix|embedded|emb|lower|upper|base|trace|copy|landing|phase|goal|probe|infl|c|t|v|d|n|p|a)$/i.test(piece));
-    return lexicalPieces.join(' ').trim();
-  };
-  const nodeById = new Map<string, SyntaxNode>();
-  const aliasToNodeId = new Map<string, string>();
-  const visit = (node?: SyntaxNode | null) => {
-    if (!node || typeof node !== 'object') return;
-    const id = stringifyDerivationAtom(node.id);
-    if (id) {
-      nodeById.set(id, node);
-      const alias = stripStageSuffixes(id);
-      if (alias && !aliasToNodeId.has(alias)) aliasToNodeId.set(alias, id);
-    }
-    const children = Array.isArray(node.children) ? node.children : [];
-    children.forEach(visit);
-  };
-  visit(tree);
-
-  const getNodeByReference = (reference?: string) => {
-    const raw = stringifyDerivationAtom(reference);
-    if (!raw) return null;
-    return nodeById.get(raw) || nodeById.get(aliasToNodeId.get(stripStageSuffixes(raw)) || '') || null;
-  };
-
-  const collectVisibleYield = (node?: SyntaxNode | null): string[] => {
-    if (!node) return [];
-    const children = Array.isArray(node.children) ? node.children : [];
-    if (children.length === 0) {
-      const word = stringifyDerivationAtom(node.word);
-      const label = stringifyDerivationAtom(node.label);
-      const surface = word || (!isStructuralLeafLabel(label) ? label : '');
-      if (!surface) return [];
-      if (/^(?:∅|Ø|ε|null|epsilon)$/i.test(surface)) return [];
-      if (/^(?:t|trace)(?:[_-]?[A-Za-z0-9]+)?$/i.test(surface)) return [];
-      return [surface];
-    }
-    return children.flatMap((child) => collectVisibleYield(child));
-  };
-
-  const resolveSurfaceRef = (reference?: string): string => {
-    const raw = stringifyDerivationAtom(reference);
-    if (!raw) return '';
-    const node = getNodeByReference(raw);
-    if (!node) {
-      const lexicalHint = lexicalHintFromId(raw);
-      return lexicalHint || humanizeDerivationId(normalizeDerivationDisplay(raw, { preferInner: true }));
-    }
-    const visibleYield = collectVisibleYield(node).join(' ').trim();
-    if (visibleYield) return visibleYield;
-    const label = stringifyDerivationAtom(node.label);
-    if (label) return label;
-    const lexicalHint = lexicalHintFromId(raw);
-    return lexicalHint || humanizeDerivationId(normalizeDerivationDisplay(raw, { preferInner: true }));
-  };
-
-  const resolveStructuralRef = (reference?: string): string => {
-    const raw = stringifyDerivationAtom(reference);
-    if (!raw) return '';
-    const node = getNodeByReference(raw);
-    if (!node) {
-      const lexicalHint = lexicalHintFromId(raw);
-      if (lexicalHint) {
-        return lexicalHint;
-      }
-      return humanizeDerivationId(normalizeDerivationDisplay(raw, { preferInner: false }));
-    }
-    const label = stringifyDerivationAtom(node.label);
-    const visibleYield = collectVisibleYield(node).join(' ').trim();
-    if (label && visibleYield && normalizeToken(label) !== normalizeToken(visibleYield)) {
-      return `${label} (${visibleYield})`;
-    }
-    return label || visibleYield || humanizeDerivationId(normalizeDerivationDisplay(raw, { preferInner: false }));
-  };
-
-  const resolveReadableReference = (preferred?: string, fallbackNodeRef?: string, { structural = false } = {}): string => {
-    const resolver = structural ? resolveStructuralRef : resolveSurfaceRef;
-    const preferredRaw = stringifyDerivationAtom(preferred);
-    const fallbackRaw = stringifyDerivationAtom(fallbackNodeRef);
-
-    if (preferredRaw) {
-      const resolvedPreferred = resolver(preferredRaw);
-      if (resolvedPreferred && resolvedPreferred !== humanizeDerivationId(preferredRaw)) {
-        return resolvedPreferred;
-      }
-      if (!/[A-Za-z]+_[A-Za-z0-9_]+/.test(preferredRaw)) {
-        return preferredRaw;
-      }
-      if (resolvedPreferred) return resolvedPreferred;
-    }
-
-    if (fallbackRaw) {
-      const resolvedFallback = resolver(fallbackRaw);
-      if (resolvedFallback) return resolvedFallback;
-    }
-
-    return preferredRaw || fallbackRaw || '';
-  };
-
-  return {
-    resolveSurfaceRef,
-    resolveStructuralRef,
-    resolveReadableReference
-  };
-};
-
-interface ReplayLedgerAttachment {
-  preferredStepId?: string;
-  block: ReplayLedgerBlock;
-}
-
-const COMMITMENT_FACT_HIDDEN_FIELDS = new Set([
-  'factId',
-  'kind',
-  'family',
-  'frameworkLabel',
-  'chainId',
-  'stepIds',
-  'nodeIds'
-]);
-
-const humanizeOpenOntologyLabel = (value?: string): string => {
-  const raw = stringifyDerivationAtom(value);
-  if (!raw) return 'Derivational Record';
-  return raw
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (ch) => ch.toUpperCase());
-};
-
-const formatCommitmentFactFieldLabel = (key: string): string =>
-  key
-    .replace(/Ids?$/, '')
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (ch) => ch.toUpperCase());
-
-const formatCommitmentParticipant = (participant: Record<string, unknown>): string => {
-  const role = stringifyDerivationAtom(participant.role);
-  const label = stringifyDerivationAtom(participant.label);
-  const value = stringifyDerivationAtom(participant.value);
-  const nodeId = stringifyDerivationAtom(participant.nodeId);
-  const referent = label || value || nodeId;
-  if (!referent) return '';
-  return role ? `${formatCommitmentFactFieldLabel(role)}: ${referent}` : referent;
-};
-
-const collectCommitmentFactFieldLines = (
-  entry: Record<string, unknown>,
-  resolveReadableReference: (preferred?: string, fallbackNodeRef?: string, options?: { structural?: boolean }) => string
-): string[] => {
-  const consumed = new Set<string>();
-  const lines: string[] = [];
-  const pushLine = (label: string, value: string) => {
-    const cleanedValue = stringifyDerivationAtom(value);
-    if (!cleanedValue) return;
-    lines.push(`${label}: ${cleanedValue}`);
-  };
-
-  if (Array.isArray(entry.participants)) {
-    const participants = entry.participants
-      .map((participant) => formatCommitmentParticipant(participant as Record<string, unknown>))
-      .filter(Boolean);
-    if (participants.length > 0) {
-      pushLine('Participants', participants.join('; '));
-    }
-    consumed.add('participants');
-  }
-
-  Object.entries(entry).forEach(([key, rawValue]) => {
-    if (consumed.has(key) || COMMITMENT_FACT_HIDDEN_FIELDS.has(key)) return;
-    if (key.endsWith('Id') || key.endsWith('Ids')) return;
-    if (rawValue === undefined || rawValue === null) return;
-
-    if (key.endsWith('Label')) {
-      const labelValue = stringifyDerivationAtom(rawValue);
-      if (!labelValue) return;
-      const nodeIdKey = `${key.slice(0, -5)}NodeId`;
-      const resolvedValue = resolveReadableReference(
-        labelValue,
-        stringifyDerivationAtom(entry[nodeIdKey]),
-        { structural: true }
-      ) || labelValue;
-      pushLine(formatCommitmentFactFieldLabel(key), resolvedValue);
-      consumed.add(key);
-      consumed.add(nodeIdKey);
-      return;
-    }
-
-    if (Array.isArray(rawValue)) {
-      const values = rawValue
-        .map((item) => stringifyDerivationAtom(item))
-        .filter(Boolean);
-      if (values.length === 0) return;
-      pushLine(
-        formatCommitmentFactFieldLabel(key),
-        key === 'order' ? values.join(' > ') : values.join(', ')
-      );
-      return;
-    }
-
-    if (typeof rawValue === 'boolean') {
-      pushLine(formatCommitmentFactFieldLabel(key), rawValue ? 'Yes' : 'No');
-      return;
-    }
-
-    if (typeof rawValue === 'number') {
-      pushLine(formatCommitmentFactFieldLabel(key), String(rawValue));
-      return;
-    }
-
-    if (typeof rawValue === 'string') {
-      const text = stringifyDerivationAtom(rawValue);
-      if (!text) return;
-      pushLine(formatCommitmentFactFieldLabel(key), text);
-    }
-  });
-
-  return lines;
-};
-
-const formatCommitmentFactReplayEntry = (
-  entry: Record<string, unknown>,
-  resolveReadableReference: (preferred?: string, fallbackNodeRef?: string, options?: { structural?: boolean }) => string
-): string => {
-  const family = humanizeOpenOntologyLabel(
-    stringifyDerivationAtom(entry.frameworkLabel) || stringifyDerivationAtom(entry.family) || stringifyDerivationAtom(entry.kind)
-  );
-  const subtype = stringifyDerivationAtom(entry.subtype);
-  const detailLines = collectCommitmentFactFieldLines(entry, resolveReadableReference)
-    .filter((line) => !/^Subtype:/i.test(line));
-  const summary = detailLines.slice(0, 3).join('; ');
-  const title = subtype ? `${family} (${subtype})` : family;
-  if (!summary) return title;
-  return `${title}: ${summary}`;
-};
-
-const fallbackReadableReference = (preferred?: string, fallbackNodeRef?: string): string =>
-  stringifyDerivationAtom(preferred) || stringifyDerivationAtom(fallbackNodeRef) || '';
-
-const buildCommitmentFactSupportBadges = (entry: Record<string, unknown>): Array<{ label: string; value: string }> => {
-  const badges = [
-    { label: 'Fact', value: stringifyDerivationAtom(entry.factId) },
-    { label: 'Chain', value: stringifyDerivationAtom(entry.chainId) },
-    {
-      label: 'Steps',
-      value: Array.isArray(entry.stepIds)
-        ? entry.stepIds.map((stepId) => stringifyDerivationAtom(stepId)).filter(Boolean).join(', ')
-        : ''
-    },
-    {
-      label: 'Nodes',
-      value: Array.isArray(entry.nodeIds)
-        ? entry.nodeIds.map((nodeId) => stringifyDerivationAtom(nodeId)).filter(Boolean).join(', ')
-        : ''
-    }
-  ].filter((badge) => badge.value);
-  return badges;
-};
-
-const buildReplayLedgerAttachments = (
-  parse: ParseResult,
-  workspaceAfter: string[],
-  rootId?: string,
-  rootLabel?: string
-): ReplayLedgerAttachment[] => {
-  const {
-    resolveReadableReference
-  } = buildReadableNodeResolvers(parse.tree);
-  const ledgerAttachments: ReplayLedgerAttachment[] = [];
-
-  const appendLedgerBlock = (
-    title: string,
-    lines: string[],
-    preferredStepId?: string
-  ) => {
-    const cleanedLines = lines.map((line) => stringifyDerivationAtom(line)).filter(Boolean);
-    if (cleanedLines.length === 0) return;
-    ledgerAttachments.push({
-      preferredStepId: stringifyDerivationAtom(preferredStepId) || undefined,
-      block: { title, lines: cleanedLines }
-    });
-  };
-
-  const appendAnchoredLedgerEntries = <T extends { stepIds?: string[] }>(
-    title: string,
-    entries: T[],
-    formatEntry: (entry: T) => string
-  ) => {
-    const linesByStep = new Map<string, string[]>();
-    const unanchoredLines: string[] = [];
-
-    entries.forEach((entry) => {
-      const line = stringifyDerivationAtom(formatEntry(entry));
-      if (!line) return;
-      const preferredStepIds = Array.isArray(entry.stepIds)
-        ? entry.stepIds.map((stepId) => stringifyDerivationAtom(stepId)).filter(Boolean)
-        : [];
-      if (preferredStepIds.length === 0) {
-        unanchoredLines.push(line);
-        return;
-      }
-      preferredStepIds.forEach((stepId) => {
-        const existing = linesByStep.get(stepId) || [];
-        existing.push(line);
-        linesByStep.set(stepId, existing);
-      });
-    });
-
-    linesByStep.forEach((lines, stepId) => appendLedgerBlock(title, lines, stepId));
-    appendLedgerBlock(title, unanchoredLines);
-  };
-
-  appendAnchoredLedgerEntries(
-    'Derivational Record',
-    (parse.commitmentFacts || []) as Array<{ stepIds?: string[] } & Record<string, unknown>>,
-    (entry) => formatCommitmentFactReplayEntry(entry, resolveReadableReference)
-  );
-
-  return ledgerAttachments;
-};
-
-const attachReplayLedgerBlocksToStructuralSteps = (
-  structuralSteps: DerivationStep[],
-  ledgerAttachments: ReplayLedgerAttachment[],
-  fallbackSteps: DerivationStep[] = []
-): { structuralSteps: DerivationStep[]; fallbackSteps: DerivationStep[] } => {
-  const normalizedStructuralSteps = structuralSteps.map((step) => ({
-    ...step,
-    ledgerBlocks: Array.isArray(step.ledgerBlocks) ? [...step.ledgerBlocks] : []
-  }));
-  const normalizedFallbackSteps = fallbackSteps.map((step) => ({
-    ...step,
-    ledgerBlocks: Array.isArray(step.ledgerBlocks) ? [...step.ledgerBlocks] : []
-  }));
-  const stepIndexById = new Map<string, number>();
-  normalizedStructuralSteps.forEach((step, index) => {
-    const stepId = stringifyDerivationAtom(step.stepId);
-    if (stepId) stepIndexById.set(stepId, index);
-  });
-  const fallbackStructuralIndex = normalizedStructuralSteps.length > 0 ? normalizedStructuralSteps.length - 1 : -1;
-  const fallbackStepIndex = normalizedFallbackSteps.length > 0 ? normalizedFallbackSteps.length - 1 : -1;
-
-  ledgerAttachments.forEach(({ preferredStepId, block }) => {
-    const preferredIndex = preferredStepId ? stepIndexById.get(preferredStepId) : undefined;
-    const targetStructuralIndex = preferredIndex ?? fallbackStructuralIndex;
-    if (targetStructuralIndex >= 0) {
-      normalizedStructuralSteps[targetStructuralIndex].ledgerBlocks!.push(block);
-      return;
-    }
-    if (fallbackStepIndex >= 0) {
-      normalizedFallbackSteps[fallbackStepIndex].ledgerBlocks!.push(block);
-    }
-  });
-
-  return {
-    structuralSteps: normalizedStructuralSteps,
-    fallbackSteps: normalizedFallbackSteps
-  };
-};
-
 const ensureReplaySpelloutStep = (parse: ParseResult | null): DerivationStep[] | undefined => {
   if (!parse) return undefined;
   const existing = getPreferredDerivationSteps(parse);
@@ -1045,13 +638,8 @@ const ensureReplaySpelloutStep = (parse: ParseResult | null): DerivationStep[] |
     const operation = String(step?.operation || '').trim();
     return operation !== 'SpellOut';
   });
-  const lastStructural = structuralSteps[structuralSteps.length - 1];
   const rootId = String(parse.tree?.id || '').trim() || undefined;
   const rootLabel = String(parse.tree?.label || '').trim() || 'Tree';
-  const workspaceSnapshot = Array.isArray(lastStructural?.workspaceAfter) && lastStructural.workspaceAfter.length > 0
-    ? lastStructural.workspaceAfter
-    : [rootLabel];
-  const ledgerAttachments = buildReplayLedgerAttachments(parse, workspaceSnapshot, rootId, rootLabel);
   const surfaceOrder = Array.isArray(parse.surfaceOrder)
     ? parse.surfaceOrder.map((token) => String(token || '').trim()).filter(Boolean)
     : [];
@@ -1097,8 +685,7 @@ const ensureReplaySpelloutStep = (parse: ParseResult | null): DerivationStep[] |
         ]
       : []);
 
-  const attachedReplay = attachReplayLedgerBlocksToStructuralSteps(structuralSteps, ledgerAttachments, ensuredSpellout);
-  const replaySteps = [...attachedReplay.structuralSteps, ...attachedReplay.fallbackSteps];
+  const replaySteps = [...structuralSteps, ...ensuredSpellout];
   return replaySteps.length > 0 ? replaySteps : undefined;
 };
 
@@ -1191,7 +778,7 @@ const App: React.FC = () => {
   }, [activeParse]);
   const derivationalNoteParagraphs = useMemo(() => {
     if (!activeParse) return [];
-    return buildDerivationalNoteParagraphs(activeParse.derivationStages, activeParse.explanation);
+    return collectDerivationStageRecords(activeParse.derivationStages);
   }, [activeParse]);
   const providerReasoningRaw = useMemo(
     () => normalizeProviderRawForDisplay(String(activeParse?.provenance?.providerReasoningRaw || '')),
@@ -1492,7 +1079,7 @@ const App: React.FC = () => {
     if (!sentence) return;
 
     const now = new Date().toISOString();
-    const snapshot = JSON.parse(JSON.stringify(analysisBundle)) as ParseBundle;
+    const snapshot = createTreeBankBundleSnapshot(analysisBundle) as ParseBundle;
     const treeSnapshotDataUrl = captureVisibleTreeSnapshot();
     const entry: TreeBankEntry = {
       id: createTreeBankId(),
@@ -1978,78 +1565,6 @@ const App: React.FC = () => {
                         </details>
                       )}
                   </div>
-
-                  {((activeParse.commitmentFacts || []).length > 0) && (
-                    <div className="glass-dark p-6 md:p-12 rounded-[2rem] md:rounded-[3rem] shadow-2xl">
-                      <div className="flex items-center gap-4 md:gap-5 mb-6 md:mb-8">
-                        <div className="w-10 h-10 md:w-12 md:h-12 bg-white/5 rounded-2xl flex items-center justify-center text-emerald-400 border border-white/10">
-                          <Layers size={24} />
-                        </div>
-                        <div>
-                          <h2 className="text-xl md:text-3xl font-bold text-white serif tracking-tight">Derivational Records</h2>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500/40">Compiled Analysis Layer</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 gap-4">
-                        {((activeParse.commitmentFacts || []) as Array<Record<string, unknown>>).map((fact, index) => {
-                          const familyLabel = humanizeOpenOntologyLabel(
-                            stringifyDerivationAtom(fact.frameworkLabel) || stringifyDerivationAtom(fact.family) || stringifyDerivationAtom(fact.kind)
-                          );
-                          const subtype = stringifyDerivationAtom(fact.subtype);
-                          const fieldLines = collectCommitmentFactFieldLines(fact, fallbackReadableReference);
-                          const supportBadges = buildCommitmentFactSupportBadges(fact);
-                          return (
-                            <div
-                              key={stringifyDerivationAtom(fact.factId) || `commitment-fact-${index}`}
-                              className="rounded-[1.5rem] border border-white/10 bg-black/35 p-5 md:p-6 shadow-inner"
-                            >
-                              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-                                <div>
-                                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-400/75">
-                                    {familyLabel}
-                                  </p>
-                                  {subtype && (
-                                    <p className="mt-2 text-sm md:text-base text-emerald-50/70 serif italic">
-                                      {subtype}
-                                    </p>
-                                  )}
-                                </div>
-                                {stringifyDerivationAtom(fact.factId) && (
-                                  <span className="px-3 py-1.5 rounded-full border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-[0.22em] text-white/55">
-                                    {stringifyDerivationAtom(fact.factId)}
-                                  </span>
-                                )}
-                              </div>
-                              {fieldLines.length > 0 && (
-                                <div className="space-y-2">
-                                  {fieldLines.map((line, lineIndex) => (
-                                    <p
-                                      key={`${stringifyDerivationAtom(fact.factId) || index}-${lineIndex}`}
-                                      className="text-emerald-50/85 leading-relaxed text-sm md:text-base"
-                                    >
-                                      {line}
-                                    </p>
-                                  ))}
-                                </div>
-                              )}
-                              {supportBadges.length > 0 && (
-                                <div className="mt-5 flex flex-wrap gap-2">
-                                  {supportBadges.map((badge) => (
-                                    <span
-                                      key={`${stringifyDerivationAtom(fact.factId) || index}-${badge.label}`}
-                                      className="px-3 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300/80"
-                                    >
-                                      {badge.label}: {badge.value}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
 
                   {(canopyMilesNotation || derivationMilesNotation) && (
                     <div className="glass-dark p-6 md:p-12 rounded-[2rem] md:rounded-[3rem] shadow-2xl">

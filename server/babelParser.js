@@ -28,10 +28,8 @@ import {
   summarizeProviderReasoningForDisplay
 } from './babelParser/modelRuntime.js';
 import { createDerivationHelpers } from './babelParser/derivationHelpers.js';
-import { createNoteBindingHelpers } from './babelParser/noteBindings.js';
 import { createSemanticValidationHelpers } from './babelParser/semanticValidation.js';
 import { createParseRoutes } from './babelParser/parseRoutes.js';
-import { createAnalysisNormalizationHelpers } from './babelParser/analysisNormalization.js';
 import { createParseNormalizationHelpers } from './babelParser/parseNormalization.js';
 import { createDerivationCompilerHelpers } from './babelParser/derivationCompiler.js';
 import { createNormalizationUtils } from './babelParser/normalizationUtils.js';
@@ -74,8 +72,6 @@ const {
   buildNodeLabelIndexFromTree,
   normalizeVisualRelationEvents,
   isAbstractFeatureSurface,
-  cleanExplanationWhitespace,
-  ensureExplanationTerminator,
   getNodeOvertYield,
   normalizeTraceLikeSurface,
   isNullLikeSurface,
@@ -93,9 +89,6 @@ const {
   materializeEmptyStructuralLeaves,
   promoteSentenceMatchingLeaves,
   buildCanonicalVisualRelationEvents,
-  buildGroundedExplanation,
-  harmonizeExplanationWithDerivation,
-  getMovementDisplayLabel,
   normalizeMovementLabelKey,
   resolveHeadMovementLandingNode
 } = createDerivationHelpers({
@@ -144,15 +137,6 @@ const {
   validateAndCommitSurfaceOrder,
   validateSpelloutConsistency
 } = syntaxTreeHelpersRef;
-
-const {
-  compileNoteBindingsFromDerivationFrames,
-  buildExplanationFromNoteBindings
-} = createNoteBindingHelpers({
-  normalizeOptionalStepText,
-  cleanExplanationWhitespace,
-  ensureExplanationTerminator
-});
 
 const {
   normalizeTransportJsonArray,
@@ -221,36 +205,18 @@ const {
 
 const {
   validatePronouncedCopiesAgainstCommittedTree,
-  validateNoteBindingsAgainstStructuredAnalysis,
-  runSemanticValidation,
-  auditNoteConsistency
+  runSemanticValidation
 } = createSemanticValidationHelpers({
   ParseApiError,
-  cleanExplanationWhitespace,
-  normalizeMovementOperation,
-  normalizeChainType,
-  normalizeOptionalStepText,
-  normalizeKey,
   buildNodeIndexFromTree,
   collectOvertTerminalNodes,
   subtreeContainsNamedCovertCategoryLeaf
 });
 
 const {
-  normalizeCommitmentFacts,
-  ensureStructuredEntryIds
-} = createAnalysisNormalizationHelpers({
-  normalizeNodeIdArray,
-  normalizeOptionalStepText,
-  normalizeOptionalStringArray,
-  normalizeTransportJsonArray
-});
-
-const {
   deriveChainsFromCommittedAnalysis,
   normalizeParseResult,
-  normalizeParseBundle,
-  validateFinalProNoteBindings
+  normalizeParseBundle
 } = createParseNormalizationHelpers({
   ParseApiError,
   normalizeKey,
@@ -259,11 +225,7 @@ const {
   normalizeMovementOperation,
   normalizeOptionalStepText,
   normalizeOptionalStringArray,
-  getLabelProfile,
   tokenizeSentenceSurfaceOrder,
-  normalizeSurfaceToken,
-  compileNoteBindingsFromDerivationFrames,
-  buildExplanationFromNoteBindings,
   normalizeDerivationStagesToDerivationFrames,
   normalizeDerivationFrames,
   materializeImplicitPhrasalTraceShellsInDerivationFrames,
@@ -271,7 +233,6 @@ const {
   collectNodeReferencesById,
   normalizeSyntaxTreeWithIds,
   buildNodeIndexFromTree,
-  buildParentIndexFromTree,
   buildNodeLabelIndexFromTree,
   assignDerivationStepIds,
   normalizeVisualRelationEvents,
@@ -281,17 +242,10 @@ const {
   stripMovementIndicesFromTree,
   collectOvertTerminalNodes,
   resolveNodeSurface,
-  resolveHeadMovementLandingNode,
   materializeCommittedTraceShells,
-  buildGroundedExplanation,
-  harmonizeExplanationWithDerivation,
   collectDerivationFrameNodeIds,
-  normalizeCommitmentFacts,
-  ensureStructuredEntryIds,
   runSemanticValidation,
   validatePronouncedCopiesAgainstCommittedTree,
-  validateNoteBindingsAgainstStructuredAnalysis,
-  auditNoteConsistency,
   deriveImplicitDerivationChainId,
   deriveChainTypeFromOperation,
   mergeChainTypes,
@@ -317,7 +271,6 @@ export const {
 } = createParseRoutes({
   ParseApiError,
   normalizeParseBundle,
-  validateFinalProNoteBindings,
   parseModelJson,
   parseModelJsonDetailed
 });
@@ -325,7 +278,6 @@ export const {
 export const __test__ = {
   normalizeParseBundle,
   normalizeParseResult,
-  validateFinalProNoteBindings,
   normalizeDerivationStagesToDerivationFrames,
   normalizeDerivationFrames,
   validateAndCommitSurfaceOrder,
@@ -335,7 +287,6 @@ export const __test__ = {
   buildCanonicalVisualRelationEvents,
   buildCanonicalVisualRelationEventsFromDerivationFrames,
   buildCanonicalDerivationFromDerivationFrames,
-  harmonizeExplanationWithDerivation,
   buildSystemInstruction,
   buildParseContentsPrompt,
   summarizeProviderReasoningForDisplay,
@@ -345,12 +296,10 @@ export const __test__ = {
   resolveRouteMaxOutputTokens,
   parseModelJson,
   parseModelJsonDetailed,
-  compileNoteBindingsFromDerivationFrames,
   normalizeSurfaceToken,
   tokenizeSentenceSurfaceOrder,
   anchorOvertLeavesToSentenceTokens,
   deriveCanonicalSurfaceSpans,
   collectOvertTerminalNodes,
-  validatePronouncedCopiesAgainstCommittedTree,
-  validateNoteBindingsAgainstStructuredAnalysis
+  validatePronouncedCopiesAgainstCommittedTree
 };

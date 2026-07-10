@@ -198,7 +198,6 @@ const classifyProviderRouteError = ({
 export const createParseRoutes = ({
   ParseApiError,
   normalizeParseBundle,
-  validateFinalProNoteBindings,
   parseModelJson,
   parseModelJsonDetailed
 }) => {
@@ -506,10 +505,6 @@ export const createParseRoutes = ({
         };
       }
 
-      if (normalized?.analyses?.[0]) {
-        normalized = validateFinalProNoteBindings(normalized);
-      }
-
       return {
         ...normalized,
         requestedModelRoute: 'local',
@@ -632,9 +627,6 @@ export const createParseRoutes = ({
                 )
               ]
             };
-            if (recovered?.analyses?.[0]) {
-              recovered = validateFinalProNoteBindings(recovered);
-            }
             return {
               ...recovered,
               requestedModelRoute: normalizedModelRoute,
@@ -749,10 +741,6 @@ export const createParseRoutes = ({
         if (!(error instanceof ParseApiError && error.code === 'BAD_MODEL_RESPONSE' && normalized?.analyses?.[0])) {
           throw error;
         }
-      }
-
-      if (normalized?.analyses?.[0]) {
-        normalized = validateFinalProNoteBindings(normalized);
       }
 
       return {
@@ -883,7 +871,6 @@ export const createParseRoutes = ({
             )
           ]
         };
-          normalized = validateFinalProNoteBindings(normalized);
         }
       } catch (error) {
         const debugPayloadPath = writeDebugModelPayload({

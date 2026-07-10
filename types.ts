@@ -148,18 +148,6 @@ export interface ResolvedVisualRelationRecord {
   evidence?: string;
 }
 
-export interface NoteBinding {
-  noteId?: string;
-  kind: 'architecture' | 'chain' | 'licensing' | 'closure' | 'other';
-  text: string;
-  chainId?: string;
-  stepIds?: string[];
-  nodeIds?: string[];
-  supportIds?: string[];
-  commitmentFactIds?: string[];
-  order?: number;
-}
-
 export interface DerivationChain {
   chainId: string;
   type?: OpenOntologyLabel;
@@ -169,27 +157,6 @@ export interface DerivationChain {
   silentCopies?: string[];
   features?: string[];
   note?: string;
-}
-
-export interface CommitmentFactParticipant {
-  role?: string;
-  nodeId?: string;
-  label?: string;
-  value?: string;
-}
-
-export interface CommitmentFact {
-  factId?: string;
-  kind: OpenOntologyLabel;
-  family?: OpenOntologyLabel;
-  frameworkLabel?: string;
-  subtype?: string;
-  statement?: string;
-  participants?: CommitmentFactParticipant[];
-  chainId?: string;
-  stepIds?: string[];
-  nodeIds?: string[];
-  [key: string]: unknown;
 }
 
 export interface Provenance {
@@ -208,7 +175,6 @@ export interface Provenance {
   payloadTranscriberOutputTokenCount?: number;
   payloadTranscriberTotalTokenCount?: number;
   payloadTranscriberThoughtsTokenCount?: number;
-  hasCommitmentFacts?: boolean;
   hasDerivationStages?: boolean;
   hasResolvedVisualRelations?: boolean;
   parsePromptTokenCount?: number;
@@ -220,23 +186,15 @@ export interface Provenance {
   providerReasoningRaw?: string;
   providerReasoningSummary?: string;
   providerThoughtsTokenCount?: number;
-  notesSource?: string;
-  notesCompiledFromDerivationStages?: boolean;
 }
 
 export interface ParseResult {
-  // There is no `notes` field on committed analyses.
-  // Structured notes live in noteBindings, and explanation is the rendered paragraph built from them.
   tree: SyntaxNode;
-  explanation: string;
   surfaceOrder?: string[];
   derivationStages?: DerivationStage[];
   resolvedVisualRelations?: ResolvedVisualRelationRecord[];
-  noteBindings?: NoteBinding[];
   derivationSteps?: DerivationStep[];
   chains?: DerivationChain[];
-  // Compiler-owned open facts derived from derivationStages; never model-authored input.
-  commitmentFacts?: CommitmentFact[];
   provenance?: Provenance;
 }
 

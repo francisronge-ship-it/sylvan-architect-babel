@@ -5,8 +5,7 @@ export const FORBIDDEN_STRING_LEAF_TOKENS = new Set([
   'children',
   'tree',
   'analysis',
-  'analyses',
-  'explanation'
+  'analyses'
 ]);
 
 export const STRUCTURAL_LEAF_LABELS = new Set([
