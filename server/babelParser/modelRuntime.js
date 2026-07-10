@@ -116,6 +116,46 @@ export const resolveLocalMaxOutputTokens = (requestedMaxOutputTokens) => {
   return Math.max(256, Math.min(requested, LOCAL_MODEL_MAX_OUTPUT_TOKENS));
 };
 
+export const buildLocalRequestBody = ({
+  transport = 'http',
+  sentence,
+  framework,
+  systemInstruction,
+  prompt,
+  temperature,
+  maxOutputTokens,
+  format = 'json'
+}) => {
+  const resolvedMaxOutputTokens = resolveLocalMaxOutputTokens(maxOutputTokens);
+  if (transport === 'command') {
+    return {
+      sentence,
+      framework,
+      model: LOCAL_MODEL_NAME,
+      systemInstruction,
+      prompt,
+      temperature,
+      maxOutputTokens: resolvedMaxOutputTokens,
+      format,
+      numCtx: LOCAL_MODEL_NUM_CTX,
+      think: false
+    };
+  }
+  return {
+    model: LOCAL_MODEL_NAME,
+    system: systemInstruction,
+    prompt,
+    format,
+    stream: false,
+    think: false,
+    options: {
+      temperature,
+      num_predict: resolvedMaxOutputTokens,
+      num_ctx: LOCAL_MODEL_NUM_CTX
+    }
+  };
+};
+
 const invokeLocalModelCommand = async ({
   sentence,
   framework,
@@ -126,20 +166,19 @@ const invokeLocalModelCommand = async ({
   format = 'json',
   timeoutMs
 }) => {
+  const requestBody = buildLocalRequestBody({
+    transport: 'command',
+    sentence,
+    framework,
+    systemInstruction,
+    prompt,
+    temperature,
+    maxOutputTokens,
+    format
+  });
   const result = spawnSync(LOCAL_MODEL_COMMAND, {
     shell: true,
-    input: JSON.stringify({
-      sentence,
-      framework,
-      model: LOCAL_MODEL_NAME,
-      systemInstruction,
-      prompt,
-      temperature,
-      maxOutputTokens,
-      format,
-      numCtx: LOCAL_MODEL_NUM_CTX,
-      think: false
-    }),
+    input: JSON.stringify(requestBody),
     encoding: 'utf8',
     timeout: Math.max(0, Number(timeoutMs || LOCAL_MODEL_TIMEOUT_MS)),
     maxBuffer: 25 * 1024 * 1024
@@ -159,6 +198,14 @@ const invokeLocalModelHttp = async ({
   timeoutMs,
   format = 'json'
 }) => {
+  const requestBody = buildLocalRequestBody({
+    transport: 'http',
+    systemInstruction,
+    prompt,
+    temperature,
+    maxOutputTokens,
+    format
+  });
   const abortController = new AbortController();
   const timeoutHandle = setTimeout(() => abortController.abort(), Math.max(0, Number(timeoutMs || LOCAL_MODEL_TIMEOUT_MS)));
   try {
@@ -167,19 +214,7 @@ const invokeLocalModelHttp = async ({
       headers: {
         'content-type': 'application/json'
       },
-      body: JSON.stringify({
-        model: LOCAL_MODEL_NAME,
-        system: systemInstruction,
-        prompt,
-        format,
-        stream: false,
-        think: false,
-        options: {
-          temperature,
-          num_predict: resolveLocalMaxOutputTokens(maxOutputTokens),
-          num_ctx: LOCAL_MODEL_NUM_CTX
-        }
-      }),
+      body: JSON.stringify(requestBody),
       signal: abortController.signal
     });
     const responseText = await response.text();
@@ -311,6 +346,29 @@ export const writeDebugModelPayload = ({ stage = 'unknown', model = 'unknown', s
   }
 };
 
+export const buildGeminiGenerationRequest = ({
+  model,
+  contents,
+  systemInstruction,
+  temperature = MODEL_TEMPERATURE,
+  maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS,
+  responseJsonSchema,
+  abortSignal,
+  thinkingConfig
+}) => ({
+  model,
+  contents,
+  config: {
+    systemInstruction,
+    responseMimeType: 'application/json',
+    maxOutputTokens,
+    temperature,
+    ...(responseJsonSchema ? { responseJsonSchema } : {}),
+    ...(thinkingConfig ? { thinkingConfig } : {}),
+    abortSignal
+  }
+});
+
 export const generateStructuredContent = async ({
   ai,
   model,
@@ -322,19 +380,16 @@ export const generateStructuredContent = async ({
   abortSignal,
   thinkingConfig
 }) => {
-  return ai.models.generateContent({
+  return ai.models.generateContent(buildGeminiGenerationRequest({
     model,
     contents,
-    config: {
-      systemInstruction,
-      responseMimeType: 'application/json',
-      maxOutputTokens,
-      temperature,
-      ...(responseJsonSchema ? { responseJsonSchema } : {}),
-      ...(thinkingConfig ? { thinkingConfig } : {}),
-      abortSignal
-    }
-  });
+    systemInstruction,
+    temperature,
+    maxOutputTokens,
+    responseJsonSchema,
+    abortSignal,
+    thinkingConfig
+  }));
 };
 
 const readResponseText = async (response) => {
@@ -427,6 +482,23 @@ const extractOpenAIOutputText = (payloadJson) => String(payloadJson?.output_text
       .trim()
     : '');
 
+export const buildOpenAIRequestBody = ({
+  model,
+  contents,
+  systemInstruction,
+  maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS,
+  reasoningEffort = OPENAI_REASONING_EFFORT,
+  background = OPENAI_BACKGROUND_RESPONSES
+}) => ({
+  model,
+  instructions: systemInstruction,
+  input: contents,
+  text: { format: { type: 'json_object' } },
+  reasoning: { effort: reasoningEffort },
+  ...(background ? { background: true, store: true } : {}),
+  max_output_tokens: maxOutputTokens
+});
+
 export const generateOpenAIStructuredContent = async ({
   apiKey,
   model,
@@ -445,15 +517,14 @@ export const generateOpenAIStructuredContent = async ({
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
+    body: JSON.stringify(buildOpenAIRequestBody({
       model,
-      instructions: systemInstruction,
-      input: contents,
-      text: { format: { type: 'json_object' } },
-      reasoning: { effort: reasoningEffort },
-      ...(background ? { background: true, store: true } : {}),
-      max_output_tokens: maxOutputTokens
-    }),
+      contents,
+      systemInstruction,
+      maxOutputTokens,
+      reasoningEffort,
+      background
+    })),
     signal: abortSignal
   });
 
@@ -506,6 +577,22 @@ export const generateOpenAIStructuredContent = async ({
   };
 };
 
+export const buildAnthropicRequestBody = ({
+  model,
+  contents,
+  systemInstruction,
+  maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS,
+  effort = ANTHROPIC_EFFORT,
+  thinking = ANTHROPIC_THINKING_CONFIG
+}) => ({
+  model,
+  system: `${systemInstruction}\n\nReturn exactly one valid JSON object and no prose.`,
+  messages: [{ role: 'user', content: contents }],
+  thinking,
+  output_config: { effort },
+  max_tokens: maxOutputTokens
+});
+
 export const generateAnthropicStructuredContent = async ({
   apiKey,
   model,
@@ -524,14 +611,14 @@ export const generateAnthropicStructuredContent = async ({
       'anthropic-version': '2023-06-01',
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
+    body: JSON.stringify(buildAnthropicRequestBody({
       model,
-      system: `${systemInstruction}\n\nReturn exactly one valid JSON object and no prose.`,
-      messages: [{ role: 'user', content: contents }],
-      thinking,
-      output_config: { effort },
-      max_tokens: maxOutputTokens
-    }),
+      contents,
+      systemInstruction,
+      maxOutputTokens,
+      effort,
+      thinking
+    })),
     signal: abortSignal
   });
 

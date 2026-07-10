@@ -79,6 +79,29 @@ export interface ResolvedVisualRelationRecord {
   evidence?: string;
 }
 
+export interface GenerationPromptContract {
+  framework: 'xbar' | 'minimalism';
+  promptRoute: 'gemini' | 'gpt' | 'claude';
+  systemInstructionSha256: string;
+  promptSha256: string;
+  promptTemplateSha256: string;
+}
+
+export interface SentGenerationConfig {
+  [key: string]: string | number | boolean | null;
+}
+
+export interface GenerationRecord {
+  schemaVersion: 1;
+  provider: 'gemini' | 'gpt' | 'claude' | 'local';
+  promptContract: GenerationPromptContract;
+  sentGenerationConfig: SentGenerationConfig;
+  timing: {
+    requestStartedAt: string;
+    durationMs: number;
+  };
+}
+
 export interface Provenance {
   modelRoute?: 'gemini' | 'gpt' | 'claude' | 'local';
   framework?: 'xbar' | 'minimalism';
@@ -121,4 +144,5 @@ export interface ParseBundle {
   requestedModelRoute?: 'gemini' | 'gpt' | 'claude';
   requestedReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   modelUsed?: string;
+  generationRecord?: GenerationRecord;
 }

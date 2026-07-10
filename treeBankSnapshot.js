@@ -39,7 +39,8 @@ const CURRENT_BUNDLE_FIELDS = [
   'sentence',
   'requestedModelRoute',
   'requestedReasoningEffort',
-  'modelUsed'
+  'modelUsed',
+  'generationRecord'
 ];
 
 const projectFields = (source, fields) => {

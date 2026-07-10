@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import { attachAggregateParseTokenCounts } from './provenance.js';
+import { buildGenerationRecord } from './generationRecord.js';
 import { buildSystemInstruction } from './systemInstruction.js';
 import { buildParseContentsPrompt } from './prompts.js';
 import {
@@ -24,6 +25,10 @@ import {
   normalizeProviderReasoningEffort
 } from './routeConfig.js';
 import {
+  buildAnthropicRequestBody,
+  buildGeminiGenerationRequest,
+  buildLocalRequestBody,
+  buildOpenAIRequestBody,
   generateAnthropicStructuredContent,
   generateOpenAIStructuredContent,
   generateStructuredContent,
@@ -286,6 +291,22 @@ export const createParseRoutes = ({
     analyses: (Array.isArray(bundle?.analyses) ? bundle.analyses : []).map(mapper)
   });
 
+  const createGenerationRecord = ({
+    provider,
+    framework,
+    promptRoute,
+    sentRequest,
+    generationStartedAt
+  }) => buildGenerationRecord({
+    provider,
+    framework,
+    promptRoute,
+    sentRequest,
+    requestStartedAt: generationStartedAt,
+    durationMs: Date.now() - generationStartedAt,
+    buildTemplate: buildParseContentsPrompt
+  });
+
   const maybeWritePrimaryDebugPayload = ({
     modelRoute,
     model,
@@ -443,7 +464,6 @@ export const createParseRoutes = ({
 
   const parseSentenceWithLocalModel = async (sentence, framework = 'xbar') => {
     const promptRoute = 'gemini';
-    const requestStartedAt = Date.now();
     const systemInstruction = buildSystemInstruction(framework, promptRoute);
     const prompt = buildParseContentsPrompt(
       sentence,
@@ -453,8 +473,18 @@ export const createParseRoutes = ({
     const temperature = resolveRouteTemperature(promptRoute);
     const maxOutputTokens = resolveLocalMaxOutputTokens(resolveRouteMaxOutputTokens(promptRoute, sentence));
     const modelUsed = `local:${LOCAL_MODEL_NAME}`;
+    const sentRequest = buildLocalRequestBody({
+      transport: LOCAL_MODEL_COMMAND ? 'command' : 'http',
+      sentence,
+      framework,
+      systemInstruction,
+      prompt,
+      temperature,
+      maxOutputTokens
+    });
 
     try {
+      const generationStartedAt = Date.now();
       const rawText = await generateStructuredLocalContent({
         sentence,
         framework,
@@ -463,6 +493,13 @@ export const createParseRoutes = ({
         temperature,
         maxOutputTokens,
         timeoutMs: undefined
+      });
+      const generationRecord = createGenerationRecord({
+        provider: 'local',
+        framework,
+        promptRoute,
+        sentRequest,
+        generationStartedAt
       });
 
       if (!rawText) {
@@ -494,7 +531,8 @@ export const createParseRoutes = ({
       return {
         ...normalized,
         requestedModelRoute: 'local',
-        modelUsed
+        modelUsed,
+        generationRecord
       };
     } catch (error) {
       if (error instanceof ParseApiError) {
@@ -538,6 +576,15 @@ export const createParseRoutes = ({
     const selectedModel = GEMINI_MODEL;
     const requestStartedAt = Date.now();
     const reasoningEffort = normalizeProviderReasoningEffort(normalizedModelRoute, options.reasoningEffort);
+    const thinkingConfig = buildGeminiThinkingConfig(reasoningEffort);
+    const sentRequest = buildGeminiGenerationRequest({
+      model: selectedModel,
+      contents: fullContents,
+      systemInstruction,
+      temperature: routeTemperature,
+      maxOutputTokens: routeMaxOutputTokens,
+      thinkingConfig
+    });
 
     try {
       const remainingBudgetMs = getRemainingRequestBudgetMs(requestStartedAt, normalizedModelRoute);
@@ -549,6 +596,7 @@ export const createParseRoutes = ({
         );
       }
 
+      const generationStartedAt = Date.now();
       const generation = await withTimeout(
         (abortSignal) => generateStructuredContent({
           ai,
@@ -557,7 +605,7 @@ export const createParseRoutes = ({
           systemInstruction,
           temperature: routeTemperature,
           maxOutputTokens: routeMaxOutputTokens,
-          thinkingConfig: buildGeminiThinkingConfig(reasoningEffort),
+          thinkingConfig,
           abortSignal
         }),
         resolveRequestTimeoutMs({
@@ -566,6 +614,13 @@ export const createParseRoutes = ({
         }),
         `Model generation (${selectedModel})`
       );
+      const generationRecord = createGenerationRecord({
+        provider: normalizedModelRoute,
+        framework,
+        promptRoute: normalizedModelRoute,
+        sentRequest,
+        generationStartedAt
+      });
 
       const generationMeta = summarizeGeneration(generation);
       const truncatedGeneration = isTruncatedGeneration(generation);
@@ -616,7 +671,8 @@ export const createParseRoutes = ({
               ...recovered,
               requestedModelRoute: normalizedModelRoute,
               requestedReasoningEffort: reasoningEffort,
-              modelUsed: selectedModel
+              modelUsed: selectedModel,
+              generationRecord
             };
           }
           const debugPayloadPath = writeDebugModelPayload({
@@ -730,7 +786,8 @@ export const createParseRoutes = ({
         ...normalized,
         requestedModelRoute: normalizedModelRoute,
         requestedReasoningEffort: reasoningEffort,
-        modelUsed: selectedModel
+        modelUsed: selectedModel,
+        generationRecord
       };
     } catch (error) {
       throw classifyGeminiRouteError({
@@ -762,6 +819,21 @@ export const createParseRoutes = ({
     const routeMaxOutputTokens = resolveRouteMaxOutputTokens(modelRoute, sentence);
     const requestStartedAt = Date.now();
     const reasoningEffort = normalizeProviderReasoningEffort(modelRoute, requestedReasoningEffort);
+    const sentRequest = modelRoute === 'gpt'
+      ? buildOpenAIRequestBody({
+          model: selectedModel,
+          contents: fullContents,
+          systemInstruction,
+          maxOutputTokens: routeMaxOutputTokens,
+          reasoningEffort
+        })
+      : buildAnthropicRequestBody({
+          model: selectedModel,
+          contents: fullContents,
+          systemInstruction,
+          maxOutputTokens: routeMaxOutputTokens,
+          effort: reasoningEffort
+        });
 
     try {
       const remainingBudgetMs = getRemainingRequestBudgetMs(requestStartedAt, modelRoute);
@@ -773,6 +845,7 @@ export const createParseRoutes = ({
         );
       }
 
+      const generationStartedAt = Date.now();
       const generation = await withTimeout(
         (abortSignal) => generate({
           apiKey,
@@ -791,6 +864,13 @@ export const createParseRoutes = ({
         }),
         `Model generation (${selectedModel})`
       );
+      const generationRecord = createGenerationRecord({
+        provider: modelRoute,
+        framework,
+        promptRoute: modelRoute,
+        sentRequest,
+        generationStartedAt
+      });
 
       const generationMeta = summarizeGeneration(generation);
       const truncatedGeneration = isTruncatedGeneration(generation);
@@ -891,7 +971,8 @@ export const createParseRoutes = ({
         ...normalized,
         requestedModelRoute: modelRoute,
         requestedReasoningEffort: reasoningEffort,
-        modelUsed: selectedModel
+        modelUsed: selectedModel,
+        generationRecord
       };
     } catch (error) {
       throw classifyProviderRouteError({
