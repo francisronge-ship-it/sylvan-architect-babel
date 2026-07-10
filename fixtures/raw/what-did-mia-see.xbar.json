@@ -1,0 +1,220 @@
+{
+  "sentence": "What did Mia see?",
+  "framework": "xbar",
+  "modelRoute": "gemini",
+  "payload": {
+    "derivationStages": [
+      {
+        "statement": "The interrogative object enters the derivation.",
+        "stageRecord": "The interrogative determiner phrase What is selected as the internal argument that the transitive predicate will merge with.",
+        "visualRelations": [],
+        "workspaceForest": [
+          {
+            "id": "dp_what_low",
+            "label": "DP",
+            "lineageId": "what-chain",
+            "children": [
+              {
+                "id": "what_low",
+                "label": "What",
+                "word": "What",
+                "tokenIndex": 0,
+                "lineageId": "what-chain-terminal",
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "statement": "The verb combines with its interrogative object.",
+        "stageRecord": "The transitive verb see selects the interrogative determiner phrase as its complement and projects a verb phrase.",
+        "visualRelations": [],
+        "workspaceForest": [
+          {
+            "id": "vp_see",
+            "label": "VP",
+            "children": [
+              {
+                "id": "v_see",
+                "label": "V",
+                "children": [
+                  {
+                    "id": "see_terminal",
+                    "label": "see",
+                    "word": "see",
+                    "tokenIndex": 3,
+                    "children": []
+                  }
+                ]
+              },
+              { "refId": "dp_what_low" }
+            ]
+          }
+        ]
+      },
+      {
+        "statement": "The subject and finite auxiliary form the tense phrase.",
+        "stageRecord": "The subject Mia occupies the tense-phrase specifier while finite did heads the tense projection over the verb phrase.",
+        "visualRelations": [],
+        "workspaceForest": [
+          {
+            "id": "tp_question",
+            "label": "TP",
+            "children": [
+              {
+                "id": "np_mia_question",
+                "label": "NP",
+                "children": [
+                  {
+                    "id": "mia_question_terminal",
+                    "label": "Mia",
+                    "word": "Mia",
+                    "tokenIndex": 2,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "tbar_question",
+                "label": "T'",
+                "children": [
+                  {
+                    "id": "t_did",
+                    "label": "T",
+                    "lineageId": "did-chain",
+                    "children": [
+                      {
+                        "id": "did_terminal",
+                        "label": "did",
+                        "word": "did",
+                        "tokenIndex": 1,
+                        "lineageId": "did-chain-terminal",
+                        "children": []
+                      }
+                    ]
+                  },
+                  { "refId": "vp_see" }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "statement": "The interrogative phrase moves to the clause edge.",
+        "stageRecord": "What is pronounced at the left edge of the complementizer phrase with a silent lower object occurrence, while the finite auxiliary raises to the complementizer head and leaves a silent tense occurrence.",
+        "visualRelations": [
+          {
+            "relation": "wh-movement",
+            "anchors": {
+              "landing-site": "dp_what_high",
+              "lower-occurrence": "dp_what_low"
+            }
+          },
+          {
+            "relation": "auxiliary-head-movement",
+            "anchors": {
+              "landing-site": "c_question",
+              "lower-occurrence": "t_did"
+            }
+          }
+        ],
+        "workspaceForest": [
+          {
+            "id": "cp_question",
+            "label": "CP",
+            "children": [
+              {
+                "id": "dp_what_high",
+                "label": "DP",
+                "lineageId": "what-chain",
+                "children": [
+                  {
+                    "id": "what_high",
+                    "label": "What",
+                    "word": "What",
+                    "tokenIndex": 0,
+                    "lineageId": "what-chain-terminal",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "cbar_question",
+                "label": "C'",
+                "children": [
+                  {
+                    "id": "c_question",
+                    "label": "C",
+                    "lineageId": "did-chain",
+                    "children": [
+                      {
+                        "id": "did_high",
+                        "label": "did",
+                        "word": "did",
+                        "tokenIndex": 1,
+                        "lineageId": "did-chain-terminal",
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "id": "tp_question",
+                    "label": "TP",
+                    "children": [
+                      { "refId": "np_mia_question" },
+                      {
+                        "id": "tbar_question",
+                        "label": "T'",
+                        "children": [
+                          {
+                            "id": "t_did",
+                            "label": "T",
+                            "lineageId": "did-chain",
+                            "silent": true,
+                            "children": [
+                              {
+                                "id": "did_terminal",
+                                "label": "did",
+                                "lineageId": "did-chain-terminal",
+                                "silent": true,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "id": "vp_see",
+                            "label": "VP",
+                            "children": [
+                              { "refId": "v_see" },
+                              {
+                                "id": "dp_what_low",
+                                "label": "DP",
+                                "lineageId": "what-chain",
+                                "silent": true,
+                                "children": [
+                                  {
+                                    "id": "what_low",
+                                    "label": "what",
+                                    "lineageId": "what-chain-terminal",
+                                    "silent": true,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "sentence": "Mia laughed.",
+  "framework": "xbar",
+  "modelRoute": "gemini",
+  "payload": {
+    "derivationStages": [
+      {
+        "statement": "The noun Mia enters the derivation.",
+        "stageRecord": "Lexical selection introduces the proper noun Mia, which projects a noun phrase that will serve as the external argument of the predicate.",
+        "visualRelations": [],
+        "workspaceForest": [
+          {
+            "id": "np_mia",
+            "label": "NP",
+            "children": [
+              {
+                "id": "n_mia",
+                "label": "N",
+                "children": [
+                  {
+                    "id": "leaf_mia",
+                    "label": "Mia",
+                    "word": "Mia",
+                    "tokenIndex": 0,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "statement": "The intransitive verb laughed projects a verb phrase.",
+        "stageRecord": "The unergative verb laughed is selected and projects a verb phrase; its single theta role is assigned to the external argument position, which the noun phrase Mia will occupy.",
+        "visualRelations": [],
+        "workspaceForest": [
+          { "refId": "np_mia" },
+          {
+            "id": "vp_laughed",
+            "label": "VP",
+            "children": [
+              {
+                "id": "vbar_laughed",
+                "label": "V'",
+                "children": [
+                  {
+                    "id": "v_laughed",
+                    "label": "V",
+                    "children": [
+                      {
+                        "id": "leaf_laughed",
+                        "label": "laughed",
+                        "word": "laughed",
+                        "tokenIndex": 1,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "statement": "Tense combines with the verb phrase.",
+        "stageRecord": "A finite past tense head selects the verb phrase as its complement, projecting the inflectional layer that licenses the subject position of the clause.",
+        "visualRelations": [],
+        "workspaceForest": [
+          { "refId": "np_mia" },
+          {
+            "id": "tbar_1",
+            "label": "T'",
+            "children": [
+              {
+                "id": "t_past",
+                "label": "T",
+                "children": [
+                  { "id": "leaf_t", "label": "∅", "children": [] }
+                ]
+              },
+              { "refId": "vp_laughed" }
+            ]
+          }
+        ]
+      },
+      {
+        "statement": "The subject occupies the specifier of TP and the clause converges.",
+        "stageRecord": "The noun phrase Mia merges as the specifier of the tense projection, and the tense head bears an open agreement relation to that subject; the derivation converges with the surface order Mia laughed.",
+        "visualRelations": [
+          {
+            "relation": "bespoke-open-agreement",
+            "anchors": {
+              "unbounded-probe-role": "t_past",
+              "bespoke-goal-role": "np_mia"
+            }
+          }
+        ],
+        "workspaceForest": [
+          {
+            "id": "tp_root",
+            "label": "TP",
+            "children": [
+              { "refId": "np_mia" },
+              { "refId": "tbar_1" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

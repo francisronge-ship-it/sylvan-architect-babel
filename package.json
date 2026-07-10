@@ -8,6 +8,10 @@
     "build": "vite build",
     "test": "node --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit --pretty false",
+    "fixtures:build": "node scripts/buildParseFixtures.mjs",
+    "verify:parse-contract": "node scripts/verifyParseContract.mjs",
+    "verify:offline": "npm test && npm run verify:parse-contract",
+    "verify:all": "npm run typecheck && npm run verify:offline",
     "preview": "vite preview",
     "start": "node server/index.js",
     "audit": "npm audit"

@@ -1,9 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DEFAULT_INPUTS = [
-  '.local-tests/fresh-claude-parse-2026-05-18/response.json'
-];
+const DEFAULT_INPUTS = fs.globSync('fixtures/normalized/*.json').sort();
 
 const readJson = (filePath) => {
   const text = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
