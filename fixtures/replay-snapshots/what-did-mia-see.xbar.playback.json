@@ -1,0 +1,376 @@
+{
+  "schemaVersion": 1,
+  "sentence": "What did Mia see",
+  "stepCount": 19,
+  "steps": [
+    {
+      "operation": "LexicalSelect",
+      "replayKind": "micro",
+      "targetNodeId": "dp_what_low::__lex_tok_0_what",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 1/4 · Step 1/3",
+      "replayVisibleNodeIds": [
+        "dp_what_low::__lex_tok_0_what"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "dp_what_low",
+      "sourceNodeIds": [
+        "dp_what_low::__lex_tok_0_what"
+      ],
+      "replayProgressLabel": "Stage 1/4 · Step 2/3",
+      "replayVisibleNodeIds": [
+        "dp_what_low::__lex_tok_0_what",
+        "dp_what_low"
+      ]
+    },
+    {
+      "operation": "StageRecord",
+      "replayKind": "macro",
+      "targetNodeId": "dp_what_low",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 1/4 · Step 3/3",
+      "replayVisibleNodeIds": [
+        "dp_what_low::__lex_tok_0_what",
+        "dp_what_low"
+      ]
+    },
+    {
+      "operation": "LexicalSelect",
+      "replayKind": "micro",
+      "targetNodeId": "v_see::__lex_tok_3_see",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 2/4 · Step 1/4",
+      "replayVisibleNodeIds": [
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "v_see::__lex_tok_3_see"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "v_see",
+      "sourceNodeIds": [
+        "v_see::__lex_tok_3_see"
+      ],
+      "replayProgressLabel": "Stage 2/4 · Step 2/4",
+      "replayVisibleNodeIds": [
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "v_see::__lex_tok_3_see",
+        "v_see"
+      ]
+    },
+    {
+      "operation": "ExternalMerge",
+      "replayKind": "micro",
+      "targetNodeId": "vp_see",
+      "sourceNodeIds": [
+        "v_see",
+        "dp_what_low"
+      ],
+      "replayProgressLabel": "Stage 2/4 · Step 3/4",
+      "replayVisibleNodeIds": [
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "v_see::__lex_tok_3_see",
+        "v_see",
+        "vp_see"
+      ]
+    },
+    {
+      "operation": "StageRecord",
+      "replayKind": "macro",
+      "targetNodeId": "vp_see",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 2/4 · Step 4/4",
+      "replayVisibleNodeIds": [
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "v_see::__lex_tok_3_see",
+        "v_see",
+        "vp_see"
+      ]
+    },
+    {
+      "operation": "LexicalSelect",
+      "replayKind": "micro",
+      "targetNodeId": "t_did::__lex_tok_1_did",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 3/4 · Step 1/7",
+      "replayVisibleNodeIds": [
+        "vp_see",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "t_did::__lex_tok_1_did"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "t_did",
+      "sourceNodeIds": [
+        "t_did::__lex_tok_1_did"
+      ],
+      "replayProgressLabel": "Stage 3/4 · Step 2/7",
+      "replayVisibleNodeIds": [
+        "vp_see",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "t_did::__lex_tok_1_did",
+        "t_did"
+      ]
+    },
+    {
+      "operation": "ExternalMerge",
+      "replayKind": "micro",
+      "targetNodeId": "tbar_question",
+      "sourceNodeIds": [
+        "t_did",
+        "vp_see"
+      ],
+      "replayProgressLabel": "Stage 3/4 · Step 3/7",
+      "replayVisibleNodeIds": [
+        "vp_see",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "t_did::__lex_tok_1_did",
+        "t_did",
+        "tbar_question"
+      ]
+    },
+    {
+      "operation": "LexicalSelect",
+      "replayKind": "micro",
+      "targetNodeId": "np_mia_question::__lex_tok_2_mia",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 3/4 · Step 4/7",
+      "replayVisibleNodeIds": [
+        "vp_see",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "t_did::__lex_tok_1_did",
+        "t_did",
+        "tbar_question",
+        "np_mia_question::__lex_tok_2_mia"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "np_mia_question",
+      "sourceNodeIds": [
+        "np_mia_question::__lex_tok_2_mia"
+      ],
+      "replayProgressLabel": "Stage 3/4 · Step 5/7",
+      "replayVisibleNodeIds": [
+        "vp_see",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "t_did::__lex_tok_1_did",
+        "t_did",
+        "tbar_question",
+        "np_mia_question::__lex_tok_2_mia",
+        "np_mia_question"
+      ]
+    },
+    {
+      "operation": "ExternalMerge",
+      "replayKind": "micro",
+      "targetNodeId": "tp_question",
+      "sourceNodeIds": [
+        "np_mia_question",
+        "tbar_question"
+      ],
+      "replayProgressLabel": "Stage 3/4 · Step 6/7",
+      "replayVisibleNodeIds": [
+        "vp_see",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "t_did::__lex_tok_1_did",
+        "t_did",
+        "tbar_question",
+        "np_mia_question::__lex_tok_2_mia",
+        "np_mia_question",
+        "tp_question"
+      ]
+    },
+    {
+      "operation": "StageRecord",
+      "replayKind": "macro",
+      "targetNodeId": "tp_question",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 3/4 · Step 7/7",
+      "replayVisibleNodeIds": [
+        "vp_see",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "t_did::__lex_tok_1_did",
+        "t_did",
+        "tbar_question",
+        "np_mia_question::__lex_tok_2_mia",
+        "np_mia_question",
+        "tp_question"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "c_question",
+      "sourceNodeIds": [
+        "c_question::__lex_tok_1_did"
+      ],
+      "replayProgressLabel": "Stage 4/4 · Step 2/7",
+      "replayVisibleNodeIds": [
+        "tp_question",
+        "np_mia_question",
+        "np_mia_question::__lex_tok_2_mia",
+        "tbar_question",
+        "t_did",
+        "vp_see",
+        "t_did::__lex_tok_1_did",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "did_terminal",
+        "what_low",
+        "c_question::__lex_tok_1_did",
+        "c_question"
+      ]
+    },
+    {
+      "operation": "ExternalMerge",
+      "replayKind": "micro",
+      "targetNodeId": "cbar_question",
+      "sourceNodeIds": [
+        "c_question",
+        "tp_question"
+      ],
+      "replayProgressLabel": "Stage 4/4 · Step 3/7",
+      "replayVisibleNodeIds": [
+        "tp_question",
+        "np_mia_question",
+        "np_mia_question::__lex_tok_2_mia",
+        "tbar_question",
+        "t_did",
+        "vp_see",
+        "t_did::__lex_tok_1_did",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "did_terminal",
+        "what_low",
+        "c_question::__lex_tok_1_did",
+        "c_question",
+        "cbar_question"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "dp_what_high",
+      "sourceNodeIds": [
+        "dp_what_high::__lex_tok_0_what"
+      ],
+      "replayProgressLabel": "Stage 4/4 · Step 5/7",
+      "replayVisibleNodeIds": [
+        "tp_question",
+        "np_mia_question",
+        "np_mia_question::__lex_tok_2_mia",
+        "tbar_question",
+        "t_did",
+        "vp_see",
+        "t_did::__lex_tok_1_did",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "did_terminal",
+        "what_low",
+        "c_question::__lex_tok_1_did",
+        "c_question",
+        "cbar_question",
+        "dp_what_high::__lex_tok_0_what",
+        "dp_what_high"
+      ]
+    },
+    {
+      "operation": "ExternalMerge",
+      "replayKind": "micro",
+      "targetNodeId": "cp_question",
+      "sourceNodeIds": [
+        "dp_what_high",
+        "cbar_question"
+      ],
+      "replayProgressLabel": "Stage 4/4 · Step 6/7",
+      "replayVisibleNodeIds": [
+        "tp_question",
+        "np_mia_question",
+        "np_mia_question::__lex_tok_2_mia",
+        "tbar_question",
+        "t_did",
+        "vp_see",
+        "t_did::__lex_tok_1_did",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "did_terminal",
+        "what_low",
+        "c_question::__lex_tok_1_did",
+        "c_question",
+        "cbar_question",
+        "dp_what_high::__lex_tok_0_what",
+        "dp_what_high",
+        "cp_question"
+      ]
+    },
+    {
+      "operation": "StageRecord",
+      "replayKind": "macro",
+      "targetNodeId": "cp_question",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 4/4 · Step 7/7",
+      "replayVisibleNodeIds": [
+        "tp_question",
+        "np_mia_question",
+        "np_mia_question::__lex_tok_2_mia",
+        "tbar_question",
+        "t_did",
+        "vp_see",
+        "t_did::__lex_tok_1_did",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "did_terminal",
+        "what_low",
+        "c_question::__lex_tok_1_did",
+        "c_question",
+        "cbar_question",
+        "dp_what_high::__lex_tok_0_what",
+        "dp_what_high",
+        "cp_question"
+      ]
+    }
+  ]
+}

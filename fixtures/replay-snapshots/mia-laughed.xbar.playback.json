@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "sentence": "Mia laughed",
+  "stepCount": 15,
+  "steps": [
+    {
+      "operation": "LexicalSelect",
+      "replayKind": "micro",
+      "targetNodeId": "n_mia::__lex_tok_0_mia",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 1/4 · Step 1/4",
+      "replayVisibleNodeIds": [
+        "n_mia::__lex_tok_0_mia"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "n_mia",
+      "sourceNodeIds": [
+        "n_mia::__lex_tok_0_mia"
+      ],
+      "replayProgressLabel": "Stage 1/4 · Step 2/4",
+      "replayVisibleNodeIds": [
+        "n_mia::__lex_tok_0_mia",
+        "n_mia"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "np_mia",
+      "sourceNodeIds": [
+        "n_mia"
+      ],
+      "replayProgressLabel": "Stage 1/4 · Step 3/4",
+      "replayVisibleNodeIds": [
+        "n_mia::__lex_tok_0_mia",
+        "n_mia",
+        "np_mia"
+      ]
+    },
+    {
+      "operation": "StageRecord",
+      "replayKind": "macro",
+      "targetNodeId": "np_mia",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 1/4 · Step 4/4",
+      "replayVisibleNodeIds": [
+        "n_mia::__lex_tok_0_mia",
+        "n_mia",
+        "np_mia"
+      ]
+    },
+    {
+      "operation": "LexicalSelect",
+      "replayKind": "micro",
+      "targetNodeId": "v_laughed::__lex_tok_1_laughed",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 2/4 · Step 1/5",
+      "replayVisibleNodeIds": [
+        "np_mia",
+        "n_mia",
+        "n_mia::__lex_tok_0_mia",
+        "v_laughed::__lex_tok_1_laughed"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "v_laughed",
+      "sourceNodeIds": [
+        "v_laughed::__lex_tok_1_laughed"
+      ],
+      "replayProgressLabel": "Stage 2/4 · Step 2/5",
+      "replayVisibleNodeIds": [
+        "np_mia",
+        "n_mia",
+        "n_mia::__lex_tok_0_mia",
+        "v_laughed::__lex_tok_1_laughed",
+        "v_laughed"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "vbar_laughed",
+      "sourceNodeIds": [
+        "v_laughed"
+      ],
+      "replayProgressLabel": "Stage 2/4 · Step 3/5",
+      "replayVisibleNodeIds": [
+        "np_mia",
+        "n_mia",
+        "n_mia::__lex_tok_0_mia",
+        "v_laughed::__lex_tok_1_laughed",
+        "v_laughed",
+        "vbar_laughed"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "vp_laughed",
+      "sourceNodeIds": [
+        "vbar_laughed"
+      ],
+      "replayProgressLabel": "Stage 2/4 · Step 4/5",
+      "replayVisibleNodeIds": [
+        "np_mia",
+        "n_mia",
+        "n_mia::__lex_tok_0_mia",
+        "v_laughed::__lex_tok_1_laughed",
+        "v_laughed",
+        "vbar_laughed",
+        "vp_laughed"
+      ]
+    },
+    {
+      "operation": "StageRecord",
+      "replayKind": "macro",
+      "targetNodeId": "np_mia",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 2/4 · Step 5/5",
+      "replayVisibleNodeIds": [
+        "np_mia",
+        "n_mia",
+        "n_mia::__lex_tok_0_mia",
+        "v_laughed::__lex_tok_1_laughed",
+        "v_laughed",
+        "vbar_laughed",
+        "vp_laughed"
+      ]
+    },
+    {
+      "operation": "LexicalSelect",
+      "replayKind": "micro",
+      "targetNodeId": "leaf_t",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 3/4 · Step 1/4",
+      "replayVisibleNodeIds": [
+        "np_mia",
+        "vp_laughed",
+        "n_mia",
+        "n_mia::__lex_tok_0_mia",
+        "vbar_laughed",
+        "v_laughed",
+        "v_laughed::__lex_tok_1_laughed",
+        "leaf_t"
+      ]
+    },
+    {
+      "operation": "Project",
+      "replayKind": "micro",
+      "targetNodeId": "t_past",
+      "sourceNodeIds": [
+        "leaf_t"
+      ],
+      "replayProgressLabel": "Stage 3/4 · Step 2/4",
+      "replayVisibleNodeIds": [
+        "np_mia",
+        "vp_laughed",
+        "n_mia",
+        "n_mia::__lex_tok_0_mia",
+        "vbar_laughed",
+        "v_laughed",
+        "v_laughed::__lex_tok_1_laughed",
+        "leaf_t",
+        "t_past"
+      ]
+    },
+    {
+      "operation": "ExternalMerge",
+      "replayKind": "micro",
+      "targetNodeId": "tbar_1",
+      "sourceNodeIds": [
+        "t_past",
+        "vp_laughed"
+      ],
+      "replayProgressLabel": "Stage 3/4 · Step 3/4",
+      "replayVisibleNodeIds": [
+        "np_mia",
+        "vp_laughed",
+        "n_mia",
+        "n_mia::__lex_tok_0_mia",
+        "vbar_laughed",
+        "v_laughed",
+        "v_laughed::__lex_tok_1_laughed",
+        "leaf_t",
+        "t_past",
+        "tbar_1"
+      ]
+    },
+    {
+      "operation": "StageRecord",
+      "replayKind": "macro",
+      "targetNodeId": "np_mia",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 3/4 · Step 4/4",
+      "replayVisibleNodeIds": [
+        "np_mia",
+        "vp_laughed",
+        "n_mia",
+        "n_mia::__lex_tok_0_mia",
+        "vbar_laughed",
+        "v_laughed",
+        "v_laughed::__lex_tok_1_laughed",
+        "leaf_t",
+        "t_past",
+        "tbar_1"
+      ]
+    },
+    {
+      "operation": "ExternalMerge",
+      "replayKind": "micro",
+      "targetNodeId": "tp_root",
+      "sourceNodeIds": [
+        "np_mia",
+        "tbar_1"
+      ],
+      "replayProgressLabel": "Stage 4/4 · Step 1/2",
+      "replayVisibleNodeIds": [
+        "np_mia",
+        "tbar_1",
+        "n_mia",
+        "n_mia::__lex_tok_0_mia",
+        "t_past",
+        "vp_laughed",
+        "leaf_t",
+        "vbar_laughed",
+        "v_laughed",
+        "v_laughed::__lex_tok_1_laughed",
+        "tp_root"
+      ]
+    },
+    {
+      "operation": "StageRecord",
+      "replayKind": "macro",
+      "targetNodeId": "tp_root",
+      "sourceNodeIds": [],
+      "replayProgressLabel": "Stage 4/4 · Step 2/2",
+      "replayVisibleNodeIds": [
+        "np_mia",
+        "tbar_1",
+        "n_mia",
+        "n_mia::__lex_tok_0_mia",
+        "t_past",
+        "vp_laughed",
+        "leaf_t",
+        "vbar_laughed",
+        "v_laughed",
+        "v_laughed::__lex_tok_1_laughed",
+        "tp_root"
+      ]
+    }
+  ]
+}
