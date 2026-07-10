@@ -434,6 +434,26 @@ const fetchOpenAIResponseJson = async ({ apiKey, responseId, abortSignal }) => {
   return payload;
 };
 
+const cancelOpenAIBackgroundResponse = async ({ apiKey, responseId }) => {
+  const normalizedResponseId = String(responseId || '').trim();
+  if (!normalizedResponseId) return false;
+  try {
+    const response = await fetch(
+      `https://api.openai.com/v1/responses/${encodeURIComponent(normalizedResponseId)}/cancel`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
 const writeOpenAIDebugResponseState = ({ model, responseId, stage, payload }) => {
   if (process.env.NODE_ENV === 'production') return null;
   try {
@@ -536,16 +556,23 @@ export const generateOpenAIStructuredContent = async ({
     throw error;
   }
 
+  const backgroundResponseId = background ? String(payload.json?.id || '').trim() : '';
   if (background) {
-    const completedPayload = await waitForOpenAIResponseCompletion({
-      apiKey,
-      initialPayload: payload,
-      pollIntervalMs,
-      model,
-      abortSignal
-    });
-    payload.text = completedPayload.text;
-    payload.json = completedPayload.json;
+    try {
+      const completedPayload = await waitForOpenAIResponseCompletion({
+        apiKey,
+        initialPayload: payload,
+        pollIntervalMs,
+        model,
+        abortSignal
+      });
+      payload.text = completedPayload.text;
+      payload.json = completedPayload.json;
+    } catch (error) {
+      // Best-effort and unawaited so cancellation never delays or replaces the original failure.
+      void cancelOpenAIBackgroundResponse({ apiKey, responseId: backgroundResponseId });
+      throw error;
+    }
   }
 
   if (payload.json?.status === 'incomplete') {
