@@ -743,11 +743,11 @@ const buildDerivationReplaySnapshot = (
     };
   }
 
-  const rawHierarchy = d3.hierarchy(clonedRawCanvas);
+  const rawHierarchy: HierNode = d3.hierarchy<SyntaxNode>(clonedRawCanvas);
   applyVizIds(rawHierarchy);
-  const effectiveVisibleNodeIds = visibleNodeIds && visibleNodeIds.size > 0
+  const effectiveVisibleNodeIds: Set<string> = visibleNodeIds && visibleNodeIds.size > 0
     ? visibleNodeIds
-    : new Set(
+    : new Set<string>(
         rawHierarchy
           .descendants()
           .filter((node) => !isSyntheticWorkspaceRootNode(node))
@@ -786,14 +786,14 @@ const buildDerivationReplaySnapshot = (
       relationLinks: effectiveRelationLinks
     };
   }
-  const renderableHierarchy = d3.hierarchy(clonedRenderableCanvas);
+  const renderableHierarchy: HierNode = d3.hierarchy<SyntaxNode>(clonedRenderableCanvas);
   applyVizIds(renderableHierarchy);
-  const renderableVisibleNodeIds = new Set(collectRenderableVisibleNodeIds(
+  const renderableVisibleNodeIds = new Set<string>(collectRenderableVisibleNodeIds(
     renderableHierarchy,
     effectiveVisibleNodeIds
   ));
   if (effectiveVisibleNodeIds && effectiveVisibleNodeIds.size > 0) {
-    const renderableNodesById = new Map(
+    const renderableNodesById = new Map<string, HierNode>(
       renderableHierarchy
         .descendants()
         .filter((node) => !isSyntheticWorkspaceRootNode(node))
@@ -5513,13 +5513,13 @@ const buildStructuralDerivationPlaybackSteps = (
   const canvas = buildRenderableDerivationCanvasData(forest, structuralRelationLinks);
   const cloned = cloneSyntaxTree(canvas);
   if (!cloned) return [];
-  const hierarchy = d3.hierarchy(cloned);
+  const hierarchy: HierNode = d3.hierarchy<SyntaxNode>(cloned);
   applyVizIds(hierarchy);
-  const visibleNodes = hierarchy
+  const visibleNodes: HierNode[] = hierarchy
     .descendants()
     .filter((node) => !isSyntheticWorkspaceRootNode(node));
-  const visibleNodeById = new Map(visibleNodes.map((node) => [getNodeId(node), node] as const));
-  const visibleIds = new Set(visibleNodes.map((node) => getNodeId(node)));
+  const visibleNodeById = new Map<string, HierNode>(visibleNodes.map((node) => [getNodeId(node), node] as const));
+  const visibleIds = new Set<string>(visibleNodes.map((node) => getNodeId(node)));
   const rawNodeById = collectForestNodesById(forest);
   const continuityVisibleNodeIds = (() => {
     const seeded = new Set(previousVisibleNodeIds);
@@ -7068,7 +7068,7 @@ const getFrameVisualRelations = (
     ? details.derivationStageVisualRelations
     : [];
   return relations
-    .map((relation) => {
+    .map<DerivationReplayPlanStep | null>((relation) => {
       if (!relation || typeof relation !== 'object') return null;
       const relationRecord = relation as Record<string, unknown>;
       const label = String(relationRecord.relation || '').trim();
@@ -7084,7 +7084,7 @@ const getFrameVisualRelations = (
         sourceNodeIds: []
       } satisfies DerivationReplayPlanStep;
     })
-    .filter((relation): relation is DerivationReplayPlanStep => Boolean(relation));
+    .filter((relation): relation is DerivationReplayPlanStep => relation !== null);
 };
 
 const isRenderableReplayVisualRelation = (relation?: DerivationReplayPlanStep | null): boolean => {
