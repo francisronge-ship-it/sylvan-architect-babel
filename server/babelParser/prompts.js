@@ -12,9 +12,9 @@ export const buildDerivationStagesFirstContentsPrompt = (
     : 'The Minimalist Program (Bare Phrase Structure)';
   const instructions = [
     `Analyze the sentence: "${sentence}" using ${frameworkName}.`,
-    `Return raw JSON only: one top-level object with a "derivationStages" array.`,
-    `Return one forward derivation; do not wrap it in an "analyses" array.`,
-    `derivationStages is the structural source of truth for this analysis.`,
+    `Return raw JSON only: either { "derivationStages": [...] } or, only for meanings that require different trees, { "analyses": [{ "derivationStages": [...] }, ...] }.`,
+    `Return every genuinely distinct structural analysis without an arbitrary two-parse limit; do not duplicate equivalent trees.`,
+    `derivationStages is the structural source of truth inside every analysis.`,
     `Build the derivation forward; do not start from a completed final tree and backfill stages.`,
     `Input tokens, in required surface order: ${tokenIndexText}.`,
     `Use exactly these overt input tokens as pronounced terminals: ${tokenText}.`,
@@ -25,17 +25,11 @@ export const buildDerivationStagesFirstContentsPrompt = (
   return instructions.join(' ');
 };
 
-export const buildSingleParseContentsPrompt = (
-  sentence,
-  framework = 'xbar',
-  modelRoute = 'gemini'
-) => buildDerivationStagesFirstContentsPrompt(sentence, framework);
-
 export const buildParseContentsPrompt = (
   sentence,
   framework = 'xbar',
   modelRoute = 'gemini'
 ) => {
-  const basePrompt = buildSingleParseContentsPrompt(sentence, framework, modelRoute);
+  const basePrompt = buildDerivationStagesFirstContentsPrompt(sentence, framework);
   return basePrompt;
 };

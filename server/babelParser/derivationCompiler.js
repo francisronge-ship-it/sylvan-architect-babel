@@ -152,9 +152,6 @@ export const createDerivationCompilerHelpers = ({
     return workspaceForest.length > 0 ? { workspaceForest } : undefined;
   };
 
-  const normalizeStageRecordTextKey = (value) =>
-    String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
-
   const isSubstantiveStageRecordText = (value) => {
     const text = normalizeOptionalStepText(value);
     if (!text || text.length < 24) return false;
@@ -162,36 +159,12 @@ export const createDerivationCompilerHelpers = ({
     return text.split(/\s+/).filter(Boolean).length >= 4;
   };
 
-  const collectStageRecordTextParts = (value, parts = [], seen = new Set()) => {
-    const parsedValue = parseTransportJsonValue(value);
-    if (typeof parsedValue === 'string') {
-      const text = normalizeOptionalStepText(parsedValue);
-      const key = normalizeStageRecordTextKey(text);
-      if (isSubstantiveStageRecordText(text) && !seen.has(key)) {
-        seen.add(key);
-        parts.push(text);
-      }
-      return parts;
-    }
-    if (Array.isArray(parsedValue)) {
-      parsedValue.forEach((item) => collectStageRecordTextParts(item, parts, seen));
-      return parts;
-    }
-    if (parsedValue && typeof parsedValue === 'object') {
-      Object.values(parsedValue).forEach((item) => collectStageRecordTextParts(item, parts, seen));
-    }
-    return parts;
-  };
-
   const normalizeDerivationStageRecord = (value) => {
     const parsedValue = parseTransportJsonValue(value);
     if (typeof parsedValue !== 'string') return null;
     const text = normalizeOptionalStepText(parsedValue);
     if (!isSubstantiveStageRecordText(text)) return null;
-    return {
-      record: text,
-      note: text
-    };
+    return text;
   };
 
   const normalizeVisualRelationAnchors = (value) => {
@@ -463,8 +436,7 @@ export const createDerivationCompilerHelpers = ({
           change: {
             statement,
             details: {
-              note: stageRecord.note,
-              stageRecord: stageRecord.record,
+              stageRecord,
               derivationStageVisualRelations: visualRelations,
               derivationStageVisualRelationsContract: true
             }
@@ -727,8 +699,6 @@ export const createDerivationCompilerHelpers = ({
     const path = findNodePathInForest(forest, targetNodeId);
     return getNodeAtForestPath(forest, path);
   };
-
-  const cloneSyntaxForest = (forest) => JSON.parse(JSON.stringify(Array.isArray(forest) ? forest : []));
 
   const collectOvertYieldTokensFromNode = (node) =>
     collectOvertTerminalNodes(node)
@@ -2004,22 +1974,6 @@ export const createDerivationCompilerHelpers = ({
     return canonicalizeDerivationFrames(normalizedFrames);
   };
 
-  const collectDerivationFrameNodeIds = (derivationFrames) => {
-    const nodeIds = new Set();
-    if (!Array.isArray(derivationFrames)) return nodeIds;
-    derivationFrames.forEach((frame) => {
-      const forest = getFrameWorkspaceForest(frame);
-      forest.forEach((root) => {
-        collectNodeReferencesById(root).forEach((_, nodeId) => {
-          if (typeof nodeId === 'string' && nodeId.trim()) {
-            nodeIds.add(nodeId);
-          }
-        });
-      });
-    });
-    return nodeIds;
-  };
-
   const canonicalizeDerivationRootCandidateForSentence = (root, sentenceTokens = []) => {
     if (!root || typeof root !== 'object') return null;
     const targetTokens = Array.isArray(sentenceTokens)
@@ -2179,7 +2133,7 @@ export const createDerivationCompilerHelpers = ({
           ...(event?.participants && typeof event.participants === 'object' && !Array.isArray(event.participants) ? { participants: event.participants } : {}),
           stepId: normalizeOptionalStepText(event?.stepId) || normalizeOptionalStepText(frame?.stepId) || undefined,
           stepIndex: Number.isInteger(event?.stepIndex) ? event.stepIndex : index,
-          note: normalizeOptionalStepText(event?.note) || normalizeOptionalStepText(frame?.change?.statement) || normalizeOptionalStepText(frame?.note),
+          note: normalizeOptionalStepText(event?.note) || normalizeOptionalStepText(frame?.change?.statement),
           ...(exactAnchorsOnly ? { exactAnchorsOnly: true } : {}),
           preserveOperationLabel: true,
           serializationStatus,
@@ -2337,7 +2291,7 @@ export const createDerivationCompilerHelpers = ({
             ...(chainId ? { chainId } : {}),
             stepId: normalizeOptionalStepText(frame?.stepId) || undefined,
             stepIndex: index,
-            note: normalizeOptionalStepText(change?.statement) || normalizeOptionalStepText(frame?.note),
+            note: normalizeOptionalStepText(change?.statement),
             serializationStatus,
             diagnostics: mergedDiagnostics
           };
@@ -2429,8 +2383,7 @@ export const createDerivationCompilerHelpers = ({
           : (isMoveFrame ? undefined : (workspaceLabels.length > 0 ? workspaceLabels : undefined)),
         recipe: normalizeOptionalStepText(change?.statement) || `${operation} frame ${index + 1}`,
         workspaceAfter: workspaceLabels.length > 0 ? workspaceLabels : undefined,
-        chainId: findChangeContinuityId(change) || undefined,
-        note: normalizeOptionalStepText(frame.note)
+        chainId: findChangeContinuityId(change) || undefined
       };
     });
 
@@ -2488,10 +2441,8 @@ export const createDerivationCompilerHelpers = ({
     normalizeTransportJsonArray,
     normalizeDerivationStagesToDerivationFrames,
     normalizeDerivationFrames,
-    normalizeMovementStemFromId,
     materializeImplicitPhrasalTraceShellsInDerivationFrames,
     materializeCommittedTraceShells,
-    collectDerivationFrameNodeIds,
     canonicalizeDerivationRootCandidateForSentence,
     selectCommittedDerivationRoot,
     findLatestCommittedDerivationFrame,

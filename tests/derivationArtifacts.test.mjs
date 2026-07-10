@@ -15,22 +15,21 @@ test('Notes are exactly the ordered non-empty derivation stage records', () => {
   assert.deepEqual(collectDerivationStageRecords(undefined), []);
 });
 
-test('new Tree Bank snapshots omit the compiled-analysis fossil while preserving reasoning provenance', () => {
+test('Tree Bank snapshots keep only current parse artifacts without mutating the source bundle', () => {
   const bundle = {
-    commitmentFacts: [{ factId: 'legacy-top-level-fact', kind: 'transition' }],
+    transientBundleField: 'not persisted',
     analyses: [
       {
         tree: { id: 'root', label: 'TP', children: [] },
-        explanation: 'Legacy synthesized explanation.',
-        noteBindings: [{ noteId: 'legacy-note', text: 'Legacy note.' }],
-        commitmentFacts: [{ factId: 'legacy-fact', kind: 'transition' }],
+        surfaceOrder: [],
         derivationStages: [],
+        resolvedVisualRelations: [],
         derivationSteps: [{ operation: 'Other' }],
+        transientAnalysisField: 'not persisted',
         provenance: {
-          hasCommitmentFacts: true,
-          notesSource: 'derivationStages',
-          notesCompiledFromDerivationStages: true,
-          providerReasoningRaw: 'Preserved provider reasoning trace.'
+          treeSource: 'derivationStages',
+          hasDerivationStages: false,
+          transientProvenanceField: 'not persisted'
         }
       }
     ],
@@ -40,14 +39,11 @@ test('new Tree Bank snapshots omit the compiled-analysis fossil while preserving
   const snapshot = createTreeBankBundleSnapshot(bundle);
   const analysis = snapshot.analyses[0];
 
-  assert.equal('commitmentFacts' in snapshot, false);
-  for (const field of ['commitmentFacts', 'noteBindings', 'explanation']) {
-    assert.equal(field in analysis, false, field);
-  }
-  for (const field of ['hasCommitmentFacts', 'notesSource', 'notesCompiledFromDerivationStages']) {
-    assert.equal(field in analysis.provenance, false, field);
-  }
-  assert.equal(analysis.provenance.providerReasoningRaw, 'Preserved provider reasoning trace.');
+  assert.equal('transientBundleField' in snapshot, false);
+  assert.equal('transientAnalysisField' in analysis, false);
+  assert.equal('transientProvenanceField' in analysis.provenance, false);
+  assert.equal(analysis.provenance.treeSource, 'derivationStages');
   assert.deepEqual(analysis.derivationSteps, [{ operation: 'Other' }]);
-  assert.equal(bundle.analyses[0].commitmentFacts.length, 1, 'source bundle must not be mutated');
+  analysis.tree.label = 'Changed snapshot';
+  assert.equal(bundle.analyses[0].tree.label, 'TP');
 });

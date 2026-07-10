@@ -1,5 +1,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  collectMovementRelations,
+  collectResolvedVisualRelations,
+  countUnresolvedAnchors
+} = require('./helpers/currentContract.cjs');
 
 let chromium;
 try {
@@ -111,8 +116,8 @@ const PAIRED_CASES = (() => {
 })();
 
 const CASES = [
-  ...PAIRED_CASES.map((item) => ({ ...item, route: 'pro', runId: `pro-${item.caseId}` })),
-  ...PAIRED_CASES.map((item) => ({ ...item, route: 'flash-lite', runId: `flash-lite-${item.caseId}` }))
+  ...PAIRED_CASES.map((item) => ({ ...item, route: 'gemini', runId: `gemini-${item.caseId}` })),
+  ...PAIRED_CASES.map((item) => ({ ...item, route: 'gpt', runId: `gpt-${item.caseId}` }))
 ];
 
 function sameSeq(left, right) {
@@ -180,15 +185,16 @@ async function setFramework(page, framework) {
 }
 
 async function setRoute(page, route) {
-  const toggle = page.locator('button').filter({ hasText: /Gemini 3\.1 Flash Lite|Gemini 3\.1 Pro/ }).first();
+  const toggle = page.locator('button').filter({ hasText: /Gemini Pro|GPT 5\.5|Claude Opus/ }).first();
   await toggle.waitFor({ timeout: 10000 });
-  const label = sanitizeText(await toggle.innerText().catch(() => ''));
-  const wantsPro = route === 'pro';
-  const onPro = /Gemini 3\.1 Pro/i.test(label);
-  if ((wantsPro && !onPro) || (!wantsPro && onPro)) {
+  const routePattern = route === 'gpt' ? /GPT 5\.5/i : /Gemini Pro/i;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const label = sanitizeText(await toggle.innerText().catch(() => ''));
+    if (routePattern.test(label)) return;
     await toggle.click();
     await sleep(700);
   }
+  throw new Error(`Unable to select ${route} route.`);
 }
 
 async function switchToTab(page, label) {
@@ -281,7 +287,7 @@ async function replayToEnd(page) {
 async function extractNotesText(page) {
   return sanitizeText(
     await page
-      .locator('h2:has-text("Structural Geneology")')
+      .locator('h2:has-text("Derivational Notes")')
       .first()
       .locator('xpath=ancestor::div[contains(@class,"glass-dark")]')
       .first()
@@ -292,7 +298,10 @@ async function extractNotesText(page) {
 
 function inferRouteFromModel(modelUsed) {
   const value = String(modelUsed || '').toLowerCase();
-  return value.includes('flash-lite') ? 'flash-lite' : value.includes('pro') ? 'pro' : 'unknown';
+  if (value.includes('gpt')) return 'gpt';
+  if (value.includes('claude')) return 'claude';
+  if (value.includes('gemini')) return 'gemini';
+  return 'unknown';
 }
 
 function analyzeCase(item, payload, notesText, replay) {
@@ -306,20 +315,17 @@ function analyzeCase(item, payload, notesText, replay) {
     })
     .map((entry) => entry.surface);
   const surfaceOrder = Array.isArray(analysis.surfaceOrder) ? analysis.surfaceOrder : [];
-  const movementEvents = Array.isArray(analysis.movementEvents) ? analysis.movementEvents : [];
+  const visualRelations = collectResolvedVisualRelations(analysis);
+  const movementRelations = collectMovementRelations(analysis);
   const issues = [];
-  const noMovementExplanation = /no movement is posited|no displacement operation is encoded/i.test(notesText);
 
   if (!sameSeq(leaves, sentenceTokens)) issues.push('LEAVES_NE_SENTENCE');
   if (!sameSeq(surfaceOrder, sentenceTokens)) issues.push('SURFACE_NE_SENTENCE');
   if (!sameSeq(leaves, surfaceOrder)) issues.push('LEAVES_NE_SURFACE');
   if (!sameCounts(leaves, sentenceTokens)) issues.push('LEAF_INVENTORY_NE_SENTENCE');
-  if (movementEvents.length > 0 && replay.maxVisibleArrows === 0) issues.push('MOVEMENT_EVENTS_WITHOUT_ARROWS');
-  if (movementEvents.length === 0 && replay.maxVisibleArrows > 0) issues.push('ARROWS_WITHOUT_MOVEMENT_EVENTS');
-  if (movementEvents.length > 0 && !MOVEMENT_RE.test(notesText)) issues.push('MOVEMENT_MISSING_FROM_NOTES');
-  if (movementEvents.length === 0 && MOVEMENT_RE.test(notesText) && !noMovementExplanation) {
-    issues.push('NOTES_MOVEMENT_WITHOUT_EVENTS');
-  }
+  if (movementRelations.length > 0 && replay.maxVisibleArrows === 0) issues.push('MOVEMENT_RELATIONS_WITHOUT_ARROWS');
+  if (movementRelations.length > 0 && !MOVEMENT_RE.test(notesText)) issues.push('MOVEMENT_MISSING_FROM_STAGE_RECORDS');
+  if (countUnresolvedAnchors(visualRelations) > 0) issues.push('UNRESOLVED_VISUAL_RELATION_ANCHOR');
   if (HEDGE_RE.test(notesText)) issues.push('HEDGING_IN_NOTES');
 
   return {
@@ -331,7 +337,8 @@ function analyzeCase(item, payload, notesText, replay) {
       issues,
       leaves,
       surfaceOrder,
-      movementEventsCount: movementEvents.length,
+      visualRelationsCount: visualRelations.length,
+      movementRelationsCount: movementRelations.length,
       replayFrames: replay.totalFrames,
       replayMovementFrames: replay.movementFrames,
       replayMaxVisibleArrows: replay.maxVisibleArrows
@@ -370,10 +377,10 @@ async function runCase(page, item) {
   const canopy = path.join(OUT_DIR, `${prefix}-canopy.png`);
   await page.screenshot({ path: canopy, fullPage: true });
 
-  await switchToTab(page, 'Growth Simulation');
+  await switchToTab(page, 'Derivation Replay');
   const replay = await replayToEnd(page);
-  const growth = path.join(OUT_DIR, `${prefix}-growth-final.png`);
-  await page.screenshot({ path: growth, fullPage: true });
+  const replayFinal = path.join(OUT_DIR, `${prefix}-replay-final.png`);
+  await page.screenshot({ path: replayFinal, fullPage: true });
 
   await switchToTab(page, 'Notes');
   const notes = path.join(OUT_DIR, `${prefix}-notes.png`);
@@ -391,15 +398,15 @@ async function runCase(page, item) {
     modelUsed,
     actualRoute,
     fallbackUsed: Boolean(parsed.payload?.fallbackUsed),
-    movementDecision: analysisSummary.analysis.movementDecision || null,
-    movementEventsCount: analysisSummary.checks.movementEventsCount,
+    visualRelationsCount: analysisSummary.checks.visualRelationsCount,
+    movementRelationsCount: analysisSummary.checks.movementRelationsCount,
     derivationStepsCount: Array.isArray(analysisSummary.analysis.derivationSteps)
       ? analysisSummary.analysis.derivationSteps.length
       : 0,
     surfaceOrder: analysisSummary.analysis.surfaceOrder || [],
     notesText,
     checks: analysisSummary.checks,
-    screenshots: { canopy, growth, notes }
+    screenshots: { canopy, replay: replayFinal, notes }
   };
 }
 
@@ -446,14 +453,14 @@ async function runCase(page, item) {
     failed: results.filter((r) => !r.ok).length,
     structurallyClean: results.filter((r) => r.ok && r.checks?.ok).length,
     byRoute: {
-      pro: results.filter((r) => r.route === 'pro' && r.ok).length,
-      flashLite: results.filter((r) => r.route === 'flash-lite' && r.ok).length
+      gemini: results.filter((r) => r.route === 'gemini' && r.ok).length,
+      gpt: results.filter((r) => r.route === 'gpt' && r.ok).length
     },
     byFrameworkAndRoute: {
-      proXbar: results.filter((r) => r.route === 'pro' && r.framework === 'xbar' && r.ok).length,
-      proMinimalism: results.filter((r) => r.route === 'pro' && r.framework === 'minimalism' && r.ok).length,
-      flashLiteXbar: results.filter((r) => r.route === 'flash-lite' && r.framework === 'xbar' && r.ok).length,
-      flashLiteMinimalism: results.filter((r) => r.route === 'flash-lite' && r.framework === 'minimalism' && r.ok).length
+      geminiXbar: results.filter((r) => r.route === 'gemini' && r.framework === 'xbar' && r.ok).length,
+      geminiMinimalism: results.filter((r) => r.route === 'gemini' && r.framework === 'minimalism' && r.ok).length,
+      gptXbar: results.filter((r) => r.route === 'gpt' && r.framework === 'xbar' && r.ok).length,
+      gptMinimalism: results.filter((r) => r.route === 'gpt' && r.framework === 'minimalism' && r.ok).length
     }
   };
 

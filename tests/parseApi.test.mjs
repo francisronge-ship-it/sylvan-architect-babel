@@ -32,14 +32,3 @@ test('preserves all current provider routes without a persistence side effect', 
     assert.equal(call.options.reasoningEffort, 'high');
   });
 });
-
-test('rejects the retired pro provider-route alias', async () => {
-  await assert.rejects(
-    () => parseFromBodyWithProviders({
-      sentence: 'Mia laughed.',
-      framework: 'xbar',
-      modelRoute: 'pro'
-    }, {}),
-    (error) => error?.code === 'INVALID_REQUEST'
-  );
-});

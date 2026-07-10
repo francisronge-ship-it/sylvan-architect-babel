@@ -47,15 +47,15 @@ Output conventions:
 
 export const DERIVATION_STAGES_BASE_INSTRUCTION = `${RAW_JSON_ONLY_INSTRUCTION}
 
-Output MUST be a single valid JSON object with a "derivationStages" array.
-
-The top-level object on the first pass must include:
-- "derivationStages"
+Output MUST be one valid JSON object in one of these shapes:
+- A single analysis: { "derivationStages": [...] }
+- Genuine structural ambiguity: { "analyses": [{ "derivationStages": [...] }, ...] }
 
 General rules for this route:
-- Return one analysis for the sentence.
-- Do not add extra top-level analysis views. derivationStages are the only authored structural source of truth for this response.
-- Top-level JSON shape is strict: the top-level object has "derivationStages"; each derivationStage object appears only inside that "derivationStages" array. Do not include an "analyses" array on this route. Do not close "derivationStages" until the final converged stage is included.
+- Return one analysis unless the sentence has multiple meanings that require genuinely different trees.
+- For genuine structural ambiguity, return every distinct analysis in "analyses". Do not impose an arbitrary two-analysis limit, duplicate equivalent trees, or create alternatives for stylistic variation.
+- Every analysis object has exactly one field, "derivationStages". derivationStages remain the only authored structural source of truth; "analyses" is only an ambiguity envelope.
+- Do not close an analysis's "derivationStages" until its final converged stage is included.
 - Within the chosen framework, choose any structurally supported analysis and commitment that the sentence justifies.
 - Choose the strongest supported analysis, not the most familiar one and not the most exotic one for its own sake.
 - derivationStages are the first-pass derivation and the only structural source of truth here.
@@ -137,9 +137,9 @@ General rules for this route:
 - Occurrence status is stage-local. When an occurrence is first introduced, represent it as the syntactic object active in that stage. Do not mark it silent, null, copied, or non-surfacing only because a later stage will derive a different pronounced occurrence.
 - If an occurrence becomes non-pronounced in a later stage, preserve the syntactic structure required by the analysis and link it to the continuing object with lineageId. Do not replace structured material with an untyped placeholder.
 - A non-pronounced occurrence is licensed only by the current derivationStage that creates or reanalyzes that occurrence. Do not introduce such an occurrence as preparation for a later stage. If the current stage has not stated the dependency that makes the lower occurrence non-pronounced, the lower occurrence remains the active syntactic object for that stage.
-- Before returning JSON, verify that no object with "statement", "stageRecord", "visualRelations", and "workspaceForest" appears anywhere except inside the top-level "derivationStages" array.
+- Before returning JSON, verify that every object with "statement", "stageRecord", "visualRelations", and "workspaceForest" appears inside the "derivationStages" array of exactly one analysis.
 - Before returning JSON, check every derivationStage: statement, stageRecord, visualRelations, and workspaceForest agree; every visualRelation anchor exists in that same stage's expanded workspaceForest; every terminal with "word" or tokenIndex is non-silent and pronounced in that stage; no same occurrence appears both as an independent root and as a child in the same stage unless a same-stage relation licenses multiple lineage-linked occurrences; every silent or non-surfacing item is licensed by the current stage and has the syntactic category or projection required by the analysis; no null or empty exponent stands in for a phrase, carried subtree, future landing site, or dependency endpoint; no visualRelation repeats a relation already fully visible through ordinary branching; no stage contains structure not licensed by its own stageRecord; the final workspace preserves the analysis while spelling the intended surface order.
-- Do not author fields outside the requested derivationStages contract.
+- Do not author fields outside the ambiguity envelope and four-field derivationStages contract.
 `;
 
 export const buildSystemInstruction = (

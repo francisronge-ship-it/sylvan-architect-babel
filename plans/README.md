@@ -138,12 +138,9 @@ BLOCKED (one-line reason) | REJECTED (one-line rationale).
 - **`getErrorMeta` unguarded `JSON.stringify(error)`**
   (`modelRuntime.js:22-32`): wrap in try/catch next time that file is touched
   (noted in plan 007's maintenance notes).
-- **Dead/vestigial code sweep**: provider reasoning summarizer is unreachable
-  with `includeThoughts: false` everywhere (`modelRuntime.js:268-334`,
-  `routeConfig.js:41-44`); `estimateProOutputBudget(sentence)` ignores its
-  argument (`routeConfig.js:172`); duplicate no-op branches in
-  `getRemainingRequestBudgetMs` (`routeConfig.js:208-213`); two deep-clone
-  implementations in `derivationCompiler.js` (lines ~666 and ~774).
+- **Dead/vestigial code sweep**: the provider reasoning-trace capture,
+  summarizer, duplicate request-budget branch, and unused duplicate deep-clone
+  helper were removed on 2026-07-10.
 - **`tsconfig` strict mode** (`"strict": true`): worthwhile after plans 002 and
   008 shrink the error surface.
 - **CI pipeline** (GitHub Actions running `verify:all`): natural once plan 003

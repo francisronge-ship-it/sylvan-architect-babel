@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { DerivationStage, DerivationStep, ReplayLedgerBlock, SyntaxNode } from '../types';
+import { DerivationStage, DerivationStep, ReplayDetailBlock, SyntaxNode } from '../types';
 import { ResolvedVisualRelation, ResolvedVisualRelationAnchor } from '../visualRelationLinks';
 import { buildDerivationReplayPlan } from '../derivationReplayPlan.js';
 import RootLogo from './RootLogo';
@@ -23,7 +23,6 @@ interface PlaybackStep {
   trajectoryKind?: ResolvedVisualRelation['trajectoryKind'];
   movementSerializationStatus?: 'complete' | 'underspecified' | 'incoherent';
   movementDiagnostics?: string[];
-  microOperations?: DerivationStep['operation'][];
   sourceFrameIndex?: number;
   visualFrameIndex?: number;
   replayFrameIndex?: number;
@@ -36,11 +35,9 @@ interface PlaybackStep {
   recipe?: string;
   workspaceAfter?: string[];
   spelloutOrder?: string[];
-  ledgerBlocks?: ReplayLedgerBlock[];
+  detailBlocks?: ReplayDetailBlock[];
   stepId?: string;
-  trigger?: string;
   chainId?: string;
-  spelloutDomain?: string;
   note?: string;
   stageRecord?: string;
   replayCanvasData?: SyntaxNode | null;
@@ -123,15 +120,11 @@ interface ReplayDerivationFrame {
   visualRelations?: DerivationStage['visualRelations'];
   after?: ReplayDerivationAfterState;
   change?: ReplayDerivationChange;
-  note?: string;
   workspaceForest: SyntaxNode[];
   operation?: DerivationStep['operation'];
   recipe?: string;
-  trigger?: string;
   chainId?: string;
-  spelloutDomain?: string;
   spelloutOrder?: string[];
-  microOperations?: DerivationStep['operation'][];
   movement?: ReplayDerivationMovementPayload | null;
 }
 
@@ -1164,13 +1157,13 @@ const collectNextFramePendingRootSubtreeIds = (
   );
 };
 
-const mergeReplayLedgerBlocks = (
-  ...sources: Array<ReplayLedgerBlock[] | undefined>
-): ReplayLedgerBlock[] | undefined => {
-  const mergedByTitle = new Map<string, ReplayLedgerBlock>();
+const mergeReplayDetailBlocks = (
+  ...sources: Array<ReplayDetailBlock[] | undefined>
+): ReplayDetailBlock[] | undefined => {
+  const mergedByTitle = new Map<string, ReplayDetailBlock>();
   sources
     .flat()
-    .filter((block): block is ReplayLedgerBlock => Boolean(block && typeof block === 'object'))
+    .filter((block): block is ReplayDetailBlock => Boolean(block && typeof block === 'object'))
     .forEach((block) => {
       const title = String(block.title || '').trim();
       if (!title) return;
@@ -1216,7 +1209,7 @@ const buildReplayProgressLabel = (
 const stripSemanticPayloadFromMicrostep = (step: PlaybackStep): PlaybackStep => ({
   ...step,
   sourceKind: 'microstep',
-  ledgerBlocks: undefined,
+  detailBlocks: undefined,
   note: undefined,
   movementSerializationStatus: undefined,
   movementDiagnostics: undefined
@@ -1289,7 +1282,7 @@ const buildPlaybackStepsFromDerivationFrames = (
     const primaryRoot = workspaceRoots[0];
     const primaryRootId = String(primaryRoot?.id || '').trim();
     const primaryRootLabel = String(primaryRoot?.label || '').trim() || 'Workspace';
-    const preferredNote = pickPreferredReplayText(frame.note, alignedStep?.note);
+    const preferredNote = pickPreferredReplayText(alignedStep?.note);
     const structuralFallbackRecipe = buildStructuralReplayFallback(
       fallbackOperation,
       primaryRootLabel,
@@ -1394,7 +1387,7 @@ const buildPlaybackStepsFromDerivationFrames = (
     const frameMacroBlocks = plannedStage
       ? frameStageRecordBlocks
       : frameReplayBlocks;
-    const mergedFrameLedgerBlocks = mergeReplayLedgerBlocks(frameMacroBlocks);
+    const mergedFrameDetailBlocks = mergeReplayDetailBlocks(frameMacroBlocks);
     const currentFrameVisibleNodeIds = collectVisibleDerivationNodeIds(
       workspaceRoots,
       frameReplaySnapshot.relationLinks
@@ -1469,9 +1462,6 @@ const buildPlaybackStepsFromDerivationFrames = (
       trajectoryKind: frameTrajectoryKind || undefined,
       movementSerializationStatus: frame.movement?.serializationStatus,
       movementDiagnostics: Array.isArray(frame.movement?.diagnostics) ? frame.movement.diagnostics : undefined,
-      microOperations: Array.isArray(frame.microOperations) && frame.microOperations.length > 0
-        ? frame.microOperations
-        : alignedStep?.microOperations,
       sourceFrameIndex: index,
       visualFrameIndex: index,
       targetNodeId:
@@ -1506,13 +1496,11 @@ const buildPlaybackStepsFromDerivationFrames = (
         ? alignedStep.workspaceAfter
         : rootLabels,
       spelloutOrder: frame.spelloutOrder || alignedStep?.spelloutOrder,
-      ledgerBlocks: mergedFrameLedgerBlocks,
+      detailBlocks: mergedFrameDetailBlocks,
       replayKind: plannedStage ? 'macro' : undefined,
       stageRecord: getFrameStageRecordText(frame, plannedStage),
       stepId: alignedStep?.stepId || frame.stepId,
-      trigger: alignedStep?.trigger || frame.trigger,
       chainId: alignedStep?.chainId || frame.chainId,
-      spelloutDomain: alignedStep?.spelloutDomain || frame.spelloutDomain,
       note: preferredNote && preferredNote !== resolvedSemanticRecipe ? preferredNote : undefined,
       replayFrameIndex: index,
       replayCanvasData: frameReplaySnapshot.canvasData,
@@ -2276,7 +2264,7 @@ const buildPlaybackStepsFromDerivationFrames = (
             note: undefined,
             preserveReplayStep: true,
             stageRecord: getFrameStageRecordText(frame, plannedStage),
-            ledgerBlocks: buildVisualRelationReplayBlocks([placement.relation], relationReplaySnapshot.canvasData),
+            detailBlocks: buildVisualRelationReplayBlocks([placement.relation], relationReplaySnapshot.canvasData),
             replayCanvasData: relationReplaySnapshot.canvasData,
             replayVisibleNodeIds: relationReplaySnapshot.visibleNodeIds,
             replayRelationLinks: relationReplaySnapshot.relationLinks
@@ -2353,7 +2341,7 @@ const buildPlaybackStepsFromDerivationFrames = (
               ...frameSemanticStep,
               operation: 'StageRecord' as DerivationStep['operation'],
               replayKind: 'macro',
-              ledgerBlocks: mergeReplayLedgerBlocks(frameStageRecordBlocks),
+              detailBlocks: mergeReplayDetailBlocks(frameStageRecordBlocks),
               note: undefined,
               recipe:
                 String(plannedStage.statement || '').trim()
@@ -2566,38 +2554,7 @@ const buildPlaybackStepsFromDerivationFrames = (
     return [frameSemanticStep];
   });
 
-  const expandedFrameBackedSteps = frameBackedSteps.flatMap((step, index) => {
-    const microOperations = Array.isArray(step.microOperations)
-      ? step.microOperations.filter(Boolean)
-      : [];
-    if (microOperations.length <= 1) {
-      return [{ ...step, microOperations: undefined }];
-    }
-
-    const previousFrameIndex = index > 0 ? index - 1 : -1;
-    return microOperations.map((operation, microIndex) => {
-      const isFinalMicroStep = microIndex === microOperations.length - 1;
-      const readableWorkspace = Array.isArray(step.workspaceAfter) && step.workspaceAfter.length > 0
-        ? step.workspaceAfter
-        : step.sourceLabels;
-      return {
-        ...step,
-        operation,
-        microOperations: undefined,
-        visualFrameIndex: isFinalMicroStep ? index : previousFrameIndex,
-        stepId: step.stepId ? `${step.stepId}.${microIndex + 1}` : undefined,
-        recipe: isFinalMicroStep
-          ? step.recipe
-          : buildStructuralReplayFallback(operation, step.targetLabel, readableWorkspace || []),
-        workspaceAfter: isFinalMicroStep ? step.workspaceAfter : undefined,
-        spelloutOrder: isFinalMicroStep ? step.spelloutOrder : undefined,
-        ledgerBlocks: isFinalMicroStep ? step.ledgerBlocks : undefined,
-        note: isFinalMicroStep ? step.note : undefined
-      };
-    });
-  });
-
-  const squashedFrameBackedSteps = squashAdjacentStructuralReplayDuplicates(expandedFrameBackedSteps);
+  const squashedFrameBackedSteps = squashAdjacentStructuralReplayDuplicates(frameBackedSteps);
   const visibilityStabilizedSteps = stabilizeStructuralReplayVisibility(squashedFrameBackedSteps);
   const nullSelectionExpandedSteps = splitCollapsedNullSelectionProjectSteps(visibilityStabilizedSteps);
   const validVisibilitySteps = removeInvalidReplayVisibilityTransitions(nullSelectionExpandedSteps);
@@ -2642,8 +2599,6 @@ const squashAdjacentStructuralReplayDuplicates = (steps: PlaybackStep[]): Playba
       squashed[squashed.length - 1] = {
         ...previous,
         stepId: step.stepId || previous.stepId,
-        trigger: step.trigger || previous.trigger,
-        spelloutDomain: step.spelloutDomain || previous.spelloutDomain,
         recipe: pickPreferredReplayText(previous.recipe, step.recipe) || previous.recipe || step.recipe,
         note: pickPreferredReplayText(previous.note, step.note) || previous.note || step.note,
         workspaceAfter:
@@ -2658,10 +2613,10 @@ const squashAdjacentStructuralReplayDuplicates = (steps: PlaybackStep[]): Playba
           (Array.isArray(previous.sourceLabels) ? previous.sourceLabels : []).length > 0
             ? previous.sourceLabels
             : step.sourceLabels,
-        ledgerBlocks:
-          (Array.isArray(step.ledgerBlocks) && step.ledgerBlocks.length > 0)
-            ? step.ledgerBlocks
-            : previous.ledgerBlocks,
+        detailBlocks:
+          (Array.isArray(step.detailBlocks) && step.detailBlocks.length > 0)
+            ? step.detailBlocks
+            : previous.detailBlocks,
         spelloutOrder:
           (Array.isArray(step.spelloutOrder) && step.spelloutOrder.length > 0)
             ? step.spelloutOrder
@@ -2728,15 +2683,13 @@ const collapseZeroDeltaReplaySteps = (steps: PlaybackStep[]): PlaybackStep[] => 
 
     collapsed[collapsed.length - 1] = {
       ...previous,
-      trigger: step.trigger || previous.trigger,
-      spelloutDomain: step.spelloutDomain || previous.spelloutDomain,
       recipe: pickPreferredReplayText(previous.recipe, step.recipe) || previous.recipe || step.recipe,
       note: pickPreferredReplayText(previous.note, step.note) || previous.note || step.note,
       workspaceAfter:
         (Array.isArray(step.workspaceAfter) && step.workspaceAfter.length > 0)
           ? step.workspaceAfter
           : previous.workspaceAfter,
-      ledgerBlocks: mergeReplayLedgerBlocks(previous.ledgerBlocks, step.ledgerBlocks),
+      detailBlocks: mergeReplayDetailBlocks(previous.detailBlocks, step.detailBlocks),
       spelloutOrder:
         (Array.isArray(step.spelloutOrder) && step.spelloutOrder.length > 0)
           ? step.spelloutOrder
@@ -3469,8 +3422,6 @@ const dropLowSignalStructuralFrameSummaries = (steps: PlaybackStep[]): PlaybackS
       filtered[filtered.length - 1] = {
         ...previous,
         stepId: step.stepId || previous.stepId,
-        trigger: step.trigger || previous.trigger,
-        spelloutDomain: step.spelloutDomain || previous.spelloutDomain,
         workspaceAfter:
           (Array.isArray(step.workspaceAfter) && step.workspaceAfter.length > 0)
             ? step.workspaceAfter
@@ -5965,9 +5916,6 @@ const isMoveLikeOperation = (operation?: DerivationStep['operation'] | string): 
 const stepRepresentsMovement = (step?: PlaybackStep | null): boolean => {
   if (!step) return false;
   if (isMoveLikeOperation(step.operation)) return true;
-  if ((Array.isArray(step.microOperations) ? step.microOperations : []).some((operation) => isMoveLikeOperation(operation))) {
-    return true;
-  }
   if (Array.isArray(step.replayRelationLinks) && step.replayRelationLinks.length > 0) {
     return !step.replayKind || step.replayKind === 'relation';
   }
@@ -6124,7 +6072,6 @@ const buildPlaybackSteps = (
   const mappedProvidedSteps = mapProvidedStepsToNodes(visibleNodes, derivationSteps);
   const withProvided = Array.from(mappedProvidedSteps.values()).map((provided) => ({
     operation: provided.operation || 'Other',
-    microOperations: provided.microOperations,
     targetNodeId: provided.targetNodeId || '',
     targetLabel: provided.targetLabel || '',
     sourceNodeIds: provided.sourceNodeIds,
@@ -6132,7 +6079,7 @@ const buildPlaybackSteps = (
     recipe: provided.recipe,
     workspaceAfter: provided.workspaceAfter,
     spelloutOrder: provided.spelloutOrder,
-    ledgerBlocks: provided.ledgerBlocks,
+    detailBlocks: provided.detailBlocks,
     note: provided.note
   }));
   const mappedIds = new Set(withProvided.map((step) => step.targetNodeId));
@@ -6141,7 +6088,6 @@ const buildPlaybackSteps = (
     .filter((step) => step.operation === 'SpellOut' || !step.targetNodeId || mappedIds.has(step.targetNodeId))
     .map((step, index) => ({
       operation: step.operation || 'SpellOut',
-      microOperations: step.microOperations,
       targetNodeId: step.targetNodeId || `__spellout_${index}`,
       targetLabel: step.targetLabel || 'SpellOut',
       sourceNodeIds: step.sourceNodeIds,
@@ -6149,7 +6095,7 @@ const buildPlaybackSteps = (
       recipe: step.recipe || 'SpellOut',
       workspaceAfter: step.workspaceAfter,
       spelloutOrder: step.spelloutOrder,
-      ledgerBlocks: step.ledgerBlocks,
+      detailBlocks: step.detailBlocks,
       note: step.note
     }));
 
@@ -7512,7 +7458,7 @@ const buildVisualRelationReplayLine = (
 const buildStageRecordReplayBlocks = (
   frame?: ReplayDerivationFrame | null,
   plannedStage?: DerivationReplayPlanStage | null
-): ReplayLedgerBlock[] | undefined => {
+): ReplayDetailBlock[] | undefined => {
   const stageRecord = getFrameStageRecordText(frame, plannedStage);
   if (!stageRecord) return undefined;
   return [{ title: 'Stage Record', lines: [stageRecord] }];
@@ -7521,7 +7467,7 @@ const buildStageRecordReplayBlocks = (
 const buildVisualRelationReplayBlocks = (
   relations: DerivationReplayPlanStep[] = [],
   replayCanvasData?: SyntaxNode | null
-): ReplayLedgerBlock[] | undefined => {
+): ReplayDetailBlock[] | undefined => {
   const lines = relations
     .filter(isRenderableReplayVisualRelation)
     .map((relation) => buildVisualRelationReplayLine(relation, replayCanvasData))
@@ -7534,8 +7480,8 @@ const buildFrameReplayBlocks = (
   frame?: ReplayDerivationFrame | null,
   replayCanvasData?: SyntaxNode | null,
   plannedStage?: DerivationReplayPlanStage | null
-): ReplayLedgerBlock[] | undefined => (
-  mergeReplayLedgerBlocks(
+): ReplayDetailBlock[] | undefined => (
+  mergeReplayDetailBlocks(
     buildStageRecordReplayBlocks(frame, plannedStage),
     buildVisualRelationReplayBlocks(getFrameVisualRelations(frame, plannedStage), replayCanvasData)
   )
@@ -7772,10 +7718,10 @@ const findReplaySelectionDisplayStepIndex = (
   return sourceIndex;
 };
 
-const buildReplayDisplayLedgerBlocks = (
+const buildReplayDisplayDetailBlocks = (
   steps: PlaybackStep[]
-): Map<number, ReplayLedgerBlock[]> => {
-  const byStep = new Map<number, ReplayLedgerBlock[]>();
+): Map<number, ReplayDetailBlock[]> => {
+  const byStep = new Map<number, ReplayDetailBlock[]>();
   const pushBlockLine = (stepIndex: number, title: string, line: string) => {
     if (!line) return;
     const bucket = byStep.get(stepIndex) || [];
@@ -7790,7 +7736,7 @@ const buildReplayDisplayLedgerBlocks = (
   };
 
   steps.forEach((step, sourceIndex) => {
-    const blocks = Array.isArray(step.ledgerBlocks) ? step.ledgerBlocks : [];
+    const blocks = Array.isArray(step.detailBlocks) ? step.detailBlocks : [];
     blocks.forEach((block) => {
       const title = String(block?.title || '').trim();
       const lines = Array.isArray(block?.lines) ? block.lines.filter(Boolean) : [];
@@ -8098,7 +8044,7 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
         (step.sourceLabels || []).join(','),
         step.recipe || '',
         (step.spelloutOrder || []).join(','),
-        (step.ledgerBlocks || [])
+        (step.detailBlocks || [])
           .map((block) => [
             block.title || '',
             (block.lines || []).join(',')
@@ -8114,13 +8060,9 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
       frameId: frame.frameId,
       stepId: frame.stepId,
       operation: frame.operation,
-      microOperations: frame.microOperations || [],
       recipe: frame.recipe,
-      trigger: frame.trigger,
       chainId: frame.chainId,
-      spelloutDomain: frame.spelloutDomain,
       spelloutOrder: frame.spelloutOrder || [],
-      note: frame.note,
       movement: frame.movement || null,
       change: frame.change || null,
       workspaceForest: frame.workspaceForest || []
@@ -9325,11 +9267,11 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
     : 0;
   const operationLabel = formatPlaybackOperationTitle(activeStep);
   const showOperationLabel = Boolean(operationLabel) && operationLabel !== activeRecipeDisplay;
-  const replayDisplayLedgerBlocksByStepIndex = useMemo(
-    () => buildReplayDisplayLedgerBlocks(playbackSteps),
+  const replayDisplayDetailBlocksByStepIndex = useMemo(
+    () => buildReplayDisplayDetailBlocks(playbackSteps),
     [playbackSteps]
   );
-  const activeDisplayLedgerBlocks = replayDisplayLedgerBlocksByStepIndex.get(activeStepIndex) || [];
+  const activeDisplayDetailBlocks = replayDisplayDetailBlocksByStepIndex.get(activeStepIndex) || [];
   const canStepBackward = animated && playbackSteps.length > 0 && activeStepIndex > 0;
   const canStepForward = animated && playbackSteps.length > 0 && activeStepIndex < playbackSteps.length - 1;
   const activeDerivationStepLabel = String(activeStep?.stepId || '').trim();
@@ -9465,24 +9407,9 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
                 ))}
               </div>
             )}
-              {activeStep?.microOperations && activeStep.microOperations.length > 0 && (
-                <div className="pt-1">
-                  <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-300/90 mb-1">
-                    Micro-Operations
-                  </div>
-                  <div className="flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-white/90">
-                    {activeStep.microOperations.map((op, idx) => (
-                      <span key={`${op}-${idx}`}>
-                        {formatOperationLabel(op)}
-                        {idx < activeStep.microOperations!.length - 1 ? ' ->' : ''}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            {activeDisplayLedgerBlocks.length > 0 && (
+            {activeDisplayDetailBlocks.length > 0 && (
               <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
-                {activeDisplayLedgerBlocks.map((block, blockIndex) => (
+                {activeDisplayDetailBlocks.map((block, blockIndex) => (
                   <div key={`${block.title}-${blockIndex}`}>
                     <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-300/90 mb-2">
                       {formatReplayBlockTitle(block.title)}

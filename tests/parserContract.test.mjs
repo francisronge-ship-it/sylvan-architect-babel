@@ -145,69 +145,21 @@ test('normalizes the current four-field derivation contract without provider cal
     replayPlan.stages[3].macroStep.workspaceForest,
     analysis.derivationStages[3].workspaceForest
   );
-  const removedResultFields = [
-    'commitmentGraph',
-    'featureLedger',
-    'caseAssignments',
-    'argumentStructure',
-    'phaseLog',
-    'morphologyRealization',
-    'selectionLedger',
-    'bindingLedger',
-    'clausalDependencies',
-    'agreementLedger',
-    'predicateClassLedger',
-    'probeLedger',
-    'nullElementLedger',
-    'diagnosticLedger',
-    'parameterLedger',
-    'informationStructureLedger',
-    'operatorScopeLedger',
-    'voiceValencyLedger',
-    'linearizationLedger',
-    'localityLedger',
-    'predicationLedger',
-    'particleLedger',
-    'evidentialityLedger',
-    'mirativityLedger',
-    'honorificityLedger',
-    'switchReferenceLedger',
-    'logophoraLedger',
-    'eventStructureLedger',
-    'rawDerivationSteps',
-    'commitmentFacts',
-    'noteBindings',
-    'explanation'
-  ];
-
-  removedResultFields.forEach((field) => assert.equal(field in analysis, false, field));
-});
-
-test('rejects legacy top-level parser views', () => {
-  const payload = {
-    ...buildCurrentContractPayload(),
-    commitmentGraph: [{ factId: 'legacy-fact', kind: 'case', nodeIds: ['np_mia'] }],
-    featureLedger: [{ entryId: 'legacy-feature', feature: 'legacy' }]
-  };
-
-  assert.throws(
-    () => __test__.normalizeParseBundle(
-      payload,
-      'xbar',
-      'Mia laughed.',
-      'gemini',
-      true,
-      { payloadIntegrityFlags: [] }
-    ),
-    (error) => error?.code === 'BAD_MODEL_RESPONSE'
-  );
+  assert.deepEqual(Object.keys(analysis).sort(), [
+    'derivationStages',
+    'derivationSteps',
+    'provenance',
+    'resolvedVisualRelations',
+    'surfaceOrder',
+    'tree'
+  ]);
 });
 
 test('rejects derivation stages that add a fifth authored field', () => {
   const payload = buildCurrentContractPayload();
   payload.derivationStages = payload.derivationStages.map((stage, index) => ({
     ...stage,
-    stepId: `legacy-stage-${index + 1}`
+    compilerHint: `stage-${index + 1}`
   }));
 
   assert.throws(
@@ -223,9 +175,24 @@ test('rejects derivation stages that add a fifth authored field', () => {
   );
 });
 
-test('rejects the legacy top-level analyses array at JSON ingress', () => {
+test('rejects a top-level array at JSON ingress', () => {
   assert.throws(
     () => __test__.parseModelJson(JSON.stringify([buildCurrentContractPayload()])),
     (error) => error?.code === 'BAD_MODEL_RESPONSE'
   );
+});
+
+test('preserves every distinct analysis in the strict ambiguity envelope', () => {
+  const payload = buildCurrentContractPayload();
+  const bundle = __test__.normalizeParseBundle(
+    { analyses: [payload, payload, payload] },
+    'xbar',
+    'Mia laughed.',
+    'gemini',
+    true,
+    { payloadIntegrityFlags: [] }
+  );
+
+  assert.equal(bundle.analyses.length, 3);
+  assert.equal(bundle.ambiguityDetected, true);
 });

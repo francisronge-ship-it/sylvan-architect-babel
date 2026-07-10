@@ -499,132 +499,6 @@ const buildMilesNotation = (
   return serializeMilesNode(tree).trim();
 };
 
-const unwrapQuotedProviderText = (value: string): string => {
-  let text = String(value || '').trim();
-  if (!text) return '';
-  text = text.replace(/^```(?:json|text|markdown)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  if (
-    (text.startsWith('"') && text.endsWith('"')) ||
-    (text.startsWith("'") && text.endsWith("'"))
-  ) {
-    try {
-      const parsed = JSON.parse(text);
-      if (typeof parsed === 'string' && parsed.trim()) {
-        text = parsed.trim();
-      } else {
-        text = text.slice(1, -1).trim();
-      }
-    } catch {
-      text = text.slice(1, -1).trim();
-    }
-  }
-  return text.trim();
-};
-
-const normalizeProviderSummaryForDisplay = (summary: string): string => {
-  const text = unwrapQuotedProviderText(summary);
-  if (!text) return '';
-  if (
-    /^[{\[]/.test(text) &&
-    /"(?:analyses|analysis|derivationStages|stageRecord|visualRelations|workspaceForest|tree)"/.test(text)
-  ) {
-    return '';
-  }
-  return text
-    .replace(/\r/g, '')
-    .replace(/\*\*(.*?)\*\*/g, '$1')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-};
-
-const summarizeProviderReasoningForDisplay = (summary: string, raw: string, maxChars = 520): string => {
-  const cleanedSummary = normalizeProviderSummaryForDisplay(summary);
-  const cleanedRaw = normalizeProviderRawForDisplay(raw);
-  const base = cleanedRaw || cleanedSummary;
-  if (!base) return '';
-
-  const metaIntroRe =
-    /^(?:analysis of[^:]*:\s*|deep dive into[^:]*:?|okay[, ]+|here(?:'|’)s how i(?:'|’)m thinking(?: about this sentence)?[, ]*|my immediate thought\??|first[, ]+|let(?:'|’)s\s+)/i;
-  const sentenceParts = base
-    .replace(/\bSHOW FULL RAW THINKING TRACE\b/gi, '')
-    .split(/(?<=[.!?])\s+/)
-    .map((part) => part.trim().replace(/^\d+\.\s*/, '').replace(metaIntroRe, '').trim())
-    .filter(Boolean);
-
-  if (sentenceParts.length === 0) {
-    return base.length <= maxChars ? base : `${base.slice(0, maxChars).trim()}...`;
-  }
-
-  const decisionCueRe =
-    /\b(?:because|since|therefore|thus|so|given|evidence|cue|signal|shows?|indicates?|suggests?|supports?|licenses?|forces?|requires?|must|challenge|favou?rs?|prefers?|chooses?|decides?|rather than|instead of|contrast|alternative|standard analysis|word order|agreement|morphology|movement|selection|locality|scope|case|theta|theta-role|raising|control|passive|unaccusative|v2|wh|inversion)\b/i;
-  const recapPenaltyRe =
-    /\b(?:the analysis projects|the clause architecture|the final tree|spellout yields|surface string|surface order|the sentence is|this is a)\b/i;
-  const metaPenaltyRe =
-    /\b(?:i immediately recognize|i see|i begin|i'm thinking|here's how i'm thinking|my immediate thought|let's|okay)\b/i;
-
-  const ranked = sentenceParts.map((part, index) => {
-    let score = 0;
-    if (decisionCueRe.test(part)) score += 4;
-    if (/\b(?:rather than|instead of|contrast|alternative)\b/i.test(part)) score += 2;
-    if (/\b(?:because|since|given|shows?|indicates?|suggests?)\b/i.test(part)) score += 2;
-    if (/\b(?:must|requires?|challenge|standard analysis)\b/i.test(part)) score += 2;
-    if (recapPenaltyRe.test(part)) score -= 3;
-    if (metaPenaltyRe.test(part)) score -= 4;
-    return { part, index, score };
-  });
-
-  const chosen = ranked
-    .slice()
-    .sort((a, b) => (b.score - a.score) || (a.index - b.index))
-    .filter((entry) => entry.score > 0)
-    .slice(0, 3)
-    .sort((a, b) => a.index - b.index)
-    .map((entry) => entry.part);
-
-  const preferredParts = chosen.length > 0 ? chosen : sentenceParts.slice(0, 2);
-  const selected: string[] = [];
-  let total = 0;
-  for (const part of preferredParts) {
-    const nextTotal = total + (selected.length > 0 ? 1 : 0) + part.length;
-    if (selected.length >= 3 || nextTotal > maxChars) break;
-    selected.push(part);
-    total = nextTotal;
-  }
-
-  if (selected.length > 0) return selected.join(' ').trim();
-  return base.length <= maxChars ? base : `${base.slice(0, maxChars).trim()}...`;
-};
-
-const normalizeProviderRawForDisplay = (summary: string): string => {
-  const text = unwrapQuotedProviderText(summary);
-  if (!text) return '';
-  if (
-    /^[{\[]/.test(text) &&
-    /"(?:analyses|analysis|derivationStages|stageRecord|visualRelations|workspaceForest|tree)"/.test(text)
-  ) {
-    return '';
-  }
-  return text
-    .replace(/\r/g, '')
-    .replace(/\*\*(.*?)\*\*/g, '$1')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{4,}/g, '\n\n\n')
-    .trim();
-};
-
-const truncateReasoningSummary = (summary: string, limit = 900): string => {
-  const text = normalizeProviderSummaryForDisplay(summary);
-  if (!text || text.length <= limit) return text;
-  const boundary = Math.max(
-    text.lastIndexOf('. ', limit),
-    text.lastIndexOf('\n', limit),
-    text.lastIndexOf('; ', limit)
-  );
-  const cut = boundary >= Math.floor(limit * 0.65) ? boundary + 1 : limit;
-  return `${text.slice(0, cut).trim()}...`;
-};
-
 const getPreferredDerivationSteps = (parse: ParseResult | null): DerivationStep[] => {
   if (!parse) return [];
   return Array.isArray(parse.derivationSteps) ? parse.derivationSteps : [];
@@ -752,7 +626,7 @@ const App: React.FC = () => {
   const [treeBankSaving, setTreeBankSaving] = useState(false);
   const [entryPendingDelete, setEntryPendingDelete] = useState<TreeBankEntry | null>(null);
   const activeParse: ParseResult | null = analysisBundle?.analyses?.[activeParseIndex] ?? null;
-  const hasAmbiguity = (analysisBundle?.analyses?.length ?? 0) === 2;
+  const hasAmbiguity = (analysisBundle?.analyses?.length ?? 0) > 1;
   const selectedModelLabel = MODEL_ROUTE_LABELS[modelRoute];
   const modelLabel = formatModelLabel(analysisBundle?.modelUsed);
   const activeModelOption = MODEL_MODE_PILLS.find((option) => option.id === modelRoute) || MODEL_MODE_PILLS[0];
@@ -780,21 +654,6 @@ const App: React.FC = () => {
     if (!activeParse) return [];
     return collectDerivationStageRecords(activeParse.derivationStages);
   }, [activeParse]);
-  const providerReasoningRaw = useMemo(
-    () => normalizeProviderRawForDisplay(String(activeParse?.provenance?.providerReasoningRaw || '')),
-    [activeParse]
-  );
-  const providerReasoningSummary = useMemo(
-    () => summarizeProviderReasoningForDisplay(
-      String(activeParse?.provenance?.providerReasoningSummary || ''),
-      String(activeParse?.provenance?.providerReasoningRaw || '')
-    ),
-    [activeParse]
-  );
-  const providerReasoningPreview = useMemo(
-    () => truncateReasoningSummary(providerReasoningSummary, 780),
-    [providerReasoningSummary]
-  );
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const target = window as any;
@@ -1460,27 +1319,20 @@ const App: React.FC = () => {
 
         {!isTreeBankView && hasAmbiguity && (
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2">
-            <div className="flex items-center gap-2 p-1 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-lg shadow-2xl">
-              <button
-                onClick={() => setActiveParseIndex(0)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  activeParseIndex === 0
-                    ? 'moss-gradient text-white border border-emerald-400/50'
-                    : 'text-white/60 hover:text-emerald-300'
-                }`}
-              >
-                Parse 1
-              </button>
-              <button
-                onClick={() => setActiveParseIndex(1)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  activeParseIndex === 1
-                    ? 'moss-gradient text-white border border-emerald-400/50'
-                    : 'text-white/60 hover:text-emerald-300'
-                }`}
-              >
-                Parse 2
-              </button>
+            <div className="flex max-w-[min(92vw,64rem)] flex-wrap items-center justify-center gap-2 p-1 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-lg shadow-2xl">
+              {(analysisBundle?.analyses || []).map((_, parseIndex) => (
+                <button
+                  key={`parse-choice-${parseIndex}`}
+                  onClick={() => setActiveParseIndex(parseIndex)}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    activeParseIndex === parseIndex
+                      ? 'moss-gradient text-white border border-emerald-400/50'
+                      : 'text-white/60 hover:text-emerald-300'
+                  }`}
+                >
+                  Parse {parseIndex + 1}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -1541,29 +1393,6 @@ const App: React.FC = () => {
                           </p>
                         ))}
                       </div>
-                      {providerReasoningSummary && (
-                        <details className="mt-6 md:mt-8 bg-black/35 border border-emerald-500/10 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-7 shadow-inner">
-                          <summary className="cursor-pointer list-none flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-2xl bg-white/5 border border-white/10 text-emerald-400 flex items-center justify-center">
-                              <Brain size={18} />
-                            </div>
-                            <span className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-400/80">Provider Reasoning Trace</span>
-                          </summary>
-                          <p className="mt-4 text-emerald-50/85 leading-relaxed serif text-base md:text-xl whitespace-pre-wrap">
-                            {providerReasoningPreview || providerReasoningSummary}
-                          </p>
-                          {providerReasoningRaw && providerReasoningRaw !== (providerReasoningPreview || providerReasoningSummary) && (
-                            <details className="mt-4 rounded-2xl border border-white/5 bg-white/[0.02] px-4 py-3">
-                              <summary className="cursor-pointer text-[11px] font-black uppercase tracking-[0.24em] text-emerald-300/75">
-                                Show Full Raw Thinking Trace
-                              </summary>
-                              <pre className="mt-3 whitespace-pre-wrap break-words text-xs md:text-sm leading-relaxed text-emerald-50/72 serif">
-                                {providerReasoningRaw}
-                              </pre>
-                            </details>
-                          )}
-                        </details>
-                      )}
                   </div>
 
                   {(canopyMilesNotation || derivationMilesNotation) && (

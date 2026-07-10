@@ -2,6 +2,12 @@ const fs = require('fs');
 const path = require('path');
 require('./helpers/loadLocalEnv.cjs')();
 const { parseSentenceWithGemini } = require('../server/geminiParser');
+const {
+  collectMovementRelations,
+  collectResolvedVisualRelations,
+  collectStageRecords,
+  countUnresolvedAnchors
+} = require('./helpers/currentContract.cjs');
 
 const CASES = [
   { framework: 'xbar', language: 'English', phenomenon: 'relative-clause', sentence: 'The editor who praised the article resigned.' },
@@ -48,15 +54,6 @@ function collectLeaves(node, out = []) {
   return out;
 }
 
-function collectNodeIds(node, out = new Set()) {
-  if (!node || typeof node !== 'object') return out;
-  const id = String(node.id || '').trim();
-  if (id) out.add(id);
-  const children = Array.isArray(node.children) ? node.children : [];
-  children.forEach((child) => collectNodeIds(child, out));
-  return out;
-}
-
 function collectOvertSpans(node, out = []) {
   if (!node || typeof node !== 'object') return out;
   const children = Array.isArray(node.children) ? node.children : [];
@@ -89,9 +86,10 @@ function analyze(bundle, testCase) {
   const surfaceOrder = Array.isArray(analysis.surfaceOrder) ? analysis.surfaceOrder : [];
   const derivationSteps = Array.isArray(analysis.derivationSteps) ? analysis.derivationSteps : [];
   const derivationOps = derivationSteps.map((s) => s.operation);
-  const movementEvents = Array.isArray(analysis.movementEvents) ? analysis.movementEvents : [];
-  const nodeIds = collectNodeIds(analysis.tree);
-  const explanation = String(analysis.explanation || '').trim();
+  const visualRelations = collectResolvedVisualRelations(analysis);
+  const movementRelations = collectMovementRelations(analysis);
+  const stageRecords = collectStageRecords(analysis);
+  const notesText = stageRecords.join('\n');
   const overtSpans = collectOvertSpans(analysis.tree);
   const issues = [];
 
@@ -99,22 +97,12 @@ function analyze(bundle, testCase) {
   if (!sameSeq(surfaceOrder, sentenceTokens)) issues.push('SURFACE_NE_SENTENCE');
   if (!sameSeq(leaves, surfaceOrder)) issues.push('LEAVES_NE_SURFACE');
   if (derivationOps[derivationOps.length - 1] !== 'SpellOut') issues.push('NO_FINAL_SPELLOUT');
-  if (movementEvents.length > 0 && !MOVEMENT_RE.test(explanation)) issues.push('MOVEMENT_MISSING_FROM_NOTES');
-  if (movementEvents.length === 0 && MOVEMENT_RE.test(explanation) && !/no movement is posited/i.test(explanation)) issues.push('NOTES_MOVEMENT_WITHOUT_EVENTS');
-  if (HEDGE_RE.test(explanation)) issues.push('HEDGING_IN_NOTES');
+  if (movementRelations.length > 0 && !MOVEMENT_RE.test(notesText)) issues.push('MOVEMENT_MISSING_FROM_STAGE_RECORDS');
+  if (HEDGE_RE.test(notesText)) issues.push('HEDGING_IN_STAGE_RECORDS');
 
   const moveSteps = countOps(derivationSteps, new Set(['Move', 'InternalMerge', 'HeadMove', 'A-Move', 'AbarMove']));
-  if (movementEvents.length > 0 && moveSteps === 0) issues.push('MOVEMENT_EVENTS_WITHOUT_MOVE_STEPS');
-
-  for (const ev of movementEvents) {
-    const from = String(ev?.fromNodeId || '').trim();
-    const to = String(ev?.toNodeId || '').trim();
-    const trace = String(ev?.traceNodeId || '').trim();
-    if (!from || !to || !nodeIds.has(from) || !nodeIds.has(to) || (trace && !nodeIds.has(trace))) {
-      issues.push('INVALID_MOVEMENT_NODE_REF');
-      break;
-    }
-  }
+  if (movementRelations.length > 0 && moveSteps === 0) issues.push('MOVEMENT_RELATIONS_WITHOUT_MOVE_STEPS');
+  if (countUnresolvedAnchors(visualRelations) > 0) issues.push('UNRESOLVED_VISUAL_RELATION_ANCHOR');
 
   for (let i = 0; i < overtSpans.length; i += 1) {
     const entry = overtSpans[i];
@@ -134,8 +122,9 @@ function analyze(bundle, testCase) {
     leaves,
     surfaceOrder,
     derivationOps,
-    movementEventsCount: movementEvents.length,
-    explanation
+    visualRelationsCount: visualRelations.length,
+    movementRelationsCount: movementRelations.length,
+    stageRecords
   };
 }
 
@@ -145,7 +134,7 @@ function analyze(bundle, testCase) {
     let final = null;
     for (let attempt = 1; attempt <= 4; attempt += 1) {
       try {
-        const bundle = await parseSentenceWithGemini(testCase.sentence, testCase.framework, 'flash-lite');
+        const bundle = await parseSentenceWithGemini(testCase.sentence, testCase.framework, 'gemini');
         final = analyze(bundle, testCase);
         break;
       } catch (error) {

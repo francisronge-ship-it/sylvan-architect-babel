@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { collectResolvedVisualRelations } = require('./helpers/currentContract.cjs');
 
 let chromium;
 try {
@@ -141,7 +142,7 @@ async function replayToEnd(page) {
 async function extractNotesText(page) {
   return sanitizeText(
     await page
-      .locator('h2:has-text("Structural Geneology")')
+      .locator('h2:has-text("Derivational Notes")')
       .first()
       .locator('xpath=ancestor::div[contains(@class,"glass-dark")]')
       .first()
@@ -185,7 +186,7 @@ async function runCase(page, item) {
 
   const analysis = parsed.payload?.analyses?.[0] || {};
 
-  await switchTab(page, 'Growth Simulation');
+  await switchTab(page, 'Derivation Replay');
   const replay = await replayToEnd(page);
   const growthShot = path.join(OUT_DIR, `${item.id}-growth-final.png`);
   await page.screenshot({ path: growthShot, fullPage: true });
@@ -202,7 +203,7 @@ async function runCase(page, item) {
     status: parsed.status,
     elapsedMs,
     analysis,
-    movementEventsCount: Array.isArray(analysis.movementEvents) ? analysis.movementEvents.length : 0,
+    visualRelationsCount: collectResolvedVisualRelations(analysis).length,
     derivationStepsCount: Array.isArray(analysis.derivationSteps) ? analysis.derivationSteps.length : 0,
     replay,
     replayTextPath,

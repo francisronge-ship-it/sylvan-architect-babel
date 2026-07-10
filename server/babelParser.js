@@ -19,21 +19,18 @@ import {
   buildParseContentsPrompt
 } from './babelParser/prompts.js';
 import {
-  estimateProOutputBudget,
+  estimateGeminiOutputBudget,
   resolveRouteMaxOutputTokens
 } from './babelParser/routeConfig.js';
 import {
   extractLocalModelResponseText,
-  summarizeGeneration,
-  summarizeProviderReasoningForDisplay
+  summarizeGeneration
 } from './babelParser/modelRuntime.js';
 import { createDerivationHelpers } from './babelParser/derivationHelpers.js';
-import { createSemanticValidationHelpers } from './babelParser/semanticValidation.js';
 import { createParseRoutes } from './babelParser/parseRoutes.js';
 import { createParseNormalizationHelpers } from './babelParser/parseNormalization.js';
 import { createDerivationCompilerHelpers } from './babelParser/derivationCompiler.js';
 import { createNormalizationUtils } from './babelParser/normalizationUtils.js';
-import { createStepNormalizationHelpers } from './babelParser/stepNormalization.js';
 import { createSyntaxTreeHelpers } from './babelParser/syntaxTree.js';
 import { parseStrictModelJson, parseStrictModelJsonDetailed } from './babelParser/strictJson.js';
 
@@ -49,11 +46,7 @@ const {
   normalizeMovementOperation,
   normalizeIndexedText,
   extractMovementIndex,
-  stripMovementIndex,
-  normalizeOpenChainType,
-  normalizeChainType,
-  mergeChainTypes,
-  deriveChainTypeFromOperation
+  stripMovementIndex
 } = createNormalizationUtils({
   MOVEMENT_INDEX_SUBSCRIPT_MAP
 });
@@ -142,10 +135,8 @@ const {
   normalizeTransportJsonArray,
   normalizeDerivationStagesToDerivationFrames,
   normalizeDerivationFrames,
-  normalizeMovementStemFromId,
   materializeImplicitPhrasalTraceShellsInDerivationFrames,
   materializeCommittedTraceShells,
-  collectDerivationFrameNodeIds,
   canonicalizeDerivationRootCandidateForSentence,
   selectCommittedDerivationRoot,
   findLatestCommittedDerivationFrame,
@@ -197,34 +188,12 @@ const {
 });
 
 const {
-  deriveImplicitDerivationChainId
-} = createStepNormalizationHelpers({
-  normalizeOptionalStepText,
-  normalizeMovementStemFromId
-});
-
-const {
-  validatePronouncedCopiesAgainstCommittedTree,
-  runSemanticValidation
-} = createSemanticValidationHelpers({
-  ParseApiError,
-  buildNodeIndexFromTree,
-  collectOvertTerminalNodes,
-  subtreeContainsNamedCovertCategoryLeaf
-});
-
-const {
-  deriveChainsFromCommittedAnalysis,
   normalizeParseResult,
   normalizeParseBundle
 } = createParseNormalizationHelpers({
   ParseApiError,
   normalizeKey,
-  normalizeOpenChainType,
-  normalizeChainType,
-  normalizeMovementOperation,
   normalizeOptionalStepText,
-  normalizeOptionalStringArray,
   tokenizeSentenceSurfaceOrder,
   normalizeDerivationStagesToDerivationFrames,
   normalizeDerivationFrames,
@@ -243,14 +212,6 @@ const {
   collectOvertTerminalNodes,
   resolveNodeSurface,
   materializeCommittedTraceShells,
-  collectDerivationFrameNodeIds,
-  runSemanticValidation,
-  validatePronouncedCopiesAgainstCommittedTree,
-  deriveImplicitDerivationChainId,
-  deriveChainTypeFromOperation,
-  mergeChainTypes,
-  normalizeMovementStemFromId,
-  subtreeContainsNamedCovertCategoryLeaf
 });
 
 const parseModelJson = (rawText) => parseStrictModelJson(
@@ -289,10 +250,9 @@ export const __test__ = {
   buildCanonicalDerivationFromDerivationFrames,
   buildSystemInstruction,
   buildParseContentsPrompt,
-  summarizeProviderReasoningForDisplay,
   summarizeGeneration,
   extractLocalModelResponseText,
-  estimateProOutputBudget,
+  estimateGeminiOutputBudget,
   resolveRouteMaxOutputTokens,
   parseModelJson,
   parseModelJsonDetailed,
@@ -300,6 +260,5 @@ export const __test__ = {
   tokenizeSentenceSurfaceOrder,
   anchorOvertLeavesToSentenceTokens,
   deriveCanonicalSurfaceSpans,
-  collectOvertTerminalNodes,
-  validatePronouncedCopiesAgainstCommittedTree
+  collectOvertTerminalNodes
 };

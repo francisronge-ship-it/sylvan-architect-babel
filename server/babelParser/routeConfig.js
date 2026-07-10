@@ -36,10 +36,6 @@ const GEMINI_THINKING_LEVELS = new Set(['LOW', 'HIGH']);
 if (!GEMINI_THINKING_LEVELS.has(GEMINI_THINKING_LEVEL)) {
   throw new Error('GEMINI_THINKING_LEVEL must be one of: low, high.');
 }
-export const GEMINI_THINKING_CONFIG = Object.freeze({
-  thinkingLevel: GEMINI_THINKING_LEVEL,
-  includeThoughts: false
-});
 const normalizeOpenAIReasoningEffort = (value) => {
   const normalized = String(value || 'xhigh').trim().toLowerCase().replace(/[\s-]+/g, '_');
   if (normalized === 'extra_high' || normalized === 'extra') return 'xhigh';
@@ -117,11 +113,8 @@ export const normalizeProviderReasoningEffort = (modelRoute = 'gemini', value) =
 };
 
 export const buildGeminiThinkingConfig = (reasoningEffort = GEMINI_THINKING_LEVEL) => Object.freeze({
-  thinkingLevel: normalizeGeminiThinkingLevel(reasoningEffort),
-  includeThoughts: false
+  thinkingLevel: normalizeGeminiThinkingLevel(reasoningEffort)
 });
-export const PRIMARY_MODEL = GEMINI_MODEL;
-export const PRO_MODEL = GEMINI_MODEL;
 export const PAYLOAD_TRANSCRIBER_MODEL = String(process.env.GEMINI_PAYLOAD_TRANSCRIBER_MODEL || '').trim() || GEMINI_MODEL;
 export const LOCAL_MODEL_NAME = String(process.env.BABEL_LOCAL_MODEL_NAME || '').trim() || 'gemma3:4b';
 export const LOCAL_MODEL_URL = String(process.env.BABEL_LOCAL_MODEL_URL || '').trim() || 'http://127.0.0.1:11434/api/generate';
@@ -135,8 +128,8 @@ export const PAYLOAD_TRANSCRIBER_TIMEOUT_MS = Math.max(0, Number(process.env.GEM
 export const PAYLOAD_TRANSCRIBER_TEMPERATURE = Number.isFinite(Number(process.env.GEMINI_PAYLOAD_TRANSCRIBER_TEMPERATURE))
   ? Number(process.env.GEMINI_PAYLOAD_TRANSCRIBER_TEMPERATURE)
   : 0;
-export const PRO_MAX_OUTPUT_TOKENS = Number(
-  process.env.GEMINI_PRO_MAX_OUTPUT_TOKENS ||
+export const GEMINI_ROUTE_MAX_OUTPUT_TOKENS = Number(
+  process.env.GEMINI_ROUTE_MAX_OUTPUT_TOKENS ||
   process.env.GEMINI_MAX_OUTPUT_TOKENS ||
   32768
 );
@@ -145,68 +138,59 @@ export const ANTHROPIC_MAX_OUTPUT_TOKENS = Math.max(8192, Number(process.env.ANT
 export const MODEL_TEMPERATURE = Number.isFinite(Number(process.env.GEMINI_TEMPERATURE))
   ? Number(process.env.GEMINI_TEMPERATURE)
   : 0.2;
-const PRO_MODEL_TEMPERATURE = Number.isFinite(Number(process.env.GEMINI_PRO_TEMPERATURE))
-  ? Number(process.env.GEMINI_PRO_TEMPERATURE)
+const GEMINI_ROUTE_TEMPERATURE = Number.isFinite(Number(process.env.GEMINI_ROUTE_TEMPERATURE))
+  ? Number(process.env.GEMINI_ROUTE_TEMPERATURE)
   : MODEL_TEMPERATURE;
 const MODEL_CALL_TIMEOUT_RAW = String(process.env.GEMINI_MODEL_TIMEOUT_MS || '').trim();
 const MODEL_CALL_TIMEOUT_MS = MODEL_CALL_TIMEOUT_RAW ? Number(MODEL_CALL_TIMEOUT_RAW) : NaN;
-const PRIMARY_MODEL_TIMEOUT_MS = Math.max(0, Number(process.env.GEMINI_PRIMARY_TIMEOUT_MS || 0));
-const PRO_MODEL_TIMEOUT_MS = Math.max(0, Number(process.env.GEMINI_PRO_TIMEOUT_MS || 0));
-const PRO_ROUTE_TIMEOUT_MS = Math.max(0, Number(process.env.GEMINI_PRO_ROUTE_TIMEOUT_MS || 0));
+const PROVIDER_MODEL_TIMEOUT_MS = Math.max(0, Number(process.env.BABEL_PROVIDER_MODEL_TIMEOUT_MS || 0));
+const GEMINI_ROUTE_TIMEOUT_MS = Math.max(0, Number(process.env.GEMINI_ROUTE_TIMEOUT_MS || 0));
 const REQUEST_BUDGET_MS = Math.max(0, Number(process.env.GEMINI_REQUEST_BUDGET_MS || 0));
-const PRO_ROUTE_REQUEST_BUDGET_MS = Math.max(0, Number(process.env.GEMINI_PRO_REQUEST_BUDGET_MS || 0));
+const GEMINI_ROUTE_REQUEST_BUDGET_MS = Math.max(0, Number(process.env.GEMINI_ROUTE_REQUEST_BUDGET_MS || 0));
 const EXTERNAL_PROVIDER_REQUEST_BUDGET_MS = Math.max(0, Number(process.env.BABEL_PROVIDER_REQUEST_BUDGET_MS || 900000));
-const DEFAULT_PRIMARY_MODEL_TIMEOUT_MS = 45000;
-const DEFAULT_PRO_MODEL_TIMEOUT_MS = 900000;
+const DEFAULT_GEMINI_MODEL_TIMEOUT_MS = 900000;
 
 export const routeUnavailableMessage = () =>
-  'The canopy is noisy right now. The selected Gemini 3.1 Pro route is unavailable; please plant your sentence again in a moment.';
+  'The canopy is noisy right now. The selected Gemini route is unavailable; please plant your sentence again in a moment.';
 
 export const localRouteUnavailableMessage = () =>
   'The local model route is unavailable. Start the configured local runtime and try again.';
 
-export const resolveRouteTemperature = () => PRO_MODEL_TEMPERATURE;
+export const resolveRouteTemperature = () => GEMINI_ROUTE_TEMPERATURE;
 
-export const estimateProOutputBudget = () => PRO_MAX_OUTPUT_TOKENS;
+export const estimateGeminiOutputBudget = () => GEMINI_ROUTE_MAX_OUTPUT_TOKENS;
 
 export const resolveRouteMaxOutputTokens = (modelRoute = 'gemini', sentence = '') => {
   const route = String(modelRoute || '').toLowerCase();
   if (route === 'gpt') return OPENAI_MAX_OUTPUT_TOKENS;
   if (route === 'claude') return ANTHROPIC_MAX_OUTPUT_TOKENS;
-  return estimateProOutputBudget(sentence);
+  return estimateGeminiOutputBudget(sentence);
 };
 
-export const resolveModelTimeoutMs = (model, modelRoute = 'gemini') => {
-  if (modelRoute !== 'local' && PRO_ROUTE_TIMEOUT_MS > 0) {
-    return PRO_ROUTE_TIMEOUT_MS;
+export const resolveModelTimeoutMs = (_model, modelRoute = 'gemini') => {
+  if (modelRoute === 'local') return LOCAL_MODEL_TIMEOUT_MS;
+  if (modelRoute !== 'local' && GEMINI_ROUTE_TIMEOUT_MS > 0) {
+    return GEMINI_ROUTE_TIMEOUT_MS;
   }
   if (Number.isFinite(MODEL_CALL_TIMEOUT_MS) && MODEL_CALL_TIMEOUT_MS > 0) {
     return MODEL_CALL_TIMEOUT_MS;
   }
-  const routeSpecificTimeoutMs = modelRoute !== 'local'
-    ? PRO_MODEL_TIMEOUT_MS
-    : model === PRIMARY_MODEL
-      ? PRIMARY_MODEL_TIMEOUT_MS
-      : PRO_MODEL_TIMEOUT_MS;
-  if (routeSpecificTimeoutMs > 0) {
-    return routeSpecificTimeoutMs;
+  if (PROVIDER_MODEL_TIMEOUT_MS > 0) {
+    return PROVIDER_MODEL_TIMEOUT_MS;
   }
   // Never return 0 here. withTimeout() treats non-finite/zero as "no timeout",
-  // which lets a hung provider call block the entire Pro route forever.
-  return modelRoute !== 'local' ? DEFAULT_PRO_MODEL_TIMEOUT_MS : DEFAULT_PRIMARY_MODEL_TIMEOUT_MS;
+  // which lets a hung provider call block the Gemini route forever.
+  return DEFAULT_GEMINI_MODEL_TIMEOUT_MS;
 };
 
 export const getRemainingRequestBudgetMs = (requestStartedAt, modelRoute = 'gemini') => {
   if (['gpt', 'claude'].includes(String(modelRoute || '').toLowerCase())) {
     return Math.max(0, EXTERNAL_PROVIDER_REQUEST_BUDGET_MS - (Date.now() - requestStartedAt));
   }
-  if (modelRoute !== 'local' && PRO_ROUTE_REQUEST_BUDGET_MS > 0) {
-    return Math.max(0, PRO_ROUTE_REQUEST_BUDGET_MS - (Date.now() - requestStartedAt));
+  if (modelRoute !== 'local' && GEMINI_ROUTE_REQUEST_BUDGET_MS > 0) {
+    return Math.max(0, GEMINI_ROUTE_REQUEST_BUDGET_MS - (Date.now() - requestStartedAt));
   }
   if (!(Number.isFinite(REQUEST_BUDGET_MS) && REQUEST_BUDGET_MS > 0)) {
-    if (modelRoute !== 'local') {
-      return Number.POSITIVE_INFINITY;
-    }
     return Number.POSITIVE_INFINITY;
   }
   return Math.max(0, REQUEST_BUDGET_MS - (Date.now() - requestStartedAt));

@@ -13,7 +13,6 @@ const CURRENT_PROVENANCE_FIELDS = [
   'payloadTranscriberPromptTokenCount',
   'payloadTranscriberOutputTokenCount',
   'payloadTranscriberTotalTokenCount',
-  'payloadTranscriberThoughtsTokenCount',
   'hasDerivationStages',
   'hasResolvedVisualRelations',
   'parsePromptTokenCount',
@@ -21,10 +20,7 @@ const CURRENT_PROVENANCE_FIELDS = [
   'parseTotalTokenCount',
   'primaryPromptTokenCount',
   'primaryOutputTokenCount',
-  'primaryTotalTokenCount',
-  'providerReasoningRaw',
-  'providerReasoningSummary',
-  'providerThoughtsTokenCount'
+  'primaryTotalTokenCount'
 ];
 
 const CURRENT_ANALYSIS_FIELDS = [
@@ -33,7 +29,6 @@ const CURRENT_ANALYSIS_FIELDS = [
   'derivationStages',
   'resolvedVisualRelations',
   'derivationSteps',
-  'chains',
   'provenance'
 ];
 

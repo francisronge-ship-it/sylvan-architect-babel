@@ -33,9 +33,9 @@ Recent public benchmark:
 - `100` sentence-level evaluations under forced explicit syntactic commitment
 - `22` languages in native script where applicable
 - `15` syntactic phenomena
-- `1` public hosted model route in the current release: `Gemini 3.1 Pro`
+- `1` public hosted model route in that benchmark release: `Gemini 3.1 Pro`
 
-| Pro route |
+| Benchmark model |
 | --- |
 | ![Gemini 3.1 Pro long-distance wh derivation](docs/research/assets/gauntlet100-v1/pro-en-longwh-growth.png) |
 
@@ -46,9 +46,9 @@ Many tree tools either use rigid templates or return black-box output with littl
 Babel is designed to make the model's structural decisions inspectable:
 
 - The model is required to commit to a concrete analysis inside a chosen syntactic framework.
-- You get both final structures and derivational metadata tied to the same committed analysis.
+- You get a final structure reconstructed from the same authored derivation stages shown in replay.
 - You can compare analyses under different theory settings.
-- When Babel detects genuine structural ambiguity, it can return two parses for comparison.
+- When multiple genuinely distinct analyses are available, Babel preserves all of them for comparison.
 
 ## Who Babel is for
 
@@ -67,13 +67,13 @@ Babel has two primary users:
 
 #### Babel as a benchmark framework
 
-With Babel's current hosted model route (`Gemini 3.1 Pro`), plus the local runtime path, you can realistically run large syntax sweeps, for example:
+With Babel's current Gemini, GPT, and Claude routes in the local runtime, you can run controlled syntax sweeps, for example:
 
 - hundreds of syntactic test sentences in a short evaluation window.
 - Multi-phenomenon suites covering `wh-movement`, `island constraints`, `agreement`, `control`, `raising`, and `attachment ambiguity`.
 - Cross-linguistic evaluation across all human languages, not only high-resource benchmark languages.
 
-Researchers can use Babel to build hypothesis-driven syntax studies: run controlled sentence suites, compare analyses across frameworks and model routes, trace how movement and feature-checking decisions vary across languages, and document where models converge or diverge from formal grammatical expectations.
+Researchers can use Babel to build hypothesis-driven syntax studies: run controlled sentence suites, compare analyses across frameworks and model routes, inspect stage records and open visual relations across languages, and document where models converge or diverge from formal grammatical expectations.
 
 This pushes Babel beyond a tree tool and toward an evaluation framework for explicit LLM structural reasoning.
 
@@ -92,16 +92,16 @@ Babel asks a different question:
 - Not only: "Does the model behave like it knows syntax?"
 - But: "Can the model explicitly produce syntactic structure?"
 
-In Babel, the model must commit to a concrete tree and derivation: one hierarchy, one movement story, one replayable analysis.
+In Babel, every returned analysis must commit to a concrete, replayable derivation. Ambiguous sentences may have multiple committed analyses when their meanings require different structures.
 
-Babel is designed around forced commitment: the model must choose one analysis and Babel evaluates the coherence of that committed structure rather than completing the syntax on the model's behalf.
+Babel is designed around forced commitment within each analysis: Babel evaluates the coherence of the authored stages rather than completing the syntax on the model's behalf.
 
 ### Students
 
 - Generate trees quickly for study and practice.
 - Learn how framework choice changes structure.
 - Move from final tree reading to derivation-level understanding.
-- Use visual + textual explanations together.
+- Read open visual relations alongside the ordered human-readable stage records.
 
 ## Full feature guide
 
@@ -120,7 +120,7 @@ Switching theory changes the analysis behavior, tree style, replay, and explanat
 
 Babel includes a model switch in the header:
 
-- `Gemini 3.1 Pro`: the hosted benchmark route.
+- `Gemini 3.1 Pro`: the Gemini route.
 - `GPT 5.5`: the OpenAI frontier route.
 - `Claude Opus`: the Anthropic frontier route.
 
@@ -152,11 +152,11 @@ When you submit a sentence, Babel shows:
 - Parse success state (tree + supporting views)
 - Parse error state with user-readable messages
 
-### 6) Ambiguity handling (Parse 1 / Parse 2)
+### 6) Ambiguity handling
 
-If Babel detects clear syntactic ambiguity, it can return two analyses.
+An ambiguous sentence may have more than one meaning and more than one corresponding tree. Babel's internal parse bundle preserves every supplied distinct analysis rather than imposing a two-parse ceiling.
 
-You can toggle `Parse 1` and `Parse 2`, and the active parse updates across the entire app state (tree view, growth simulation, notes).
+The parse selector exposes `Parse 1`, `Parse 2`, and any additional analyses. Selecting one updates Canopy, Derivation Replay, and Notes together.
 
 ### 7) Canopy view
 
@@ -164,9 +164,9 @@ You can toggle `Parse 1` and `Parse 2`, and the active parse updates across the 
 
 It is optimized for readability of the resulting structure.
 
-### 8) Growth Simulation view
+### 8) Derivation Replay view
 
-`Growth Simulation` is the derivation playback environment.
+`Derivation Replay` presents the ordered structural states compiled from `derivationStages`.
 
 It includes:
 
@@ -174,34 +174,33 @@ It includes:
 - Playback controls (`Prev`, `Play/Replay`, `Next`)
 - Timeline scrubber with sprout slider
 - Operation labels per step
-- Feature-checking visibility during derivation steps
-- Workspace/derivation-set style state updates
-- Movement visualization with arrows
+- Workspace-forest state updates
+- Open `visualRelations` rendered when Babel has a supported visual treatment
 - Trace visibility for derivation inspection
 
 This view is designed to expose process, not just endpoint.
 
 ### 9) Notes view
 
-`Notes` includes:
+`Notes` presents the ordered, non-empty `derivationStages[].stageRecord` strings directly. Babel does not synthesize a parallel explanation or compiled analysis layer.
 
-- Framework-specific explanation text
-- Optional interpretation label (useful when ambiguity exists)
-- Bracketed notation block
+The view also includes:
+
+- A labeled-bracketing block derived from the selected tree
 - One-click copy for bracketed notation
 - Direct external link support for notation tooling
 - Use bracketed notation in traditional tools (for example, MShang) when you want a classic tree workflow outside Babel's renderer.
 
 ### 10) Output artifacts
 
-Each parse can include structured outputs such as:
+The authored model output is exactly `derivationStages`. Every stage has exactly four fields:
 
-- Tree
-- Explanation
-- Parts of speech
-- Bracketed notation
-- Derivation steps
-- Movement events
+- `statement`
+- `stageRecord`
+- `visualRelations`
+- `workspaceForest`
+
+Babel validates those stages, replays them, and derives the committed tree, surface order, resolved visual-relation records, and replay steps. Relation names and anchor-role names remain open rather than being projected into a fixed ontology.
 
 These outputs are intended for both human reading and downstream inspection workflows.
 
@@ -222,15 +221,15 @@ It includes:
 1. Choose a framework (X-bar or Minimalism).
 2. Parse a sentence.
 3. Inspect the final structure in Canopy.
-4. Inspect derivational behavior in Growth Simulation.
+4. Inspect derivational behavior in Derivation Replay.
 5. Compare outputs across frameworks and across reruns.
-6. Record differences in structure, movement, and explanation.
+6. Record differences in structure, visual relations, and stage records.
 
 ## Limits and caveats
 
 - Output quality can vary with model behavior and service availability.
 - Any single tree should be treated as a committed analysis proposal, not final theoretical truth.
-- The public app and the stricter benchmark use-case are closely related but not identical: Babel is both a learning environment for students and a structured evaluation surface for researchers.
+- The former public Vercel app is temporarily paused; current development and benchmark work run locally.
 
 ## Project direction
 
@@ -238,8 +237,7 @@ Babel is being built as an open resource for linguistics and AI interpretability
 
 Current direction includes:
 
-- Expanding model routes so researchers can benchmark multiple LLMs inside the same syntax environment
-- Adding `GPT` and `Claude` routes so Babel can compare public syntax across frontier model families rather than within a single provider
+- Comparing Gemini, GPT, and Claude inside the same syntax environment
 - Running large cross-model gauntlets (for example, 100+ tree/derivation suites) across many languages
 - Publishing comparable structural-reasoning results across frameworks, models, and sentence phenomena
 - Evolving Babel into a public benchmark standard for explicit syntactic derivation generation

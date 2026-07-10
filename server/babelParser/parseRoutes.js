@@ -4,6 +4,7 @@ import { buildSystemInstruction } from './systemInstruction.js';
 import { buildParseContentsPrompt } from './prompts.js';
 import {
   buildGeminiThinkingConfig,
+  GEMINI_MODEL,
   LOCAL_MODEL_COMMAND,
   LOCAL_MODEL_NAME,
   LOCAL_MODEL_URL,
@@ -13,7 +14,6 @@ import {
   PAYLOAD_TRANSCRIBER_MODEL,
   PAYLOAD_TRANSCRIBER_TEMPERATURE,
   PAYLOAD_TRANSCRIBER_TIMEOUT_MS,
-  PRO_MODEL,
   getRemainingRequestBudgetMs,
   localRouteUnavailableMessage,
   resolveModelTimeoutMs,
@@ -232,8 +232,7 @@ export const createParseRoutes = ({
       '- place fields into their correct JSON positions\n' +
       '- normalize harmless transport notation drift without changing linguistic content\n' +
       'Forbidden repairs:\n' +
-      '- changing tree shape\n' +
-      '- changing derivationSteps\n' +
+      '- changing workspaceForest structure\n' +
       '- changing statement or stageRecord\n' +
       '- changing workspaceForest\n' +
       '- changing visualRelations\n' +
@@ -250,12 +249,6 @@ export const createParseRoutes = ({
     ...analysis,
     provenance: attachAggregateParseTokenCounts({
       ...(analysis?.provenance || {}),
-      ...(generationMeta?.providerReasoningSummary
-        ? { providerReasoningSummary: generationMeta.providerReasoningSummary }
-        : {}),
-      ...(generationMeta?.providerReasoningRaw
-        ? { providerReasoningRaw: generationMeta.providerReasoningRaw }
-        : {}),
       ...(generationMeta?.promptTokenCount
         ? { primaryPromptTokenCount: generationMeta.promptTokenCount }
         : {}),
@@ -264,9 +257,6 @@ export const createParseRoutes = ({
         : {}),
       ...(generationMeta?.totalTokenCount
         ? { primaryTotalTokenCount: generationMeta.totalTokenCount }
-        : {}),
-      ...(generationMeta?.thoughtsTokenCount
-        ? { providerThoughtsTokenCount: generationMeta.thoughtsTokenCount }
         : {}),
       ...extraProvenance
     })
@@ -287,11 +277,13 @@ export const createParseRoutes = ({
       ...(transcriberMeta?.totalTokenCount
         ? { payloadTranscriberTotalTokenCount: transcriberMeta.totalTokenCount }
         : {}),
-      ...(transcriberMeta?.thoughtsTokenCount
-        ? { payloadTranscriberThoughtsTokenCount: transcriberMeta.thoughtsTokenCount }
-        : {}),
       ...extraProvenance
     })
+  });
+
+  const mapBundleAnalyses = (bundle, mapper) => ({
+    ...bundle,
+    analyses: (Array.isArray(bundle?.analyses) ? bundle.analyses : []).map(mapper)
   });
 
   const maybeWritePrimaryDebugPayload = ({
@@ -348,7 +340,6 @@ export const createParseRoutes = ({
           systemInstruction: buildPayloadTranscriberSystemInstruction(),
           temperature: PAYLOAD_TRANSCRIBER_TEMPERATURE,
           maxOutputTokens: PAYLOAD_TRANSCRIBER_MAX_OUTPUT_TOKENS,
-          includeThoughts: false,
           abortSignal
         }),
         resolveRequestTimeoutMs({
@@ -491,18 +482,13 @@ export const createParseRoutes = ({
         { payloadIntegrityFlags: parsedPayload.integrityFlags }
       );
       if (normalized?.analyses?.[0]) {
-        normalized = {
-          ...normalized,
-          analyses: [
-            {
-              ...normalized.analyses[0],
-              provenance: attachAggregateParseTokenCounts({
-                ...(normalized.analyses[0].provenance || {}),
-                modelRoute: 'local'
-              })
-            }
-          ]
-        };
+        normalized = mapBundleAnalyses(normalized, (analysis) => ({
+          ...analysis,
+          provenance: attachAggregateParseTokenCounts({
+            ...(analysis.provenance || {}),
+            modelRoute: 'local'
+          })
+        }));
       }
 
       return {
@@ -549,7 +535,7 @@ export const createParseRoutes = ({
     );
     const routeTemperature = resolveRouteTemperature(normalizedModelRoute);
     const routeMaxOutputTokens = resolveRouteMaxOutputTokens(normalizedModelRoute, sentence);
-    const selectedModel = PRO_MODEL;
+    const selectedModel = GEMINI_MODEL;
     const requestStartedAt = Date.now();
     const reasoningEffort = normalizeProviderReasoningEffort(normalizedModelRoute, options.reasoningEffort);
 
@@ -597,9 +583,9 @@ export const createParseRoutes = ({
           ? parseModelJsonDetailed(generationMeta.rawText)
           : { payload: parseModelJson(generationMeta.rawText), integrityFlags: [] };
         payload = parsedPayload.payload;
-          payloadIntegrityFlags = Array.isArray(parsedPayload.integrityFlags)
-            ? parsedPayload.integrityFlags
-            : [];
+        payloadIntegrityFlags = Array.isArray(parsedPayload.integrityFlags)
+          ? parsedPayload.integrityFlags
+          : [];
       } catch (error) {
         if (error instanceof ParseApiError && error.code === 'BAD_MODEL_RESPONSE') {
           const transcribed = await attemptPayloadTranscriber({
@@ -614,19 +600,18 @@ export const createParseRoutes = ({
             existingIntegrityFlags: []
           });
           if (transcribed?.normalized?.analyses?.[0]) {
-            let recovered = {
-              ...transcribed.normalized,
-              analyses: [
+            const recovered = mapBundleAnalyses(
+              transcribed.normalized,
+              (analysis) =>
                 attachPayloadTranscriberProvenance(
                   attachPrimaryParseProvenance(
-                    transcribed.normalized.analyses[0],
+                    analysis,
                     generationMeta,
                     primaryDebugPayloadPath ? { primaryDebugPayloadPath } : {}
                   ),
                   transcribed.transcriberMeta
                 )
-              ]
-            };
+            );
             return {
               ...recovered,
               requestedModelRoute: normalizedModelRoute,
@@ -671,16 +656,15 @@ export const createParseRoutes = ({
           { payloadIntegrityFlags }
         );
         if (normalized?.analyses?.[0]) {
-          normalized = {
-            ...normalized,
-            analyses: [
+          normalized = mapBundleAnalyses(
+            normalized,
+            (analysis) =>
               attachPrimaryParseProvenance(
-                normalized.analyses[0],
+                analysis,
                 generationMeta,
                 primaryDebugPayloadPath ? { primaryDebugPayloadPath } : {}
               )
-            ]
-          };
+          );
         }
       } catch (error) {
         if (error instanceof ParseApiError && error.code === 'BAD_MODEL_RESPONSE') {
@@ -696,46 +680,45 @@ export const createParseRoutes = ({
             existingIntegrityFlags: payloadIntegrityFlags
           });
           if (transcribed?.normalized?.analyses?.[0]) {
-            normalized = {
-              ...transcribed.normalized,
-              analyses: [
+            normalized = mapBundleAnalyses(
+              transcribed.normalized,
+              (analysis) =>
                 attachPayloadTranscriberProvenance(
                   attachPrimaryParseProvenance(
-                    transcribed.normalized.analyses[0],
+                    analysis,
                     generationMeta,
                     primaryDebugPayloadPath ? { primaryDebugPayloadPath } : {}
                   ),
                   transcribed.transcriberMeta
-                )
-              ]
-            };
+              )
+            );
           } else {
-          const debugPayloadPath = writeDebugModelPayload({
-            stage: 'normalization',
-            model: selectedModel,
-            sentence,
-            rawText: generationMeta.rawText
-          });
-          let payloadPreview = '<unserializable>';
-          try {
-            payloadPreview = JSON.stringify(payload).slice(0, 320);
-          } catch {
-            // keep fallback preview
-          }
-          throw new ParseApiError(
-            error.code,
-            error.message,
-            422,
-            {
+            const debugPayloadPath = writeDebugModelPayload({
               stage: 'normalization',
               model: selectedModel,
-              finishReason: generationMeta.finishReason || null,
-              textLength: generationMeta.textLength,
-              preview: generationMeta.preview || '',
-              payloadPreview,
-              debugPayloadPath
+              sentence,
+              rawText: generationMeta.rawText
+            });
+            let payloadPreview = '<unserializable>';
+            try {
+              payloadPreview = JSON.stringify(payload).slice(0, 320);
+            } catch {
+              // keep fallback preview
             }
-          );
+            throw new ParseApiError(
+              error.code,
+              error.message,
+              422,
+              {
+                stage: 'normalization',
+                model: selectedModel,
+                finishReason: generationMeta.finishReason || null,
+                textLength: generationMeta.textLength,
+                preview: generationMeta.preview || '',
+                payloadPreview,
+                debugPayloadPath
+              }
+            );
           }
         }
         if (!(error instanceof ParseApiError && error.code === 'BAD_MODEL_RESPONSE' && normalized?.analyses?.[0])) {
@@ -861,16 +844,15 @@ export const createParseRoutes = ({
           { payloadIntegrityFlags }
         );
         if (normalized?.analyses?.[0]) {
-          normalized = {
-            ...normalized,
-            analyses: [
-            attachPrimaryParseProvenance(
-              normalized.analyses[0],
-              generationMeta,
-              primaryDebugPayloadPath ? { primaryDebugPayloadPath } : {}
-            )
-          ]
-        };
+          normalized = mapBundleAnalyses(
+            normalized,
+            (analysis) =>
+              attachPrimaryParseProvenance(
+                analysis,
+                generationMeta,
+                primaryDebugPayloadPath ? { primaryDebugPayloadPath } : {}
+              )
+          );
         }
       } catch (error) {
         const debugPayloadPath = writeDebugModelPayload({

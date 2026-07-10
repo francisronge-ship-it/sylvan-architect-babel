@@ -33,14 +33,12 @@ dist-ssr
 .artifacts/quarantine/legacy-harnesses/*
 !.artifacts/quarantine/legacy-harnesses/README.md
 !.artifacts/api_consistency_multilang.cjs
-!.artifacts/audit_random30_dual.cjs
 !.artifacts/capture_flavor_mixed10.cjs
 !.artifacts/direct_consistency_gauntlet.cjs
 !.artifacts/direct_consistency_world_sweep.cjs
-!.artifacts/gauntlet100_dual.cjs
 !.artifacts/live_consistency_gauntlet.cjs
 !.artifacts/novel_gauntlet_20.cjs
-!.artifacts/pro_novel5_sweep.cjs
+!.artifacts/gemini_novel5_sweep.cjs
 !.artifacts/random20_dual_showcase.cjs
 test-results/
 skills/

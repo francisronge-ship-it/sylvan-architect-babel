@@ -89,7 +89,7 @@ What matters:
 
 Design implication:
 
-- Babel should not build visual relations as a special-case "movementEvents" successor.
+- Babel should not reduce visual relations to a special-case movement-only channel.
 - Babel should build a relation overlay engine.
 - Relations need independent geometry, styling, labels, hover states, and click behavior.
 
@@ -755,7 +755,7 @@ Build the visual-relations layer in this order:
 2. Anchor resolver
    - resolve from current authored stage `workspaceForest` first
    - support node anchors, domain anchors, hidden anchors, and surface-token anchors
-   - never let old `movementEvents` override model-authored anchors
+   - never let compiler-invented movement records override model-authored anchors
 
 3. Relation inspector
    - make every relation inspectable before adding many visual styles

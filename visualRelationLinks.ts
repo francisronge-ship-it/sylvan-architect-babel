@@ -1,15 +1,4 @@
-export type VisualRelationRenderFamily =
-  | 'trajectory'
-  | 'identity'
-  | 'dependency'
-  | 'feature'
-  | 'domain'
-  | 'silence'
-  | 'sharing'
-  | 'morphology'
-  | 'linearization'
-  | 'scope'
-  | 'unknown';
+export type VisualRelationRenderFamily = string & {};
 
 export type VisualRelationTrajectoryKind = 'head' | 'phrasal';
 
@@ -34,15 +23,4 @@ export interface ResolvedVisualRelation {
   movedSurface?: string;
   chainId?: string;
   note?: string;
-
-  /**
-   * Compatibility aliases for the current arrow renderer.
-   * New visual-relation code should prefer relationIndex/sourceNodeId/
-   * targetNodeId/witnessNodeId/renderFamily/trajectoryKind.
-   */
-  relationIndex?: string;
-  sourceNodeId?: string;
-  targetNodeId?: string;
-  witnessNodeId?: string;
-  trajectoryKind?: VisualRelationTrajectoryKind;
 }

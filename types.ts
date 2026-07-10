@@ -16,94 +16,25 @@ export interface SyntaxNode {
 
 export type OpenOntologyLabel = string & {};
 
-export type KnownDerivationOperation =
-  | 'LexicalSelect'
-  | 'ExternalMerge'
-  | 'InternalMerge'
-  | 'HeadMove'
-  | 'A-Move'
-  | 'AbarMove'
-  | 'Project'
-  | 'Label'
-  | 'Move'
-  | 'Agree'
-  | 'SpellOutDomain'
-  | 'SpellOut'
-  | 'Other';
+export type DerivationOperation = OpenOntologyLabel;
 
-export type DerivationOperation = KnownDerivationOperation | OpenOntologyLabel;
-
-export interface ReplayLedgerBlock {
+export interface ReplayDetailBlock {
   title: string;
   lines: string[];
-}
-
-export interface FeatureCheckEvent {
-  feature: string;
-  value?: string;
-  status?: 'checked' | 'valued' | 'licensed' | 'deleted' | 'failed' | 'other';
-  probeNodeId?: string;
-  goalNodeId?: string;
-  probeLabel?: string;
-  goalLabel?: string;
-  note?: string;
-}
-
-export interface DerivationFrameAnchor {
-  role?: string;
-  nodeId?: string;
-  lineageId?: string;
-  value?: string;
-  text?: string;
-  [key: string]: unknown;
-}
-
-export interface DerivationFrameChange {
-  statement?: string;
-  anchors?: DerivationFrameAnchor[];
-  continuityIds?: string[];
-  details?: Record<string, unknown>;
-  [key: string]: unknown;
-}
-
-export interface DerivationFrameAfterState {
-  workspaceForest?: SyntaxNode[];
 }
 
 export interface DerivationStep {
   stepId?: string;
   operation: DerivationOperation;
-  microOperations?: DerivationOperation[];
-  affectedNodeIds?: string[];
-  trigger?: string;
   chainId?: string;
-  spelloutDomain?: string;
-  preFeatures?: string[];
-  postFeatures?: string[];
-  thetaRole?: string;
-  introducerHead?: string;
-  phase?: string;
-  labelDecision?: string;
-  linearizationEffect?: string;
-  morphologyEffect?: string;
   targetLabel?: string;
   targetNodeId?: string;
   sourceNodeIds?: string[];
   sourceLabels?: string[];
   recipe?: string;
-  workspaceBefore?: string[];
   workspaceAfter?: string[];
   spelloutOrder?: string[];
-  featureChecking?: FeatureCheckEvent[];
-  ledgerBlocks?: ReplayLedgerBlock[];
-  note?: string;
-}
-
-export interface DerivationFrame {
-  frameId?: string;
-  stepId?: string;
-  after: DerivationFrameAfterState;
-  change: DerivationFrameChange;
+  detailBlocks?: ReplayDetailBlock[];
   note?: string;
 }
 
@@ -148,23 +79,12 @@ export interface ResolvedVisualRelationRecord {
   evidence?: string;
 }
 
-export interface DerivationChain {
-  chainId: string;
-  type?: OpenOntologyLabel;
-  family?: 'A' | 'A-bar' | 'head' | 'other';
-  copies?: string[];
-  pronouncedCopy?: string;
-  silentCopies?: string[];
-  features?: string[];
-  note?: string;
-}
-
 export interface Provenance {
   modelRoute?: 'gemini' | 'gpt' | 'claude' | 'local';
   framework?: 'xbar' | 'minimalism';
   language?: string;
   timestamp?: string;
-  treeSource?: 'derivationStages' | 'committedTree';
+  treeSource?: 'derivationStages';
   promptVersion?: string;
   parserVersion?: string;
   uiVersion?: string;
@@ -174,7 +94,6 @@ export interface Provenance {
   payloadTranscriberPromptTokenCount?: number;
   payloadTranscriberOutputTokenCount?: number;
   payloadTranscriberTotalTokenCount?: number;
-  payloadTranscriberThoughtsTokenCount?: number;
   hasDerivationStages?: boolean;
   hasResolvedVisualRelations?: boolean;
   parsePromptTokenCount?: number;
@@ -183,9 +102,6 @@ export interface Provenance {
   primaryPromptTokenCount?: number;
   primaryOutputTokenCount?: number;
   primaryTotalTokenCount?: number;
-  providerReasoningRaw?: string;
-  providerReasoningSummary?: string;
-  providerThoughtsTokenCount?: number;
 }
 
 export interface ParseResult {
@@ -194,7 +110,6 @@ export interface ParseResult {
   derivationStages?: DerivationStage[];
   resolvedVisualRelations?: ResolvedVisualRelationRecord[];
   derivationSteps?: DerivationStep[];
-  chains?: DerivationChain[];
   provenance?: Provenance;
 }
 

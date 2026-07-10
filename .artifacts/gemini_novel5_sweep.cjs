@@ -1,8 +1,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  collectMovementRelations,
+  collectResolvedVisualRelations,
+  collectStageRecords,
+  countUnresolvedAnchors
+} = require('./helpers/currentContract.cjs');
 
 const BASE_URL = process.env.BABEL_BASE_URL || 'http://127.0.0.1:5177';
-const OUT_DIR = path.resolve('.artifacts/pro-novel5-sweep');
+const OUT_DIR = path.resolve('.artifacts/gemini-novel5-sweep');
 
 const CASES = [
   { id: 'en_yesno', framework: 'xbar', language: 'English', phenomenon: 'yes-no-question', sentence: 'Did the captain repair the bridge?' },
@@ -14,7 +20,6 @@ const CASES = [
 
 const TRACE_RE = /^(?:t|trace|t\d+|trace\d+|(?:t|trace)(?:_[a-z0-9]+)+|[a-z]+_trace(?:_[a-z0-9]+)*|<[^>]+>|⟨[^⟩]+⟩|\(t\)|\{t\}|∅|Ø|ε|null|epsilon)$/i;
 const MOVEMENT_RE = /\b(move(?:ment|d|s|ing)?|internal\s*merge|head[\s-]*move(?:ment)?|raising|raised|trace|copy|a-?bar|a-?move|wh-?move|front(?:ing|ed)?|displac(?:e|ed|ement|ing)|spec(?:ifier)?[, ]*(?:cp|tp|inflp|ip)|epp)\b/i;
-const NO_MOVEMENT_RE = /\b(no movement is posited|no displacement operation is encoded)\b/i;
 
 const sanitizeText = (value) => String(value || '').replace(/\r/g, '').trim();
 const tokenize = (value) => sanitizeText(value).split(/\s+/).filter(Boolean);
@@ -60,15 +65,6 @@ function collectLeaves(node, out = []) {
   return out;
 }
 
-function collectNodeIds(node, out = new Set()) {
-  if (!node || typeof node !== 'object') return out;
-  const id = String(node.id || '').trim();
-  if (id) out.add(id);
-  const children = Array.isArray(node.children) ? node.children : [];
-  children.forEach((child) => collectNodeIds(child, out));
-  return out;
-}
-
 function countMoveSteps(steps) {
   const moveOps = new Set(['Move', 'InternalMerge', 'HeadMove', 'A-Move', 'AbarMove']);
   return (Array.isArray(steps) ? steps : []).filter((step) => moveOps.has(String(step?.operation || '').trim())).length;
@@ -79,37 +75,29 @@ function analyze(testCase, bundle) {
   const sentenceTokens = tokenize(testCase.sentence);
   const leaves = collectLeaves(analysis.tree);
   const surfaceOrder = Array.isArray(analysis.surfaceOrder) ? analysis.surfaceOrder : [];
-  const movementEvents = Array.isArray(analysis.movementEvents) ? analysis.movementEvents : [];
+  const visualRelations = collectResolvedVisualRelations(analysis);
+  const movementRelations = collectMovementRelations(analysis);
   const derivationSteps = Array.isArray(analysis.derivationSteps) ? analysis.derivationSteps : [];
-  const explanation = sanitizeText(analysis.explanation || '');
-  const nodeIds = collectNodeIds(analysis.tree);
+  const stageRecords = collectStageRecords(analysis);
+  const notesText = stageRecords.join('\n');
   const issues = [];
 
   if (!sameSeq(leaves, sentenceTokens)) issues.push('LEAVES_NE_SENTENCE');
   if (!sameSeq(surfaceOrder, sentenceTokens)) issues.push('SURFACE_NE_SENTENCE');
   if (!sameSeq(leaves, surfaceOrder)) issues.push('LEAVES_NE_SURFACE');
-  if (movementEvents.length > 0 && !MOVEMENT_RE.test(explanation)) issues.push('MOVEMENT_MISSING_FROM_NOTES');
-  if (movementEvents.length === 0 && MOVEMENT_RE.test(explanation) && !NO_MOVEMENT_RE.test(explanation)) issues.push('NOTES_MOVEMENT_WITHOUT_EVENTS');
-  if (countMoveSteps(derivationSteps) === 0 && movementEvents.length > 0) issues.push('MOVE_EVENTS_WITHOUT_MOVE_STEPS');
-
-  for (const event of movementEvents) {
-    const from = String(event?.fromNodeId || '').trim();
-    const to = String(event?.toNodeId || '').trim();
-    const trace = String(event?.traceNodeId || '').trim();
-    if (!from || !to || !nodeIds.has(from) || !nodeIds.has(to) || (trace && !nodeIds.has(trace))) {
-      issues.push('INVALID_MOVEMENT_NODE_REF');
-      break;
-    }
-  }
+  if (movementRelations.length > 0 && !MOVEMENT_RE.test(notesText)) issues.push('MOVEMENT_MISSING_FROM_STAGE_RECORDS');
+  if (countMoveSteps(derivationSteps) === 0 && movementRelations.length > 0) issues.push('MOVEMENT_RELATIONS_WITHOUT_MOVE_STEPS');
+  if (countUnresolvedAnchors(visualRelations) > 0) issues.push('UNRESOLVED_VISUAL_RELATION_ANCHOR');
 
   return {
     ok: issues.length === 0,
     issues,
     leaves,
     surfaceOrder,
-    movementEventsCount: movementEvents.length,
+    visualRelationsCount: visualRelations.length,
+    movementRelationsCount: movementRelations.length,
     moveDerivationStepsCount: countMoveSteps(derivationSteps),
-    explanation
+    stageRecords
   };
 }
 
@@ -124,7 +112,7 @@ async function parseCase(testCase) {
       body: JSON.stringify({
         sentence: testCase.sentence,
         framework: testCase.framework,
-        modelRoute: 'pro'
+        modelRoute: 'gemini'
       }),
       signal: controller.signal
     });

@@ -2,6 +2,10 @@ const fs = require('fs');
 const path = require('path');
 require('./helpers/loadLocalEnv.cjs')();
 const { parseSentenceWithGemini } = require('../server/geminiParser');
+const {
+  collectResolvedVisualRelations,
+  collectStageRecords
+} = require('./helpers/currentContract.cjs');
 
 const cases = [
   { framework: 'xbar', sentence: 'The student said that the lecture ended early.' },
@@ -43,20 +47,18 @@ async function runCase(testCase) {
   const attempts = [];
   for (let i = 0; i < 4; i += 1) {
     try {
-      const bundle = await parseSentenceWithGemini(testCase.sentence, testCase.framework, 'flash-lite');
+      const bundle = await parseSentenceWithGemini(testCase.sentence, testCase.framework, 'gemini');
       const analysis = bundle?.analyses?.[0];
       const result = {
         ok: true,
         sentence: testCase.sentence,
         framework: testCase.framework,
-        modelUsed: bundle?.metadata?.modelUsed || null,
+        modelUsed: bundle?.modelUsed || null,
         leaves: collectLeaves(analysis?.tree),
         surfaceOrder: analysis?.surfaceOrder || null,
-        movementEvents: Array.isArray(analysis?.movementEvents) ? analysis.movementEvents : [],
+        visualRelations: collectResolvedVisualRelations(analysis),
         derivationOps: Array.isArray(analysis?.derivationSteps) ? analysis.derivationSteps.map((s) => s.operation) : [],
-        explanation: analysis?.explanation || '',
-        interpretation: analysis?.interpretation || '',
-        bracketedNotation: analysis?.bracketedNotation || ''
+        stageRecords: collectStageRecords(analysis)
       };
       attempts.push({ attempt: i + 1, ok: true, result });
       return { final: result, attempts };

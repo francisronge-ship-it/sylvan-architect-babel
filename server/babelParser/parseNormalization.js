@@ -1,11 +1,7 @@
 export const createParseNormalizationHelpers = ({
   ParseApiError,
   normalizeKey,
-  normalizeOpenChainType,
-  normalizeChainType,
-  normalizeMovementOperation,
   normalizeOptionalStepText,
-  normalizeOptionalStringArray,
   tokenizeSentenceSurfaceOrder,
   normalizeDerivationStagesToDerivationFrames,
   normalizeDerivationFrames,
@@ -24,241 +20,7 @@ export const createParseNormalizationHelpers = ({
   collectOvertTerminalNodes,
   resolveNodeSurface,
   materializeCommittedTraceShells,
-  collectDerivationFrameNodeIds,
-  runSemanticValidation,
-  validatePronouncedCopiesAgainstCommittedTree,
-  deriveImplicitDerivationChainId,
-  deriveChainTypeFromOperation,
-  mergeChainTypes,
-  normalizeMovementStemFromId,
-  subtreeContainsNamedCovertCategoryLeaf
 }) => {
-  const deriveChainsFromCommittedAnalysis = (derivationSteps, visualRelationEvents, nodeIds) => {
-    if (!Array.isArray(visualRelationEvents) || visualRelationEvents.length === 0) return [];
-    const steps = Array.isArray(derivationSteps) ? derivationSteps : [];
-    const chainsById = new Map();
-
-    visualRelationEvents.forEach((event, eventIndex) => {
-      const stepIndex = Number.isInteger(event?.stepIndex) ? event.stepIndex : -1;
-      const step = stepIndex >= 0 && stepIndex < steps.length ? steps[stepIndex] : null;
-      const chainId = deriveImplicitDerivationChainId(step, event, eventIndex);
-      const pronouncedCopy = String(event?.toNodeId || '').trim();
-      const sourceCopy = String(event?.traceNodeId || event?.fromNodeId || '').trim();
-      if (!chainId || !pronouncedCopy || !nodeIds.has(pronouncedCopy)) return;
-
-      const existing = chainsById.get(chainId) || {
-        chainId,
-        type: normalizeMovementOperation(event?.operation) || normalizeOptionalStepText(event?.operation),
-        family: deriveChainTypeFromOperation(event?.operation),
-        copies: [],
-        pronouncedCopy,
-        silentCopies: [],
-        features: [],
-        note: normalizeOptionalStepText(event?.note) || normalizeOptionalStepText(step?.note)
-      };
-
-      existing.family = mergeChainTypes(existing.family, deriveChainTypeFromOperation(event?.operation));
-      if (!existing.type) {
-        existing.type = normalizeMovementOperation(event?.operation) || normalizeOptionalStepText(event?.operation);
-      }
-      existing.pronouncedCopy = pronouncedCopy;
-      if (nodeIds.has(pronouncedCopy)) existing.copies.push(pronouncedCopy);
-      if (sourceCopy && nodeIds.has(sourceCopy) && sourceCopy !== pronouncedCopy) {
-        existing.silentCopies.push(sourceCopy);
-      }
-      normalizeOptionalStringArray(step?.preFeatures)?.forEach((feature) => existing.features.push(feature));
-      normalizeOptionalStringArray(step?.postFeatures)?.forEach((feature) => existing.features.push(feature));
-      if (!existing.note) {
-        existing.note = normalizeOptionalStepText(event?.note) || normalizeOptionalStepText(step?.note);
-      }
-      chainsById.set(chainId, existing);
-    });
-
-    return Array.from(chainsById.values()).map((entry) => ({
-      chainId: entry.chainId,
-      type: entry.type,
-      family: entry.family,
-      copies: Array.from(new Set(entry.copies.filter(Boolean))),
-      pronouncedCopy: entry.pronouncedCopy,
-      silentCopies: Array.from(new Set(entry.silentCopies.filter(Boolean))),
-      features: entry.features.length > 0 ? Array.from(new Set(entry.features)) : undefined,
-      note: entry.note
-    }));
-  };
-
-  const dedupeChainNodeIds = (values, nodeIds) => Array.from(new Set(
-    (Array.isArray(values) ? values : [])
-      .map((value) => String(value || '').trim())
-      .filter((nodeId) => nodeId && (!nodeIds || nodeIds.has(nodeId)))
-  ));
-
-  const nodeHasCommittedOvertYield = (node) =>
-    Boolean(
-      node
-      && collectOvertTerminalNodes(node)
-        .map((terminal) => resolveNodeSurface(terminal))
-        .map((surface) => String(surface || '').trim())
-        .filter(Boolean)
-        .length > 0
-    );
-
-  const canonicalizeChainEntry = (entry, nodeIds, nodeById) => {
-    if (!entry || typeof entry !== 'object') return null;
-    const chainId = normalizeOptionalStepText(entry.chainId);
-    if (!chainId) return null;
-
-    const pronouncedCopy = (() => {
-      const candidate = String(entry.pronouncedCopy || '').trim();
-      if (!candidate || (nodeIds && !nodeIds.has(candidate))) return undefined;
-      if (nodeById && !nodeHasCommittedOvertYield(nodeById.get(candidate) || null)) return undefined;
-      return candidate;
-    })();
-
-    const explicitCopies = dedupeChainNodeIds(entry.copies, nodeIds);
-    const explicitSilentCopies = dedupeChainNodeIds(entry.silentCopies, nodeIds)
-      .filter((nodeId) => nodeId !== pronouncedCopy);
-    const explicitSilentSet = new Set(explicitSilentCopies);
-    const copies = dedupeChainNodeIds(
-      [
-        ...explicitCopies.filter((nodeId) => !explicitSilentSet.has(nodeId)),
-        pronouncedCopy
-      ],
-      nodeIds
-    );
-    const silentCopies = dedupeChainNodeIds(
-      explicitSilentCopies.length > 0
-        ? explicitSilentCopies
-        : copies.filter((nodeId) => nodeId !== pronouncedCopy),
-      nodeIds
-    ).filter((nodeId) => nodeId !== pronouncedCopy);
-    const features = Array.from(new Set(
-      (normalizeOptionalStringArray(entry.features) || []).filter(Boolean)
-    ));
-
-    return {
-      chainId,
-      type: normalizeOpenChainType(entry.type) || normalizeChainType(entry.type),
-      family: normalizeChainType(entry.family || entry.type),
-      copies,
-      pronouncedCopy,
-      silentCopies,
-      features: features.length > 0 ? features : undefined,
-      note: normalizeOptionalStepText(entry.note)
-    };
-  };
-
-  const buildCanonicalChains = ({ derivationSteps, visualRelationEvents, nodeIds, nodeById }) => (
-    deriveChainsFromCommittedAnalysis(derivationSteps, visualRelationEvents, nodeIds)
-      .map((entry) => canonicalizeChainEntry(entry, nodeIds, nodeById))
-      .filter(Boolean)
-  );
-
-  // Keep low-level visualRelationEvents aligned with the chain view compiled from stages.
-  const backfillVisualRelationEventChainIds = ({ visualRelationEvents, chains, derivationSteps }) => {
-    const events = Array.isArray(visualRelationEvents) ? visualRelationEvents : [];
-    const chainEntries = Array.isArray(chains) ? chains : [];
-    if (events.length === 0 || chainEntries.length === 0) return events;
-
-    const chainIdSet = new Set(
-      chainEntries
-        .map((entry) => normalizeOptionalStepText(entry?.chainId))
-        .filter(Boolean)
-    );
-    const steps = Array.isArray(derivationSteps) ? derivationSteps : [];
-    const preparedChains = chainEntries
-      .map((entry) => {
-        const chainId = normalizeOptionalStepText(entry?.chainId);
-        if (!chainId) return null;
-        const copySet = new Set(dedupeChainNodeIds(entry?.copies));
-        const silentCopySet = new Set(dedupeChainNodeIds(entry?.silentCopies));
-        const pronouncedCopy = normalizeOptionalStepText(entry?.pronouncedCopy);
-        if (pronouncedCopy) copySet.add(pronouncedCopy);
-        return {
-          chainId,
-          type: normalizeOpenChainType(entry?.type) || normalizeChainType(entry?.family || entry?.type),
-          family: normalizeChainType(entry?.family || entry?.type),
-          copySet,
-          silentCopySet,
-          pronouncedCopy
-        };
-      })
-      .filter(Boolean);
-
-    const scoreChainCandidate = (event, candidate, eventIndex) => {
-      const operationType = deriveChainTypeFromOperation(normalizeMovementOperation(event?.operation));
-      const targetNodeId = normalizeOptionalStepText(event?.toNodeId);
-      const traceNodeId = normalizeOptionalStepText(event?.traceNodeId);
-      const sourceNodeId = normalizeOptionalStepText(event?.fromNodeId);
-      const stepIndex = Number.isInteger(event?.stepIndex) ? event.stepIndex : -1;
-      const step = stepIndex >= 0 && stepIndex < steps.length ? steps[stepIndex] : null;
-      const implicitChainId = deriveImplicitDerivationChainId(step, event, eventIndex);
-
-      const targetIsPronounced = Boolean(targetNodeId && candidate.pronouncedCopy === targetNodeId);
-      const targetIsSilent = Boolean(targetNodeId && candidate.silentCopySet.has(targetNodeId));
-      const targetIsCopy = Boolean(targetNodeId && candidate.copySet.has(targetNodeId));
-      if (!targetIsPronounced && !targetIsSilent && !targetIsCopy) return Number.NEGATIVE_INFINITY;
-
-      const lowerMatchesSilent = Boolean(
-        (traceNodeId && candidate.silentCopySet.has(traceNodeId))
-        || (sourceNodeId && candidate.silentCopySet.has(sourceNodeId))
-      );
-      const lowerMatchesCopy = Boolean(
-        (traceNodeId && candidate.copySet.has(traceNodeId))
-        || (sourceNodeId && candidate.copySet.has(sourceNodeId))
-        || (traceNodeId && candidate.pronouncedCopy === traceNodeId)
-        || (sourceNodeId && candidate.pronouncedCopy === sourceNodeId)
-      );
-      if (!lowerMatchesSilent && !lowerMatchesCopy) return Number.NEGATIVE_INFINITY;
-
-      let score = 0;
-      if (targetIsPronounced) score += 10;
-      else if (targetIsCopy) score += 8;
-      else if (targetIsSilent) score += 6;
-
-      if (lowerMatchesSilent) score += 7;
-      else if (lowerMatchesCopy) score += 4;
-
-      if (operationType && candidate.type && operationType === candidate.type) score += 3;
-      if (implicitChainId && candidate.chainId === implicitChainId) score += 5;
-      return score;
-    };
-
-    return events.map((event, eventIndex) => {
-      const explicitChainId = normalizeOptionalStepText(event?.chainId);
-      if (explicitChainId) return event;
-
-      let bestCandidate = null;
-      let bestScore = Number.NEGATIVE_INFINITY;
-      let isTied = false;
-
-      preparedChains.forEach((candidate) => {
-        const score = scoreChainCandidate(event, candidate, eventIndex);
-        if (score > bestScore) {
-          bestScore = score;
-          bestCandidate = candidate;
-          isTied = false;
-          return;
-        }
-        if (score === bestScore && score > Number.NEGATIVE_INFINITY) {
-          isTied = true;
-        }
-      });
-
-      if (bestCandidate && !isTied) {
-        return { ...event, chainId: bestCandidate.chainId };
-      }
-
-      const stepIndex = Number.isInteger(event?.stepIndex) ? event.stepIndex : -1;
-      const step = stepIndex >= 0 && stepIndex < steps.length ? steps[stepIndex] : null;
-      const implicitChainId = deriveImplicitDerivationChainId(step, event, eventIndex);
-      if (implicitChainId && chainIdSet.has(implicitChainId)) {
-        return { ...event, chainId: implicitChainId };
-      }
-
-      return event;
-    });
-  };
-
   const buildFrameNodeById = (frame) => {
     const after = frame?.after && typeof frame.after === 'object' && !Array.isArray(frame.after)
       ? frame.after
@@ -392,7 +154,7 @@ export const createParseNormalizationHelpers = ({
 
       const frameNodeById = buildFrameNodeById(frame);
       const stageId = normalizeOptionalStepText(frame?.stepId || frame?.frameId) || `d${frameIndex + 1}`;
-      const evidence = normalizeOptionalStepText(details.stageRecord || details.note || frame?.note || change?.statement);
+      const evidence = normalizeOptionalStepText(details.stageRecord || change?.statement);
 
       visualRelations.forEach((visualRelation, relationIndex) => {
         if (!visualRelation || typeof visualRelation !== 'object') return;
@@ -534,28 +296,6 @@ export const createParseNormalizationHelpers = ({
       tokenizeSentenceSurfaceOrder(sentence),
       committedSurfaceOrder
     );
-    const committedNodeById = buildNodeIndexFromTree(committedTree);
-    const finalNodeIds = new Set(committedNodeById.keys());
-    const derivationNodeIds = collectDerivationFrameNodeIds(derivationFrames);
-    const chainNodeIds = new Set([...finalNodeIds, ...derivationNodeIds]);
-    const canonicalChainEntries = buildCanonicalChains({
-      derivationSteps: identifiedDerivationSteps,
-      visualRelationEvents: authoritativeVisualRelationEvents,
-      nodeIds: chainNodeIds,
-      nodeById: committedNodeById
-    });
-    const authoritativeVisualRelationEventsWithChainIds = backfillVisualRelationEventChainIds({
-      visualRelationEvents: authoritativeVisualRelationEvents,
-      chains: canonicalChainEntries,
-      derivationSteps: identifiedDerivationSteps
-    });
-    runSemanticValidation('chain-consistency', () => {
-      validatePronouncedCopiesAgainstCommittedTree({
-        chains: canonicalChainEntries,
-        tree: committedTree,
-        visualRelationEvents: authoritativeVisualRelationEventsWithChainIds
-      });
-    });
     const resolvedVisualRelations = buildResolvedVisualRelationsFromDerivationFrames(derivationFrames);
     const derivationStages = derivationFrames.map((frame, index) => {
       const details = frame?.change?.details && typeof frame.change.details === 'object' && !Array.isArray(frame.change.details)
@@ -594,12 +334,10 @@ export const createParseNormalizationHelpers = ({
 
     return {
       tree: committedTree,
-      rootLabel: normalizeOptionalStepText(committedTree?.label),
       surfaceOrder: committedSurfaceOrder,
       derivationStages,
       resolvedVisualRelations,
       derivationSteps: identifiedDerivationSteps,
-      chains: canonicalChainEntries,
       provenance
     };
   };
@@ -617,19 +355,36 @@ export const createParseNormalizationHelpers = ({
       const topLevelFields = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
         ? Object.keys(parsed)
         : [];
-      if (
+      const hasSingleAnalysisShape = (
         topLevelFields.length !== 1
-        || !Object.prototype.hasOwnProperty.call(parsed || {}, 'derivationStages')
-      ) {
+          ? false
+          : Object.prototype.hasOwnProperty.call(parsed || {}, 'derivationStages')
+      );
+      const hasAmbiguityShape = (
+        topLevelFields.length === 1
+        && Object.prototype.hasOwnProperty.call(parsed || {}, 'analyses')
+        && Array.isArray(parsed.analyses)
+        && parsed.analyses.length > 0
+        && parsed.analyses.every((analysis) => (
+          analysis
+          && typeof analysis === 'object'
+          && !Array.isArray(analysis)
+          && Object.keys(analysis).length === 1
+          && Object.prototype.hasOwnProperty.call(analysis, 'derivationStages')
+        ))
+      );
+      if (!hasSingleAnalysisShape && !hasAmbiguityShape) {
         throw new ParseApiError(
           'BAD_MODEL_RESPONSE',
-          'The authored payload must contain exactly one top-level field: derivationStages.',
+          'The authored payload must be either { derivationStages } or { analyses: [{ derivationStages }, ...] }, with no additional fields.',
           502
         );
       }
     }
+    // ParseBundle is an internal/product envelope. Each analysis inside it still
+    // has the same four-field authored derivation-stage contract.
     const analysesSource = Array.isArray(parsed?.analyses)
-      ? parsed.analyses.slice(0, 2)
+      ? parsed.analyses
       : parsed
         ? [parsed]
         : [];
@@ -642,8 +397,7 @@ export const createParseNormalizationHelpers = ({
         modelRoute,
         enforceDerivationRouteContract,
         options
-      ))
-      .slice(0, 2);
+      ));
 
     if (analyses.length === 0) {
       throw new ParseApiError('BAD_MODEL_RESPONSE', 'No valid analyses returned by model.', 502);
@@ -659,8 +413,6 @@ export const createParseNormalizationHelpers = ({
   };
 
   return {
-    deriveChainsFromCommittedAnalysis,
-    backfillVisualRelationEventChainIds,
     normalizeParseResult,
     normalizeParseBundle
   };

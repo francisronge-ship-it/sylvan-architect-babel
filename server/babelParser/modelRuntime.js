@@ -14,9 +14,7 @@ import {
   MODEL_TEMPERATURE,
   OPENAI_BACKGROUND_POLL_INTERVAL_MS,
   OPENAI_BACKGROUND_RESPONSES,
-  OPENAI_REASONING_EFFORT,
-  PRIMARY_MODEL,
-  PRO_MODEL
+  OPENAI_REASONING_EFFORT
 } from './routeConfig.js';
 
 export const getErrorMeta = (error) => {
@@ -243,96 +241,6 @@ export const isTruncatedGeneration = (generation) => {
   return finishReason.includes('MAX_TOKENS') || finishReason.includes('LENGTH');
 };
 
-const unwrapProviderReasoningTransportText = (value) => {
-  let text = String(value || '').trim();
-  if (!text) return '';
-  text = text.replace(/^```(?:json|text|markdown)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  if (
-    (text.startsWith('"') && text.endsWith('"')) ||
-    (text.startsWith("'") && text.endsWith("'"))
-  ) {
-    try {
-      const parsed = JSON.parse(text);
-      if (typeof parsed === 'string' && parsed.trim()) {
-        text = parsed.trim();
-      } else {
-        text = text.slice(1, -1).trim();
-      }
-    } catch {
-      text = text.slice(1, -1).trim();
-    }
-  }
-  return text.trim();
-};
-
-export const summarizeProviderReasoningForDisplay = (text, maxChars = 520) => {
-  const cleaned = unwrapProviderReasoningTransportText(text)
-    .replace(/\r/g, '')
-    .replace(/\*\*(.*?)\*\*/g, '$1')
-    .replace(/\bSHOW FULL RAW THINKING TRACE\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!cleaned) return '';
-  if (
-    /^[{\[]/.test(cleaned) &&
-    /"(?:analyses|analysis|derivationStages|stageRecord|workspaceForest|visualRelations|tree)"/.test(cleaned)
-  ) {
-    return '';
-  }
-
-  const metaIntroRe =
-    /^(?:analysis of[^:]*:\s*|deep dive into[^:]*:?|okay[, ]+|here(?:'|’)s how i(?:'|’)m thinking(?: about this sentence)?[, ]*|my immediate thought\??|first[, ]+|let(?:'|’)s\s+)/i;
-  const sentenceParts = cleaned
-    .split(/(?<=[.!?])\s+/)
-    .map((part) => part.trim().replace(/^\d+\.\s*/, '').replace(metaIntroRe, '').trim())
-    .filter(Boolean);
-
-  if (sentenceParts.length === 0) {
-    return cleaned.length <= maxChars ? cleaned : `${cleaned.slice(0, maxChars).trim()}...`;
-  }
-
-  const decisionCueRe =
-    /\b(?:because|since|therefore|thus|so|given|evidence|cue|signal|shows?|indicates?|suggests?|supports?|licenses?|forces?|requires?|must|challenge|favou?rs?|prefers?|chooses?|decides?|rather than|instead of|contrast|alternative|standard analysis|word order|agreement|morphology|movement|selection|locality|scope|case|theta|theta-role|raising|control|passive|unaccusative|v2|wh|inversion)\b/i;
-  const recapPenaltyRe =
-    /\b(?:the analysis projects|the clause architecture|the final tree|spellout yields|surface string|surface order|the sentence is|this is a)\b/i;
-  const metaPenaltyRe =
-    /\b(?:i immediately recognize|i see|i begin|i'm thinking|here's how i'm thinking|my immediate thought|let's|okay)\b/i;
-
-  const ranked = sentenceParts.map((part, index) => {
-    let score = 0;
-    if (decisionCueRe.test(part)) score += 4;
-    if (/\b(?:rather than|instead of|contrast|alternative)\b/i.test(part)) score += 2;
-    if (/\b(?:because|since|given|shows?|indicates?|suggests?)\b/i.test(part)) score += 2;
-    if (/\b(?:must|requires?|challenge|standard analysis)\b/i.test(part)) score += 2;
-    if (recapPenaltyRe.test(part)) score -= 3;
-    if (metaPenaltyRe.test(part)) score -= 4;
-    return { part, index, score };
-  });
-
-  const chosen = ranked
-    .slice()
-    .sort((a, b) => (b.score - a.score) || (a.index - b.index))
-    .filter((entry) => entry.score > 0)
-    .slice(0, 3)
-    .sort((a, b) => a.index - b.index)
-    .map((entry) => entry.part);
-
-  const preferredParts = chosen.length > 0 ? chosen : sentenceParts.slice(0, 2);
-  const selected = [];
-  let total = 0;
-  for (const part of preferredParts) {
-    const nextTotal = total + (selected.length > 0 ? 1 : 0) + part.length;
-    if (selected.length >= 3 || nextTotal > maxChars) break;
-    selected.push(part);
-    total = nextTotal;
-  }
-
-  if (selected.length > 0) {
-    return selected.join(' ').trim();
-  }
-  return cleaned.length <= maxChars ? cleaned : `${cleaned.slice(0, maxChars).trim()}...`;
-};
-
 export const summarizeGeneration = (generation) => {
   const contentParts = Array.isArray(generation?.candidates?.[0]?.content?.parts)
     ? generation.candidates[0].content.parts
@@ -361,13 +269,6 @@ export const summarizeGeneration = (generation) => {
     || generation?.usageMetadata?.totalTokens
     || 0
   ) || (promptTokenCount && outputTokenCount ? (promptTokenCount + outputTokenCount) : undefined);
-  const thoughtParts = contentParts.filter((part) => Boolean(part?.thought));
-  const providerReasoningRaw = thoughtParts
-    .map((part) => String(part?.text || '').replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
-    .join('\n\n')
-    .trim();
-  const providerReasoningSummary = summarizeProviderReasoningForDisplay(providerReasoningRaw);
   const preview = rawText
     .slice(0, 220)
     .replace(/\s+/g, ' ')
@@ -377,8 +278,6 @@ export const summarizeGeneration = (generation) => {
     finishReason,
     textLength: rawText.length,
     preview,
-    providerReasoningRaw: providerReasoningRaw || undefined,
-    providerReasoningSummary: providerReasoningSummary || undefined,
     promptTokenCount,
     outputTokenCount,
     totalTokenCount,
@@ -421,7 +320,6 @@ export const generateStructuredContent = async ({
   maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS,
   responseJsonSchema,
   abortSignal,
-  includeThoughts = false,
   thinkingConfig
 }) => {
   return ai.models.generateContent({
@@ -433,9 +331,7 @@ export const generateStructuredContent = async ({
       maxOutputTokens,
       temperature,
       ...(responseJsonSchema ? { responseJsonSchema } : {}),
-      ...(thinkingConfig
-        ? { thinkingConfig }
-        : (includeThoughts ? { thinkingConfig: { includeThoughts: true } } : {})),
+      ...(thinkingConfig ? { thinkingConfig } : {}),
       abortSignal
     }
   });
@@ -667,6 +563,3 @@ export const generateAnthropicStructuredContent = async ({
     }
   };
 };
-
-export const isPrimaryModel = (model) => model === PRIMARY_MODEL;
-export const isProModel = (model) => model === PRO_MODEL;

@@ -16,7 +16,7 @@ const readArg = (name, fallback = '') => {
 
 const renderDir = path.resolve(readArg('render-dir'));
 const outDir = path.resolve(readArg('out'));
-const browserPath = readArg('browser', 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe');
+const browserPath = readArg('browser', process.env.BABEL_CHROME_BIN || '');
 const cols = Math.max(1, Number(readArg('cols', '2')) || 2);
 const framesPerSheet = Math.max(1, Number(readArg('frames-per-sheet', '12')) || 12);
 const viewportWidth = Math.max(800, Number(readArg('width', '1800')) || 1800);
@@ -31,7 +31,7 @@ if (!outDir) {
   process.exit(1);
 }
 if (!browserPath || !fs.existsSync(browserPath)) {
-  console.error('Missing --browser executable.');
+  console.error('Missing browser executable. Pass --browser or set BABEL_CHROME_BIN.');
   process.exit(1);
 }
 
@@ -253,7 +253,7 @@ const captureSheet = async (htmlPath, pngPath) => {
     try {
       fs.rmSync(userDataDir, { recursive: true, force: true });
     } catch {
-      // Disposable browser profile cleanup can fail briefly on Windows.
+      // Disposable browser profile cleanup can briefly lag behind browser exit.
     }
   }
 };
