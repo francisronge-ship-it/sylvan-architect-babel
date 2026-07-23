@@ -93,6 +93,7 @@ test('generation records hash exact prompt material without embedding it', () =>
   assert.notEqual(first.promptContract.promptTemplateSha256, gpt.promptContract.promptTemplateSha256);
   assert.equal(first.timing.requestStartedAt, '2026-07-10T12:00:00.000Z');
   assert.equal(first.timing.durationMs, 321);
+  assert.equal(first.schemaVersion, 2);
   assert.equal(JSON.stringify(first).includes(SYSTEM_TEXT), false);
   assert.equal(JSON.stringify(first).includes('Analyze sentence one.'), false);
 });

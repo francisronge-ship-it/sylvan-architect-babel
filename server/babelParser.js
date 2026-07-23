@@ -1,6 +1,7 @@
 ﻿import { buildSystemInstruction } from './babelParser/systemInstruction.js';
 import { MOVEMENT_INDEX_SUBSCRIPT_MAP } from './babelParser/constants.js';
 import { ParseApiError } from './babelParser/error.js';
+import { withFailureDetails } from './babelParser/validationErrors.js';
 import {
   normalizeSurfaceToken,
   tokenizeSentenceSurfaceOrder
@@ -208,6 +209,7 @@ const {
   validateAndCommitSurfaceOrder,
   validateSpelloutConsistency,
   buildCanonicalVisualRelationEvents,
+  sameTokenSequence,
   stripMovementIndicesFromTree,
   collectOvertTerminalNodes,
   resolveNodeSurface,
@@ -216,12 +218,32 @@ const {
 
 const parseModelJson = (rawText) => parseStrictModelJson(
   rawText,
-  (code, message, status) => new ParseApiError(code, message, status)
+  (code, message, status, offendingRawText) => new ParseApiError(
+    code,
+    message,
+    status,
+    withFailureDetails({}, {
+      failureClass: 'transport_serialization',
+      ruleId: 'TRANSPORT_JSON_OBJECT',
+      fieldPath: '$',
+      offendingValue: offendingRawText
+    }, offendingRawText)
+  )
 );
 
 const parseModelJsonDetailed = (rawText) => parseStrictModelJsonDetailed(
   rawText,
-  (code, message, status) => new ParseApiError(code, message, status)
+  (code, message, status, offendingRawText) => new ParseApiError(
+    code,
+    message,
+    status,
+    withFailureDetails({}, {
+      failureClass: 'transport_serialization',
+      ruleId: 'TRANSPORT_JSON_OBJECT',
+      fieldPath: '$',
+      offendingValue: offendingRawText
+    }, offendingRawText)
+  )
 );
 
 export const {

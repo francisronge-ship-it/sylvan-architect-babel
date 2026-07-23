@@ -41,6 +41,10 @@ export const createDerivationCompilerHelpers = ({
   collapseOvertHeadLandingChains,
   addNodeAliasIds
 }) => {
+  const recordValidationIssue = (validationIssues, issue) => {
+    if (Array.isArray(validationIssues)) validationIssues.push(issue);
+  };
+
   const parseTransportJsonValue = (value) => {
     if (typeof value !== 'string') return value;
     const trimmed = value.trim();
@@ -184,10 +188,23 @@ export const createDerivationCompilerHelpers = ({
     return entries.length > 0 ? Object.fromEntries(entries) : undefined;
   };
 
-  const normalizeDerivationStageVisualRelations = (value, stageId, frameIndex, integrityFlags) => {
+  const normalizeDerivationStageVisualRelations = (
+    value,
+    stageId,
+    frameIndex,
+    integrityFlags,
+    validationIssues
+  ) => {
     const parsedValue = parseTransportJsonValue(value);
     if (!Array.isArray(parsedValue)) {
       integrityFlags.push(`visual_relations_missing_on_derivation_stage:${stageId}`);
+      recordValidationIssue(validationIssues, {
+        failureClass: 'contract_misunderstanding',
+        ruleId: 'DERIVATION_STAGE_VISUAL_RELATIONS_ARRAY',
+        stageIndex: frameIndex,
+        fieldPath: `$.derivationStages[${frameIndex}].visualRelations`,
+        offendingValue: parsedValue
+      });
       return [];
     }
     const records = parsedValue
@@ -195,6 +212,13 @@ export const createDerivationCompilerHelpers = ({
         const item = parseTransportJsonValue(rawRelation);
         if (!item || typeof item !== 'object' || Array.isArray(item)) {
           integrityFlags.push(`visual_relation_item_invalid:${stageId}:${relationIndex + 1}`);
+          recordValidationIssue(validationIssues, {
+            failureClass: 'contract_misunderstanding',
+            ruleId: 'VISUAL_RELATION_OBJECT',
+            stageIndex: frameIndex,
+            fieldPath: `$.derivationStages[${frameIndex}].visualRelations[${relationIndex}]`,
+            offendingValue: item
+          });
           return null;
         }
         const authoredFields = Object.keys(item);
@@ -204,15 +228,36 @@ export const createDerivationCompilerHelpers = ({
           || !Object.prototype.hasOwnProperty.call(item, 'anchors')
         ) {
           integrityFlags.push(`visual_relation_contract_fields_invalid:${stageId}:${relationIndex + 1}`);
+          recordValidationIssue(validationIssues, {
+            failureClass: 'contract_misunderstanding',
+            ruleId: 'VISUAL_RELATION_FIELDS_EXACT',
+            stageIndex: frameIndex,
+            fieldPath: `$.derivationStages[${frameIndex}].visualRelations[${relationIndex}]`,
+            offendingValue: item
+          });
           return null;
         }
         const relation = normalizeOptionalStepText(item.relation);
         if (!relation) {
           integrityFlags.push(`visual_relation_missing_relation:${stageId}:${relationIndex + 1}`);
+          recordValidationIssue(validationIssues, {
+            failureClass: 'contract_misunderstanding',
+            ruleId: 'VISUAL_RELATION_NAME_NONEMPTY',
+            stageIndex: frameIndex,
+            fieldPath: `$.derivationStages[${frameIndex}].visualRelations[${relationIndex}].relation`,
+            offendingValue: item.relation
+          });
         }
         const anchors = normalizeVisualRelationAnchors(item.anchors);
         if (!anchors) {
           integrityFlags.push(`visual_relation_anchors_missing:${stageId}:${relationIndex + 1}`);
+          recordValidationIssue(validationIssues, {
+            failureClass: 'contract_misunderstanding',
+            ruleId: 'VISUAL_RELATION_ANCHORS_OBJECT',
+            stageIndex: frameIndex,
+            fieldPath: `$.derivationStages[${frameIndex}].visualRelations[${relationIndex}].anchors`,
+            offendingValue: item.anchors
+          });
         }
         if (!relation || !anchors) return null;
         return {
@@ -388,14 +433,33 @@ export const createDerivationCompilerHelpers = ({
   );
 
   const normalizeDerivationStagesToDerivationFrames = (value, options = {}) => {
-    if (!Array.isArray(value)) return [];
+    const validationIssues = Array.isArray(options?.validationIssues) ? options.validationIssues : [];
+    if (!Array.isArray(value)) {
+      recordValidationIssue(validationIssues, {
+        failureClass: 'contract_misunderstanding',
+        ruleId: 'DERIVATION_STAGE_FIELDS_EXACT',
+        stageIndex: null,
+        fieldPath: '$.derivationStages',
+        offendingValue: value
+      });
+      return [];
+    }
     const integrityFlags = Array.isArray(options?.integrityFlags) ? options.integrityFlags : [];
     const requiredStageFields = ['statement', 'stageRecord', 'visualRelations', 'workspaceForest'];
 
     return value
       .map((rawItem, frameIndex) => {
         const item = parseTransportJsonValue(rawItem);
-        if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+          recordValidationIssue(validationIssues, {
+            failureClass: 'contract_misunderstanding',
+            ruleId: 'DERIVATION_STAGE_OBJECT',
+            stageIndex: frameIndex,
+            fieldPath: `$.derivationStages[${frameIndex}]`,
+            offendingValue: item
+          });
+          return null;
+        }
         const stageId = `d${frameIndex + 1}`;
         const authoredFields = Object.keys(item);
         if (
@@ -403,27 +467,56 @@ export const createDerivationCompilerHelpers = ({
           || requiredStageFields.some((field) => !Object.prototype.hasOwnProperty.call(item, field))
         ) {
           integrityFlags.push(`derivation_stage_contract_fields_invalid:${stageId}`);
+          recordValidationIssue(validationIssues, {
+            failureClass: 'contract_misunderstanding',
+            ruleId: 'DERIVATION_STAGE_FIELDS_EXACT',
+            stageIndex: frameIndex,
+            fieldPath: `$.derivationStages[${frameIndex}]`,
+            offendingValue: item
+          });
           return null;
         }
         const statement = normalizeOptionalStepText(item.statement);
         if (!statement) {
           integrityFlags.push(`statement_missing_on_derivation_stage:${stageId}`);
+          recordValidationIssue(validationIssues, {
+            failureClass: 'contract_misunderstanding',
+            ruleId: 'DERIVATION_STAGE_STATEMENT_NONEMPTY',
+            stageIndex: frameIndex,
+            fieldPath: `$.derivationStages[${frameIndex}].statement`,
+            offendingValue: item.statement
+          });
           return null;
         }
         const stageRecord = normalizeDerivationStageRecord(item.stageRecord);
         if (!stageRecord) {
           integrityFlags.push(`stage_record_missing_or_thin:${stageId}`);
+          recordValidationIssue(validationIssues, {
+            failureClass: 'contract_misunderstanding',
+            ruleId: 'DERIVATION_STAGE_RECORD_SUBSTANTIVE',
+            stageIndex: frameIndex,
+            fieldPath: `$.derivationStages[${frameIndex}].stageRecord`,
+            offendingValue: item.stageRecord
+          });
           return null;
         }
         const visualRelations = normalizeDerivationStageVisualRelations(
           item.visualRelations,
           stageId,
           frameIndex,
-          integrityFlags
+          integrityFlags,
+          validationIssues
         );
         const workspaceForest = item.workspaceForest;
         if (typeof workspaceForest === 'undefined') {
           integrityFlags.push(`workspace_forest_missing_on_derivation_stage:${stageId}`);
+          recordValidationIssue(validationIssues, {
+            failureClass: 'contract_misunderstanding',
+            ruleId: 'DERIVATION_STAGE_WORKSPACE_FOREST_PRESENT',
+            stageIndex: frameIndex,
+            fieldPath: `$.derivationStages[${frameIndex}].workspaceForest`,
+            offendingValue: workspaceForest
+          });
           return null;
         }
 

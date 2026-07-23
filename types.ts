@@ -92,7 +92,7 @@ export interface SentGenerationConfig {
 }
 
 export interface GenerationRecord {
-  schemaVersion: 1;
+  schemaVersion: 2;
   provider: 'gemini' | 'gpt' | 'claude' | 'local';
   promptContract: GenerationPromptContract;
   sentGenerationConfig: SentGenerationConfig;
@@ -100,6 +100,52 @@ export interface GenerationRecord {
     requestStartedAt: string;
     durationMs: number;
   };
+  outcome?: {
+    sentMaxOutputTokens: number;
+    finishReason: string;
+    finishStatus: string;
+    reasoningTokenCount?: number;
+    promptTokenCount?: number;
+    outputTokenCount?: number;
+    totalTokenCount?: number;
+    runId: string;
+    attempts: Array<{
+      attemptNumber: number;
+      startedAt: string;
+      completedAt: string;
+      outcome: string;
+      finishReason?: string;
+      finishStatus?: string;
+      statusCode?: number;
+      message?: string;
+    }>;
+  };
+}
+
+export type ParseFailureClass =
+  | 'transport_serialization'
+  | 'incomplete_generation'
+  | 'contract_misunderstanding'
+  | 'linguistic_failure'
+  | 'deterministic_engine_failure'
+  | 'valid_but_unexpected';
+
+export interface ParseFailure {
+  class: ParseFailureClass;
+  ruleId: string;
+  stageIndex: number | null;
+  fieldPath: string;
+  offendingValue: unknown;
+}
+
+export interface RawOutputArtifact {
+  mediaType: string;
+  encoding: 'base64';
+  byteLength: number;
+  retainedByteLength: number;
+  truncated: boolean;
+  sha256: string;
+  data: string;
 }
 
 export interface Provenance {

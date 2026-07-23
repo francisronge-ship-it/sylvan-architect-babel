@@ -117,7 +117,7 @@ export const buildGenerationRecord = ({
 }) => {
   const promptMaterial = extractPromptMaterial(provider, sentRequest);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     provider,
     promptContract: buildPromptContract({
       framework,

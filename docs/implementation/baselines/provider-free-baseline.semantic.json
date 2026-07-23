@@ -41,24 +41,77 @@
       "malformedPayloads": {
         "invalidJson": {
           "code": "BAD_MODEL_RESPONSE",
-          "details": null,
-          "message": "Model returned malformed JSON.",
+          "details": {
+            "failure": {
+              "class": "transport_serialization",
+              "fieldPath": "$",
+              "offendingValue": "{\"derivationStages\":",
+              "ruleId": "TRANSPORT_JSON_OBJECT",
+              "stageIndex": null
+            },
+            "rawOutputArtifact": {
+              "byteLength": 20,
+              "data": "eyJkZXJpdmF0aW9uU3RhZ2VzIjo=",
+              "encoding": "base64",
+              "mediaType": "text/plain",
+              "retainedByteLength": 20,
+              "sha256": "f9e80498aa02c8eba6755a502db0e176dcb7572fc67cac812cb0928b7477fc34",
+              "truncated": false
+            }
+          },
+          "message": "Model response was not a valid JSON object.",
           "name": "ParseApiError",
           "outcome": "rejected",
           "status": 502
         },
         "tokenMismatch": {
           "code": "BAD_MODEL_RESPONSE",
-          "details": null,
-          "message": "Derivation frames never produced a committed final structure whose overt terminals match the input sentence.",
+          "details": {
+            "failure": {
+              "class": "contract_misunderstanding",
+              "fieldPath": "$.derivationStages[3].workspaceForest",
+              "offendingValue": {
+                "expectedSurfaceOrder": [
+                  "Different",
+                  "input"
+                ],
+                "observedRootSurfaceOrders": [
+                  [
+                    "Mia",
+                    "laughed"
+                  ]
+                ]
+              },
+              "ruleId": "SURFACE_ORDER_EXACT",
+              "stageIndex": 3
+            }
+          },
+          "message": "No authored tree overt terminals match the input sentence order.",
           "name": "ParseApiError",
           "outcome": "rejected",
           "status": 502
         },
         "topLevelArray": {
           "code": "BAD_MODEL_RESPONSE",
-          "details": null,
-          "message": "Model returned malformed JSON.",
+          "details": {
+            "failure": {
+              "class": "transport_serialization",
+              "fieldPath": "$",
+              "offendingValue": "[{\"derivationStages\":[{\"statement\":\"The noun Mia enters the derivation.\",\"stageRecord\":\"Lexical selection introduces the proper noun Mia, which projects a noun phrase that will serve as the external argument of the predicate.\",\"visualRelations\":[],\"workspaceForest\":[{\"id\":\"np_mia\",\"label\":\"NP\",\"children\":[{\"id\":\"n_mia\",\"label\":\"N\",\"children\":[{\"id\":\"leaf_mia\",\"label\":\"Mia\",\"word\":\"Mia\",\"tokenIndex\":0,\"children\":[]}]}]}]},{\"statement\":\"The intransitive verb laughed projects a verb phrase.\",\"stageRecord\":\"The unergative verb laughed is selected and projects a verb phrase; its single theta role is assigned to the external argument position, which the noun phrase Mia will occupy.\",\"visualRelations\":[],\"workspaceForest\":[{\"refId\":\"np_mia\"},{\"id\":\"vp_laughed\",\"label\":\"VP\",\"children\":[{\"id\":\"vbar_laughed\",\"label\":\"V'\",\"children\":[{\"id\":\"v_laughed\",\"label\":\"V\",\"children\":[{\"id\":\"leaf_laughed\",\"label\":\"laughed\",\"word\":\"laughed\",\"tokenIndex\":1,\"children\":[]}]}]}]}]},{\"statement\":\"Tense combines with the verb phrase.\",\"stageRecord\":\"A finite past tense head selects the verb phrase as its complement, projecting the inflectional layer that licenses the subject position of the clause.\",\"visualRelations\":[],\"workspaceForest\":[{\"refId\":\"np_mia\"},{\"id\":\"tbar_1\",\"label\":\"T'\",\"children\":[{\"id\":\"t_past\",\"label\":\"T\",\"children\":[{\"id\":\"leaf_t\",\"label\":\"∅\",\"children\":[]}]},{\"refId\":\"vp_laughed\"}]}]},{\"statement\":\"The subject occupies the specifier of TP and the clause converges.\",\"stageRecord\":\"The noun phrase Mia merges as the specifier of the tense projection, and the tense head bears an open agreement relation to that subject; the derivation converges with the surface order Mia laughed.\",\"visualRelations\":[{\"relation\":\"bespoke-open-agreement\",\"anchors\":{\"unbounded-probe-role\":\"t_past\",\"bespoke-goal-role\":\"np_mia\"}}],\"workspaceForest\":[{\"id\":\"tp_root\",\"label\":\"TP\",\"children\":[{\"refId\":\"np_mia\"},{\"refId\":\"tbar_1\"}]}]}]}]",
+              "ruleId": "TRANSPORT_JSON_OBJECT",
+              "stageIndex": null
+            },
+            "rawOutputArtifact": {
+              "byteLength": 1934,
+              "data": "W3siZGVyaXZhdGlvblN0YWdlcyI6W3sic3RhdGVtZW50IjoiVGhlIG5vdW4gTWlhIGVudGVycyB0aGUgZGVyaXZhdGlvbi4iLCJzdGFnZVJlY29yZCI6IkxleGljYWwgc2VsZWN0aW9uIGludHJvZHVjZXMgdGhlIHByb3BlciBub3VuIE1pYSwgd2hpY2ggcHJvamVjdHMgYSBub3VuIHBocmFzZSB0aGF0IHdpbGwgc2VydmUgYXMgdGhlIGV4dGVybmFsIGFyZ3VtZW50IG9mIHRoZSBwcmVkaWNhdGUuIiwidmlzdWFsUmVsYXRpb25zIjpbXSwid29ya3NwYWNlRm9yZXN0IjpbeyJpZCI6Im5wX21pYSIsImxhYmVsIjoiTlAiLCJjaGlsZHJlbiI6W3siaWQiOiJuX21pYSIsImxhYmVsIjoiTiIsImNoaWxkcmVuIjpbeyJpZCI6ImxlYWZfbWlhIiwibGFiZWwiOiJNaWEiLCJ3b3JkIjoiTWlhIiwidG9rZW5JbmRleCI6MCwiY2hpbGRyZW4iOltdfV19XX1dfSx7InN0YXRlbWVudCI6IlRoZSBpbnRyYW5zaXRpdmUgdmVyYiBsYXVnaGVkIHByb2plY3RzIGEgdmVyYiBwaHJhc2UuIiwic3RhZ2VSZWNvcmQiOiJUaGUgdW5lcmdhdGl2ZSB2ZXJiIGxhdWdoZWQgaXMgc2VsZWN0ZWQgYW5kIHByb2plY3RzIGEgdmVyYiBwaHJhc2U7IGl0cyBzaW5nbGUgdGhldGEgcm9sZSBpcyBhc3NpZ25lZCB0byB0aGUgZXh0ZXJuYWwgYXJndW1lbnQgcG9zaXRpb24sIHdoaWNoIHRoZSBub3VuIHBocmFzZSBNaWEgd2lsbCBvY2N1cHkuIiwidmlzdWFsUmVsYXRpb25zIjpbXSwid29ya3NwYWNlRm9yZXN0IjpbeyJyZWZJZCI6Im5wX21pYSJ9LHsiaWQiOiJ2cF9sYXVnaGVkIiwibGFiZWwiOiJWUCIsImNoaWxkcmVuIjpbeyJpZCI6InZiYXJfbGF1Z2hlZCIsImxhYmVsIjoiViciLCJjaGlsZHJlbiI6W3siaWQiOiJ2X2xhdWdoZWQiLCJsYWJlbCI6IlYiLCJjaGlsZHJlbiI6W3siaWQiOiJsZWFmX2xhdWdoZWQiLCJsYWJlbCI6ImxhdWdoZWQiLCJ3b3JkIjoibGF1Z2hlZCIsInRva2VuSW5kZXgiOjEsImNoaWxkcmVuIjpbXX1dfV19XX1dfSx7InN0YXRlbWVudCI6IlRlbnNlIGNvbWJpbmVzIHdpdGggdGhlIHZlcmIgcGhyYXNlLiIsInN0YWdlUmVjb3JkIjoiQSBmaW5pdGUgcGFzdCB0ZW5zZSBoZWFkIHNlbGVjdHMgdGhlIHZlcmIgcGhyYXNlIGFzIGl0cyBjb21wbGVtZW50LCBwcm9qZWN0aW5nIHRoZSBpbmZsZWN0aW9uYWwgbGF5ZXIgdGhhdCBsaWNlbnNlcyB0aGUgc3ViamVjdCBwb3NpdGlvbiBvZiB0aGUgY2xhdXNlLiIsInZpc3VhbFJlbGF0aW9ucyI6W10sIndvcmtzcGFjZUZvcmVzdCI6W3sicmVmSWQiOiJucF9taWEifSx7ImlkIjoidGJhcl8xIiwibGFiZWwiOiJUJyIsImNoaWxkcmVuIjpbeyJpZCI6InRfcGFzdCIsImxhYmVsIjoiVCIsImNoaWxkcmVuIjpbeyJpZCI6ImxlYWZfdCIsImxhYmVsIjoi4oiFIiwiY2hpbGRyZW4iOltdfV19LHsicmVmSWQiOiJ2cF9sYXVnaGVkIn1dfV19LHsic3RhdGVtZW50IjoiVGhlIHN1YmplY3Qgb2NjdXBpZXMgdGhlIHNwZWNpZmllciBvZiBUUCBhbmQgdGhlIGNsYXVzZSBjb252ZXJnZXMuIiwic3RhZ2VSZWNvcmQiOiJUaGUgbm91biBwaHJhc2UgTWlhIG1lcmdlcyBhcyB0aGUgc3BlY2lmaWVyIG9mIHRoZSB0ZW5zZSBwcm9qZWN0aW9uLCBhbmQgdGhlIHRlbnNlIGhlYWQgYmVhcnMgYW4gb3BlbiBhZ3JlZW1lbnQgcmVsYXRpb24gdG8gdGhhdCBzdWJqZWN0OyB0aGUgZGVyaXZhdGlvbiBjb252ZXJnZXMgd2l0aCB0aGUgc3VyZmFjZSBvcmRlciBNaWEgbGF1Z2hlZC4iLCJ2aXN1YWxSZWxhdGlvbnMiOlt7InJlbGF0aW9uIjoiYmVzcG9rZS1vcGVuLWFncmVlbWVudCIsImFuY2hvcnMiOnsidW5ib3VuZGVkLXByb2JlLXJvbGUiOiJ0X3Bhc3QiLCJiZXNwb2tlLWdvYWwtcm9sZSI6Im5wX21pYSJ9fV0sIndvcmtzcGFjZUZvcmVzdCI6W3siaWQiOiJ0cF9yb290IiwibGFiZWwiOiJUUCIsImNoaWxkcmVuIjpbeyJyZWZJZCI6Im5wX21pYSJ9LHsicmVmSWQiOiJ0YmFyXzEifV19XX1dfV0=",
+              "encoding": "base64",
+              "mediaType": "text/plain",
+              "retainedByteLength": 1934,
+              "sha256": "7b15bd08abe1e2d2e917f0999d5aaac3e1da7144c1200ba4ff2696ee029761a9",
+              "truncated": false
+            }
+          },
+          "message": "Model response was not a valid JSON object.",
           "name": "ParseApiError",
           "outcome": "rejected",
           "status": 502
@@ -195,21 +248,21 @@
     "sourceHashes": {
       "derivationReplayPlan.js": "f43053f32eaf60a7427a0cfe5c7c1a4c8e9e424ff353d9516368941d5cd93cdc",
       "docs/implementation/baselines/provider-free-baseline-spec.md": "c378fc5e982bf849d7497d2bd88957065b9453973d81248a17e37ed16b0fde6c",
-      "replay/replayCompiler.ts": "0b2c2ed22fa8c1817301f4bd649b55ec797e9481e9dab9e6adfda1c54c5bd9dd",
+      "replay/replayCompiler.ts": "738352352b45dcea5c405d53185857bd3bc91feb61d5664f0a622ec065c1a258",
       "replay/replaySnapshot.ts": "baf3a3a0a26d7e4f2b25ae87f7d2996dbc44d2cc6d369814fae6fe2172596a20",
       "scripts/captureProviderFreeBaseline.mjs": "40bc35af7fca98d8df08514743606f990ab0fa06466c9d4b9dd70d577e8e07a5",
       "scripts/providerFreeNetworkGuard.cjs": "bf06a80eb6128f20addcf0dd4165b299477c4e6bd527ee8459f0e1a96df12ca8",
-      "server/babelParser.js": "c3c0be4a859d4ffcfd785ac61846283d0c8eb00341c758bcd22f1c4a19f136da",
-      "server/babelParser/derivationCompiler.js": "a4dd2cdc9420bbbc7d1ecc0307919861a7176b4385c58ffe7f56dfb099e9b8a8",
-      "server/babelParser/modelRuntime.js": "2d3726fd1457e721a4a3b6eebd09d19389a43fecffb060243740275e75eee705",
-      "server/babelParser/parseNormalization.js": "a48b7cb39cdd8ff03faa6a67f779ab2f42d7c6553fd138def3d677b5389af1d6",
-      "server/babelParser/parseRoutes.js": "0220c4f569cb5fd0700e2c39fc106ee200f6e5040487545a7693320ad77d2df4",
+      "server/babelParser.js": "73eac0948cbd3b1dcb5070f1d0619be7616a49b7787041fe03bc0354d5258dc8",
+      "server/babelParser/derivationCompiler.js": "84bf936fc5f5bf5f73bfb28d03032cbb83fc17b409ba82ed948f1d4d9c8615c2",
+      "server/babelParser/modelRuntime.js": "cdf035425a5fd9123bf46c432be4560d19796e0d7aa29450bc5db2bc2a2897a3",
+      "server/babelParser/parseNormalization.js": "cfe543f9918ae034ec2437f44a049c064e7f99af9ee399994638c96923c8915d",
+      "server/babelParser/parseRoutes.js": "61ab9169a9e6c0e8bd3410bf7b575916d944fc9f0e3ae9d048436a308919481e",
       "server/babelParser/prompts.js": "c866617865f8a6a886dcb225821d4ab6c9bb88ae1851f4e2eb615648cb017fbe",
-      "server/babelParser/routeConfig.js": "c9f0c0c6b37422c99fad7872c260ff49855c96573982b2eeb5fa09862972eced",
-      "server/babelParser/surfaceTokens.js": "173f75eb2d261688663d2fd3b507a1e9c07fffa2339c150ac6bc0f75f510ef31",
+      "server/babelParser/routeConfig.js": "0a6ccb29a2853b738293eeb3a8b6681ee2b74cd978c1272fe209f350a2383c59",
+      "server/babelParser/surfaceTokens.js": "0d03fd13e22a3fc51e24373c91ec84fba114047824739e914d24f96e696df2a1",
       "server/babelParser/systemInstruction.js": "24843c855961b1f73ed72edd6054ce402cdede5c3f31fbf54c937a6af7977b18",
-      "types.ts": "46d81588df5f6c5cfefa1c165d3bcc232a96cfc9ab4c937030380026fcb0bdb0"
+      "types.ts": "c62dce99b95cf07a7417d79e2d7cc8a24ed36f67e04bd3ef357ec2bbacb8d174"
     }
   },
-  "semanticSha256": "d5a0a3452602dd4d3f0b2693c2b59b44f6a9f8052a59023b62d16a648209fb7e"
+  "semanticSha256": "f228833d7f52e2055bb1393e7dbbeb21a7bb0a6d6c1693ca3ddff78a3724d461"
 }

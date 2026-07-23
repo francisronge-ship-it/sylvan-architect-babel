@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { ParseApiError } from './error.js';
+import { withFailureDetails } from './validationErrors.js';
 import {
   ANTHROPIC_EFFORT,
   ANTHROPIC_THINKING_CONFIG,
@@ -19,7 +22,12 @@ import {
 
 export const getErrorMeta = (error) => {
   const msg = String(error?.message || '');
-  const details = JSON.stringify(error || {});
+  let details = '';
+  try {
+    details = JSON.stringify(error || {});
+  } catch {
+    details = '';
+  }
   const haystack = `${msg}\n${details}`.toLowerCase();
   const statusCode = Number(
     error?.status ??
@@ -273,7 +281,11 @@ export const generateStructuredLocalContent = async ({
 
 export const isTruncatedGeneration = (generation) => {
   const finishReason = String(generation?.candidates?.[0]?.finishReason || '').toUpperCase();
-  return finishReason.includes('MAX_TOKENS') || finishReason.includes('LENGTH');
+  return (
+    finishReason.includes('MAX_TOKENS')
+    || finishReason.includes('MAX_OUTPUT_TOKENS')
+    || finishReason.includes('LENGTH')
+  );
 };
 
 export const summarizeGeneration = (generation) => {
@@ -283,10 +295,10 @@ export const summarizeGeneration = (generation) => {
   const nonThoughtText = contentParts
     .filter((part) => !part?.thought && typeof part?.text === 'string')
     .map((part) => String(part.text || ''))
-    .join('')
-    .trim();
+    .join('');
   const rawText = String(nonThoughtText || generation?.text || '');
   const finishReason = String(generation?.candidates?.[0]?.finishReason || '').toUpperCase() || 'UNKNOWN';
+  const status = String(generation?.status || finishReason || 'UNKNOWN').toUpperCase();
   const promptTokenCount = Number(
     generation?.usageMetadata?.promptTokenCount
     || generation?.usageMetadata?.inputTokenCount
@@ -316,8 +328,144 @@ export const summarizeGeneration = (generation) => {
     promptTokenCount,
     outputTokenCount,
     totalTokenCount,
-    thoughtsTokenCount: Number(generation?.usageMetadata?.thoughtsTokenCount || generation?.usageMetadata?.totalThoughtTokens || 0) || undefined
+    reasoningTokenCount: Number(
+      generation?.usageMetadata?.reasoningTokenCount
+      || generation?.usageMetadata?.thoughtsTokenCount
+      || generation?.usageMetadata?.totalThoughtTokens
+      || 0
+    ) || undefined,
+    status
   };
+};
+
+export const assertGenerationComplete = ({
+  generation,
+  provider,
+  model,
+  sentMaxOutputTokens,
+  runId,
+  attempts = []
+}) => {
+  const generationMeta = summarizeGeneration(generation);
+  if (!isTruncatedGeneration(generation)) return generationMeta;
+
+  throw new ParseApiError(
+    'INCOMPLETE_GENERATION',
+    `The ${provider} generation stopped at its output limit before parsing.`,
+    422,
+    withFailureDetails({
+      provider,
+      model,
+      sentMaxOutputTokens,
+      finishReason: generationMeta.finishReason,
+      finishStatus: generationMeta.status,
+      reasoningTokenCount: generationMeta.reasoningTokenCount,
+      outputTokenCount: generationMeta.outputTokenCount,
+      runId,
+      attempts
+    }, {
+      failureClass: 'incomplete_generation',
+      ruleId: 'GENERATION_LENGTH_STOP',
+      stageIndex: null,
+      fieldPath: '$',
+      offendingValue: {
+        finishReason: generationMeta.finishReason,
+        finishStatus: generationMeta.status,
+        sentMaxOutputTokens
+      }
+    }, generationMeta.rawText)
+  );
+};
+
+export const buildGenerationOutcome = ({
+  generationMeta,
+  sentMaxOutputTokens,
+  runId,
+  attempts = []
+}) => ({
+  sentMaxOutputTokens,
+  finishReason: generationMeta.finishReason,
+  finishStatus: generationMeta.status,
+  ...(generationMeta.reasoningTokenCount
+    ? { reasoningTokenCount: generationMeta.reasoningTokenCount }
+    : {}),
+  ...(generationMeta.promptTokenCount
+    ? { promptTokenCount: generationMeta.promptTokenCount }
+    : {}),
+  ...(generationMeta.outputTokenCount
+    ? { outputTokenCount: generationMeta.outputTokenCount }
+    : {}),
+  ...(generationMeta.totalTokenCount
+    ? { totalTokenCount: generationMeta.totalTokenCount }
+    : {}),
+  runId,
+  attempts
+});
+
+const retryDelay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export const isRetryableProviderFailure = (error) => {
+  if (error?.completedStopState) return false;
+  const { statusCode } = getErrorMeta(error);
+  return (
+    isNetworkTransportError(error)
+    || statusCode === 429
+    || (Number.isFinite(statusCode) && statusCode >= 500 && statusCode <= 599)
+  );
+};
+
+export const runWithTransportRetries = async ({
+  run,
+  maxAttempts = 3,
+  backoffBaseMs = 250,
+  delay = retryDelay,
+  now = () => new Date(),
+  runId = randomUUID()
+}) => {
+  const boundedMaxAttempts = Math.max(1, Math.min(3, Number(maxAttempts) || 1));
+  const attempts = [];
+
+  for (let attemptNumber = 1; attemptNumber <= boundedMaxAttempts; attemptNumber += 1) {
+    const startedAt = now();
+    try {
+      const value = await run({ attemptNumber, runId });
+      const generationMeta = summarizeGeneration(value);
+      attempts.push({
+        attemptNumber,
+        startedAt: startedAt.toISOString(),
+        completedAt: now().toISOString(),
+        outcome: 'completed',
+        finishReason: generationMeta.finishReason,
+        finishStatus: generationMeta.status
+      });
+      return { value, runId, attempts };
+    } catch (error) {
+      const retryable = isRetryableProviderFailure(error);
+      attempts.push({
+        attemptNumber,
+        startedAt: startedAt.toISOString(),
+        completedAt: now().toISOString(),
+        outcome: retryable ? 'retryable_transport_failure' : 'terminal_failure',
+        ...summarizeErrorForLog(error)
+      });
+      if (!retryable || attemptNumber >= boundedMaxAttempts) {
+        const terminalError = error && typeof error === 'object'
+          ? error
+          : new Error(String(error || 'Provider request failed.'));
+        terminalError.providerRunId = runId;
+        terminalError.providerAttempts = attempts;
+        terminalError.details = {
+            ...(terminalError.details && typeof terminalError.details === 'object' ? terminalError.details : {}),
+            providerRunId: runId,
+            providerAttempts: attempts
+        };
+        throw terminalError;
+      }
+      await delay(backoffBaseMs * (2 ** (attemptNumber - 1)));
+    }
+  }
+
+  throw new Error('Provider retry loop exhausted unexpectedly.');
 };
 
 export const writeDebugModelPayload = ({ stage = 'unknown', model = 'unknown', sentence = '', rawText = '' }) => {
@@ -493,13 +641,12 @@ const waitForOpenAIResponseCompletion = async ({
   return payload;
 };
 
-const extractOpenAIOutputText = (payloadJson) => String(payloadJson?.output_text || '').trim()
+const extractOpenAIOutputText = (payloadJson) => String(payloadJson?.output_text || '')
   || (Array.isArray(payloadJson?.output)
     ? payloadJson.output
       .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
       .map((part) => String(part?.text || ''))
       .join('')
-      .trim()
     : '');
 
 export const buildOpenAIRequestBody = ({
@@ -575,31 +722,32 @@ export const generateOpenAIStructuredContent = async ({
     }
   }
 
-  if (payload.json?.status === 'incomplete') {
-    const reason = String(payload.json?.incomplete_details?.reason || 'unknown').trim();
-    const error = new Error(`OpenAI response incomplete: ${reason}`);
-    error.status = 422;
-    error.responseBody = payload.text;
-    throw error;
-  }
-
   if (payload.json?.status === 'failed' || payload.json?.status === 'cancelled') {
     const errorMessage = String(payload.json?.error?.message || `OpenAI response ${payload.json.status}.`);
     const error = new Error(errorMessage);
     error.status = 502;
     error.responseBody = payload.text;
+    error.completedStopState = true;
+    error.finishReason = String(payload.json.status).toUpperCase();
     throw error;
   }
 
   const outputText = extractOpenAIOutputText(payload.json);
+  const responseStatus = String(payload.json?.status || 'completed').toLowerCase();
+  const incompleteReason = String(payload.json?.incomplete_details?.reason || '').trim();
+  const finishReason = responseStatus === 'incomplete'
+    ? `INCOMPLETE_${incompleteReason || 'UNKNOWN'}`
+    : responseStatus;
 
   return {
     text: outputText,
-    candidates: [{ finishReason: String(payload.json?.status || 'STOP').toUpperCase() }],
+    status: responseStatus,
+    candidates: [{ finishReason: finishReason.toUpperCase() }],
     usageMetadata: {
       inputTokenCount: payload.json?.usage?.input_tokens,
       outputTokenCount: payload.json?.usage?.output_tokens,
-      totalTokenCount: payload.json?.usage?.total_tokens
+      totalTokenCount: payload.json?.usage?.total_tokens,
+      reasoningTokenCount: payload.json?.usage?.output_tokens_details?.reasoning_tokens
     }
   };
 };
@@ -661,15 +809,16 @@ export const generateAnthropicStructuredContent = async ({
     ? payload.json.content
       .map((part) => String(part?.text || ''))
       .join('')
-      .trim()
     : '';
 
   return {
     text: outputText,
+    status: String(payload.json?.stop_reason || 'STOP').toUpperCase(),
     candidates: [{ finishReason: String(payload.json?.stop_reason || 'STOP').toUpperCase() }],
     usageMetadata: {
       inputTokenCount: payload.json?.usage?.input_tokens,
       outputTokenCount: payload.json?.usage?.output_tokens,
+      reasoningTokenCount: payload.json?.usage?.output_tokens_details?.thinking_tokens,
       totalTokenCount: (
         Number(payload.json?.usage?.input_tokens || 0) +
         Number(payload.json?.usage?.output_tokens || 0)

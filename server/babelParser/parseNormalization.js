@@ -1,3 +1,5 @@
+import { withFailureDetails } from './validationErrors.js';
+
 export const createParseNormalizationHelpers = ({
   ParseApiError,
   normalizeKey,
@@ -16,6 +18,7 @@ export const createParseNormalizationHelpers = ({
   validateAndCommitSurfaceOrder,
   validateSpelloutConsistency,
   buildCanonicalVisualRelationEvents,
+  sameTokenSequence,
   stripMovementIndicesFromTree,
   collectOvertTerminalNodes,
   resolveNodeSurface,
@@ -225,16 +228,29 @@ export const createParseNormalizationHelpers = ({
   ) => {
     const parsed = value;
     if (!parsed || typeof parsed !== 'object') {
-      throw new ParseApiError('BAD_MODEL_RESPONSE', 'Malformed parse result from model.', 502);
+      throw new ParseApiError(
+        'BAD_MODEL_RESPONSE',
+        'The analysis must be a JSON object.',
+        502,
+        withFailureDetails({}, {
+          failureClass: 'contract_misunderstanding',
+          ruleId: 'ANALYSIS_OBJECT',
+          fieldPath: '$',
+          offendingValue: parsed
+        })
+      );
     }
     const payloadIntegrityFlags = Array.isArray(options?.payloadIntegrityFlags)
       ? options.payloadIntegrityFlags.slice()
       : [];
+    const validationIssues = [];
     const sentenceTokens = tokenizeSentenceSurfaceOrder(sentence);
-    const rawDerivationStages = Array.isArray(parsed.derivationStages) ? parsed.derivationStages : [];
-    const usesDerivationStages = rawDerivationStages.length > 0;
+    const rawDerivationStages = parsed.derivationStages;
+    const rawDerivationStageCount = Array.isArray(rawDerivationStages) ? rawDerivationStages.length : 0;
+    const usesDerivationStages = rawDerivationStageCount > 0;
     const rawDerivationFrames = normalizeDerivationStagesToDerivationFrames(rawDerivationStages, {
-      integrityFlags: payloadIntegrityFlags
+      integrityFlags: payloadIntegrityFlags,
+      validationIssues
     });
     if (usesDerivationStages) {
       payloadIntegrityFlags.push('derivation_stages_compiled_to_derivation_frames');
@@ -249,12 +265,69 @@ export const createParseNormalizationHelpers = ({
       ? buildCanonicalDerivationFromDerivationFrames(derivationFrames, sentenceTokens, framework)
       : null;
     if (!derivationPrimaryBundle?.tree) {
+      const validationIssue = validationIssues[0];
+      if (validationIssue) {
+        throw new ParseApiError(
+          'BAD_MODEL_RESPONSE',
+          `Model output violated ${validationIssue.ruleId}.`,
+          502,
+          withFailureDetails({}, validationIssue)
+        );
+      }
+      const finalFrame = derivationFrames[derivationFrames.length - 1];
+      const finalForest = Array.isArray(finalFrame?.after?.workspaceForest)
+        ? finalFrame.after.workspaceForest
+        : [];
+      const observedRootSurfaceOrders = finalForest.map((root) => (
+        collectOvertTerminalNodes(root)
+          .map((node) => resolveNodeSurface(node))
+          .map((token) => String(token || '').trim())
+          .filter(Boolean)
+      ));
+      const flattenedSurfaceOrder = observedRootSurfaceOrders.flat();
+      const hasExactRootSurface = observedRootSurfaceOrders.some((surfaceOrder) => (
+        sameTokenSequence(surfaceOrder, sentenceTokens)
+      ));
+      const incompleteWorkspaceCouldStillSpellOut = (
+        finalForest.length > 1
+        && sameTokenSequence(flattenedSurfaceOrder, sentenceTokens)
+      );
+      if (
+        observedRootSurfaceOrders.length > 0
+        && !hasExactRootSurface
+        && !incompleteWorkspaceCouldStillSpellOut
+      ) {
+        throw new ParseApiError(
+          'BAD_MODEL_RESPONSE',
+          'No authored tree overt terminals match the input sentence order.',
+          502,
+          withFailureDetails({}, {
+            failureClass: 'contract_misunderstanding',
+            ruleId: 'SURFACE_ORDER_EXACT',
+            stageIndex: rawDerivationStageCount > 0 ? rawDerivationStageCount - 1 : null,
+            fieldPath: rawDerivationStageCount > 0
+              ? `$.derivationStages[${rawDerivationStageCount - 1}].workspaceForest`
+              : '$.derivationStages',
+            offendingValue: {
+              expectedSurfaceOrder: sentenceTokens,
+              observedRootSurfaceOrders
+            }
+          })
+        );
+      }
       throw new ParseApiError(
-        'BAD_MODEL_RESPONSE',
+        'INCOMPLETE_GENERATION',
         derivationFrames.length > 0
           ? 'Derivation frames never produced a committed final structure whose overt terminals match the input sentence.'
           : 'Derivation analysis failed to produce a committed tree from derivationStages.',
-        502
+        502,
+        withFailureDetails({}, {
+          failureClass: 'incomplete_generation',
+          ruleId: 'GENERATION_DID_NOT_CONVERGE',
+          stageIndex: rawDerivationStageCount > 0 ? rawDerivationStageCount - 1 : null,
+          fieldPath: '$.derivationStages',
+          offendingValue: rawDerivationStages
+        })
       );
     }
     const treeSource = derivationPrimaryBundle.tree;
@@ -377,7 +450,13 @@ export const createParseNormalizationHelpers = ({
         throw new ParseApiError(
           'BAD_MODEL_RESPONSE',
           'The authored payload must be either { derivationStages } or { analyses: [{ derivationStages }, ...] }, with no additional fields.',
-          502
+          502,
+          withFailureDetails({}, {
+            failureClass: 'contract_misunderstanding',
+            ruleId: 'PAYLOAD_ENVELOPE_EXACT',
+            fieldPath: '$',
+            offendingValue: parsed
+          })
         );
       }
     }
@@ -400,7 +479,17 @@ export const createParseNormalizationHelpers = ({
       ));
 
     if (analyses.length === 0) {
-      throw new ParseApiError('BAD_MODEL_RESPONSE', 'No valid analyses returned by model.', 502);
+      throw new ParseApiError(
+        'BAD_MODEL_RESPONSE',
+        'No analyses were returned by the model.',
+        502,
+        withFailureDetails({}, {
+          failureClass: 'contract_misunderstanding',
+          ruleId: 'ANALYSES_NONEMPTY',
+          fieldPath: '$.analyses',
+          offendingValue: parsed?.analyses
+        })
+      );
     }
 
     const ambiguityDetected = analyses.length > 1 || Boolean(parsed?.ambiguityDetected);

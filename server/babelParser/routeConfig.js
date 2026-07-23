@@ -122,19 +122,56 @@ export const LOCAL_MODEL_COMMAND = String(process.env.BABEL_LOCAL_MODEL_COMMAND 
 export const LOCAL_MODEL_TIMEOUT_MS = Math.max(0, Number(process.env.BABEL_LOCAL_MODEL_TIMEOUT_MS || 1800000));
 export const LOCAL_MODEL_NUM_CTX = Math.max(4096, Number(process.env.BABEL_LOCAL_MODEL_NUM_CTX || 12288));
 export const LOCAL_MODEL_MAX_OUTPUT_TOKENS = Math.max(1024, Number(process.env.BABEL_LOCAL_MODEL_MAX_OUTPUT_TOKENS || 4096));
-export const DEFAULT_MAX_OUTPUT_TOKENS = Math.max(8192, Number(process.env.GEMINI_MAX_OUTPUT_TOKENS || 32768));
+const resolveBoundedOutputAllowance = (value, fallback, documentedMaximum) => {
+  const requested = Number(value);
+  const finiteValue = Number.isFinite(requested) && requested > 0 ? requested : fallback;
+  return Math.min(documentedMaximum, Math.max(8192, finiteValue));
+};
+export const DEFAULT_MAX_OUTPUT_TOKENS = resolveBoundedOutputAllowance(
+  process.env.GEMINI_MAX_OUTPUT_TOKENS,
+  65536,
+  65536
+);
 export const PAYLOAD_TRANSCRIBER_MAX_OUTPUT_TOKENS = Math.max(2048, Number(process.env.GEMINI_PAYLOAD_TRANSCRIBER_MAX_OUTPUT_TOKENS || 16384));
 export const PAYLOAD_TRANSCRIBER_TIMEOUT_MS = Math.max(0, Number(process.env.GEMINI_PAYLOAD_TRANSCRIBER_TIMEOUT_MS || 45000));
 export const PAYLOAD_TRANSCRIBER_TEMPERATURE = Number.isFinite(Number(process.env.GEMINI_PAYLOAD_TRANSCRIBER_TEMPERATURE))
   ? Number(process.env.GEMINI_PAYLOAD_TRANSCRIBER_TEMPERATURE)
   : 0;
-export const GEMINI_ROUTE_MAX_OUTPUT_TOKENS = Number(
+export const GEMINI_ROUTE_MAX_OUTPUT_TOKENS = resolveBoundedOutputAllowance(
   process.env.GEMINI_ROUTE_MAX_OUTPUT_TOKENS ||
-  process.env.GEMINI_MAX_OUTPUT_TOKENS ||
-  32768
+  process.env.GEMINI_MAX_OUTPUT_TOKENS,
+  65536,
+  65536
 );
-export const OPENAI_MAX_OUTPUT_TOKENS = Math.max(8192, Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 32768));
+export const OPENAI_MAX_OUTPUT_TOKENS = resolveBoundedOutputAllowance(
+  process.env.OPENAI_MAX_OUTPUT_TOKENS,
+  128000,
+  128000
+);
 export const ANTHROPIC_MAX_OUTPUT_TOKENS = Math.max(8192, Number(process.env.ANTHROPIC_MAX_OUTPUT_TOKENS || 32768));
+export const PROVIDER_OUTPUT_ALLOWANCE_POLICIES = Object.freeze({
+  gemini: Object.freeze({
+    model: GEMINI_MODEL,
+    configuredMaxOutputTokens: GEMINI_ROUTE_MAX_OUTPUT_TOKENS,
+    documentedMaximum: 65536,
+    admissionProbeConfirmed: false,
+    source: 'corrected-canonical-architecture.md §5.4, retrieved 2026-07-23'
+  }),
+  gpt: Object.freeze({
+    model: OPENAI_MODEL,
+    configuredMaxOutputTokens: OPENAI_MAX_OUTPUT_TOKENS,
+    documentedMaximum: 128000,
+    admissionProbeConfirmed: false,
+    source: 'corrected-canonical-architecture.md §5.4, retrieved 2026-07-23'
+  }),
+  claude: Object.freeze({
+    model: ANTHROPIC_MODEL,
+    configuredMaxOutputTokens: ANTHROPIC_MAX_OUTPUT_TOKENS,
+    documentedMaximum: null,
+    admissionProbeConfirmed: false,
+    source: 'corrected-canonical-architecture.md §5.4; numeric per-model ceiling unresolved'
+  })
+});
 export const MODEL_TEMPERATURE = Number.isFinite(Number(process.env.GEMINI_TEMPERATURE))
   ? Number(process.env.GEMINI_TEMPERATURE)
   : 0.2;
@@ -160,11 +197,11 @@ export const resolveRouteTemperature = () => GEMINI_ROUTE_TEMPERATURE;
 
 export const estimateGeminiOutputBudget = () => GEMINI_ROUTE_MAX_OUTPUT_TOKENS;
 
-export const resolveRouteMaxOutputTokens = (modelRoute = 'gemini', sentence = '') => {
+export const resolveRouteMaxOutputTokens = (modelRoute = 'gemini') => {
   const route = String(modelRoute || '').toLowerCase();
   if (route === 'gpt') return OPENAI_MAX_OUTPUT_TOKENS;
   if (route === 'claude') return ANTHROPIC_MAX_OUTPUT_TOKENS;
-  return estimateGeminiOutputBudget(sentence);
+  return estimateGeminiOutputBudget();
 };
 
 export const resolveModelTimeoutMs = (_model, modelRoute = 'gemini') => {

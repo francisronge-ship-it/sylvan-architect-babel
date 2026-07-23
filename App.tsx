@@ -1,15 +1,22 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { parseSentence } from './services/parseService';
-import { DerivationStep, ParseBundle, ParseResult, SyntaxNode } from './types';
+import { parseSentence, ParseServiceError } from './services/parseService';
+import {
+  DerivationStep,
+  ParseBundle,
+  ParseFailure,
+  ParseResult,
+  RawOutputArtifact,
+  SyntaxNode
+} from './types';
 import TreeVisualizer from './components/TreeVisualizer';
 import RootLogo from './components/RootLogo';
+import FailurePanel from './components/FailurePanel';
 import { collectDerivationStageRecords } from './derivationNotes.js';
 import { createTreeBankBundleSnapshot } from './treeBankSnapshot.js';
 import { 
   RotateCcw, 
   Sparkles,
   TreeDeciduous,
-  AlertTriangle,
   Layers,
   Zap,
   Info,
@@ -44,20 +51,41 @@ const KEY_ERROR_CODES = new Set(['API_KEY_EXPIRED', 'API_KEY_MISSING', 'API_KEY_
 
 type KeyPromptMode = 'none' | 'gemini' | 'external';
 
-const resolveUiError = (err: unknown): { needsKey: boolean; keyPromptMode: KeyPromptMode; message: string } => {
+interface UiErrorState {
+  message: string;
+  code?: string;
+  failure?: ParseFailure;
+  rawOutput?: RawOutputArtifact;
+}
+
+const resolveUiError = (err: unknown, modelRoute: ModelMode): {
+  needsKey: boolean;
+  keyPromptMode: KeyPromptMode;
+  error: UiErrorState;
+} => {
   const message = err instanceof Error ? err.message : String(err || '');
-  if (KEY_ERROR_CODES.has(message)) {
+  const code = err instanceof ParseServiceError ? err.code : '';
+  if (KEY_ERROR_CODES.has(code || message)) {
     return {
       needsKey: true,
-      keyPromptMode: 'gemini',
-      message: 'Your API key is missing or invalid. Please update it below.'
+      keyPromptMode: modelRoute === 'gemini' ? 'gemini' : 'external',
+      error: {
+        message: 'Your API key is missing or invalid. Please update it below.',
+        code: code || message,
+        ...(err instanceof ParseServiceError && err.failure ? { failure: err.failure } : {})
+      }
     };
   }
 
   return {
     needsKey: false,
     keyPromptMode: 'none',
-    message: message || 'Derivation interrupted.'
+    error: {
+      message: message || 'Derivation interrupted.',
+      ...(code ? { code } : {}),
+      ...(err instanceof ParseServiceError && err.failure ? { failure: err.failure } : {}),
+      ...(err instanceof ParseServiceError && err.rawOutput ? { rawOutput: err.rawOutput } : {})
+    }
   };
 };
 
@@ -604,7 +632,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [analysisBundle, setAnalysisBundle] = useState<ParseBundle | null>(null);
   const [activeParseIndex, setActiveParseIndex] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<UiErrorState | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('tree');
   const [isInputExpanded, setIsInputExpanded] = useState(true);
   const [isInputVisible, setIsInputVisible] = useState(!showcaseMode);
@@ -784,7 +812,7 @@ const App: React.FC = () => {
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : String(err || 'Unknown error');
-        setError(`Unable to load preview bundle: ${message}`);
+        setError({ message: `Unable to load preview bundle: ${message}` });
       }
     };
 
@@ -922,10 +950,10 @@ const App: React.FC = () => {
       setNeedsKey(false);
       setKeyPromptMode('none');
     } catch (err: unknown) {
-      const uiError = resolveUiError(err);
+      const uiError = resolveUiError(err, modelRoute);
       setNeedsKey(uiError.needsKey);
       setKeyPromptMode(uiError.keyPromptMode);
-      setError(uiError.message);
+      setError(uiError.error);
     } finally {
       setLoading(false);
     }
@@ -1540,10 +1568,11 @@ const App: React.FC = () => {
 
                     <div className={`transition-[max-height,opacity,padding] duration-700 ease-in-out ${isInputExpanded ? 'max-h-[350px] opacity-100 p-4 md:p-6 pt-3 md:pt-4' : 'max-h-0 opacity-0'}`}>
                       {error && (
-                        <div className="mb-4 bg-rose-500/10 border border-rose-500/20 px-4 py-3 rounded-2xl flex flex-col gap-3 text-rose-400 text-xs shadow-inner">
-                          <div className="flex items-center gap-3 italic serif">
-                            <AlertTriangle size={14} className="shrink-0" /> {error}
-                          </div>
+                        <FailurePanel
+                          message={error.message}
+                          failure={error.failure}
+                          rawOutput={error.rawOutput}
+                        >
                           {needsKey && keyPromptMode === 'gemini' && (
                             <button
                               onClick={handleOpenKeySelection}
@@ -1559,7 +1588,7 @@ const App: React.FC = () => {
                               External API Key Required
                             </div>
                           )}
-                        </div>
+                        </FailurePanel>
                       )}
 
                       <form onSubmit={handleParse} className="flex gap-3 md:gap-4 items-end">

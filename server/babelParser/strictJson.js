@@ -77,48 +77,59 @@ const repairDelimiterDamage = (candidate) => {
   return repaired ? output : null;
 };
 
-const createBadJsonError = (createError) => {
+const createBadJsonError = (createError, rawText) => {
   if (typeof createError === 'function') {
-    return createError('BAD_MODEL_RESPONSE', 'Model returned malformed JSON.', 502);
+    return createError(
+      'BAD_MODEL_RESPONSE',
+      'Model response was not a valid JSON object.',
+      502,
+      rawText
+    );
   }
   return new Error('Model returned malformed JSON.');
 };
 
-const parseStrictJsonCandidate = (candidate, createError, integrityFlags = []) => {
+const parseStrictJsonCandidate = (
+  candidate,
+  createError,
+  integrityFlags = [],
+  rawTextForError = candidate
+) => {
   let parsed;
   try {
     parsed = JSON.parse(candidate);
   } catch (initialError) {
     const repairedCandidate = repairDelimiterDamage(candidate);
     if (!repairedCandidate) {
-      throw createBadJsonError(createError);
+      throw createBadJsonError(createError, rawTextForError);
     }
     try {
       parsed = JSON.parse(repairedCandidate);
       integrityFlags.push('json_delimiter_damage_repaired');
     } catch {
-      throw createBadJsonError(createError);
+      throw createBadJsonError(createError, rawTextForError);
     }
   }
 
   const normalized = normalizeParsedRoot(parsed);
   if (!normalized) {
-    throw createBadJsonError(createError);
+    throw createBadJsonError(createError, rawTextForError);
   }
   return normalized;
 };
 
 export const parseStrictModelJsonDetailed = (rawText, createError) => {
-  const text = String(rawText || '')
+  const originalText = String(rawText ?? '');
+  const text = originalText
     .replace(/^\uFEFF/, '')
     .trim();
   if (!text) {
-    throw createBadJsonError(createError);
+    throw createBadJsonError(createError, originalText);
   }
 
   const integrityFlags = [];
   return {
-    payload: parseStrictJsonCandidate(text, createError, integrityFlags),
+    payload: parseStrictJsonCandidate(text, createError, integrityFlags, originalText),
     integrityFlags
   };
 };

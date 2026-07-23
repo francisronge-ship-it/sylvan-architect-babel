@@ -29,14 +29,16 @@ import {
   buildGeminiGenerationRequest,
   buildLocalRequestBody,
   buildOpenAIRequestBody,
+  assertGenerationComplete,
+  buildGenerationOutcome,
   generateAnthropicStructuredContent,
   generateOpenAIStructuredContent,
   generateStructuredContent,
   generateStructuredLocalContent,
   getErrorMeta,
   isNetworkTransportError,
-  isTruncatedGeneration,
   resolveLocalMaxOutputTokens,
+  runWithTransportRetries,
   summarizeErrorForLog,
   summarizeGeneration,
   withTimeout,
@@ -48,6 +50,15 @@ import {
   payloadPreservesRawAuthoredText,
   payloadRespectsRawStructuralAnchors
 } from './payloadFirewall.js';
+import {
+  createRawOutputArtifact,
+  withFailureDetails
+} from './validationErrors.js';
+
+const getProviderAttemptDetails = (error) => ({
+  ...(error?.providerRunId ? { providerRunId: error.providerRunId } : {}),
+  ...(Array.isArray(error?.providerAttempts) ? { providerAttempts: error.providerAttempts } : {})
+});
 
 export const classifyGeminiRouteError = ({
   error,
@@ -61,6 +72,7 @@ export const classifyGeminiRouteError = ({
 
   const { msg, haystack, statusCode } = getErrorMeta(error);
   const providerMessage = String(msg || '').trim() || undefined;
+  const providerAttemptDetails = getProviderAttemptDetails(error);
 
   if (
     haystack.includes('api key expired') ||
@@ -72,11 +84,11 @@ export const classifyGeminiRouteError = ({
     statusCode === 401 ||
     statusCode === 403
   ) {
-    return new ParseApiError('API_KEY_INVALID', 'Server API key is invalid or expired.', 500);
+    return new ParseApiError('API_KEY_INVALID', 'Server API key is invalid or expired.', 500, providerAttemptDetails);
   }
 
   if (haystack.includes('resource_exhausted') || haystack.includes('quota') || statusCode === 429) {
-    return new ParseApiError('GEMINI_QUOTA', 'Rate limit or quota reached for this server key.', 429);
+    return new ParseApiError('GEMINI_QUOTA', 'Rate limit or quota reached for this server key.', 429, providerAttemptDetails);
   }
 
   if (
@@ -87,11 +99,11 @@ export const classifyGeminiRouteError = ({
       haystack.includes('unsupported')
     ))
   ) {
-    return new ParseApiError('MODEL_UNAVAILABLE', 'Requested model is unavailable for this project/key.', 503);
+    return new ParseApiError('MODEL_UNAVAILABLE', 'Requested model is unavailable for this project/key.', 503, providerAttemptDetails);
   }
 
   if (haystack.includes('invalid_argument') || statusCode === 400) {
-    return new ParseApiError('INVALID_REQUEST', 'Request was rejected by Gemini (invalid argument).', 400);
+    return new ParseApiError('INVALID_REQUEST', 'Request was rejected by Gemini (invalid argument).', 400, providerAttemptDetails);
   }
 
   if (
@@ -104,7 +116,7 @@ export const classifyGeminiRouteError = ({
       'GEMINI_TIMEOUT',
       `Gemini parse timed out before ${model || 'the model'} returned a result.`,
       504,
-      providerMessage ? { providerMessage } : undefined
+      { ...providerAttemptDetails, ...(providerMessage ? { providerMessage } : {}) }
     );
   }
 
@@ -116,7 +128,8 @@ export const classifyGeminiRouteError = ({
     return new ParseApiError(
       'GEMINI_UNAVAILABLE',
       routeUnavailableMessage(modelRoute),
-      503
+      503,
+      providerAttemptDetails
     );
   }
 
@@ -125,11 +138,11 @@ export const classifyGeminiRouteError = ({
       'GEMINI_TRANSPORT',
       `Gemini transport failed before ${model || 'the model'} returned a result.`,
       502,
-      providerMessage ? { providerMessage } : undefined
+      { ...providerAttemptDetails, ...(providerMessage ? { providerMessage } : {}) }
     );
   }
 
-  return new ParseApiError('PARSE_FAILED', msg || 'Syntactic parsing failed.', 500);
+  return new ParseApiError('PARSE_FAILED', msg || 'Syntactic parsing failed.', 500, providerAttemptDetails);
 };
 
 const classifyProviderRouteError = ({
@@ -144,6 +157,26 @@ const classifyProviderRouteError = ({
 
   const { msg, haystack, statusCode } = getErrorMeta(error);
   const providerMessage = String(msg || '').trim();
+  const providerAttemptDetails = getProviderAttemptDetails(error);
+  if (error?.completedStopState) {
+    return new ParseApiError(
+      'INCOMPLETE_GENERATION',
+      `${providerLabel} completed with ${error.finishReason || 'a failed stop state'} and no valid generation.`,
+      502,
+      withFailureDetails({
+        provider: providerLabel,
+        model,
+        providerMessage: providerMessage || null,
+        finishReason: error.finishReason || null,
+        ...providerAttemptDetails
+      }, {
+        failureClass: 'incomplete_generation',
+        ruleId: 'GENERATION_COMPLETED_STOP_FAILURE',
+        fieldPath: '$',
+        offendingValue: error.finishReason || providerMessage || null
+      }, error.responseBody || '')
+    );
+  }
   if (
     haystack.includes('api key expired') ||
     haystack.includes('invalid api key') ||
@@ -156,6 +189,7 @@ const classifyProviderRouteError = ({
     return new ParseApiError('API_KEY_INVALID', `${providerLabel} API key is invalid or lacks required permissions.`, 500, {
       provider: providerLabel,
       model,
+      ...providerAttemptDetails,
       providerMessage: providerMessage || null
     });
   }
@@ -163,6 +197,7 @@ const classifyProviderRouteError = ({
     return new ParseApiError('PROVIDER_QUOTA', `Rate limit or quota reached for ${providerLabel}.`, 429, {
       provider: providerLabel,
       model,
+      ...providerAttemptDetails,
       providerMessage: providerMessage || null
     });
   }
@@ -177,6 +212,7 @@ const classifyProviderRouteError = ({
     return new ParseApiError('MODEL_UNAVAILABLE', `${providerLabel} model is unavailable for this key or endpoint.`, 503, {
       provider: providerLabel,
       model,
+      ...providerAttemptDetails,
       providerMessage: providerMessage || null
     });
   }
@@ -184,6 +220,7 @@ const classifyProviderRouteError = ({
     return new ParseApiError('INVALID_REQUEST', `${providerLabel} rejected the request.`, 400, {
       provider: providerLabel,
       model,
+      ...providerAttemptDetails,
       providerMessage: providerMessage || null
     });
   }
@@ -191,12 +228,14 @@ const classifyProviderRouteError = ({
     return new ParseApiError('PROVIDER_UNAVAILABLE', `${providerLabel} transport failed before the model returned a result.`, 503, {
       provider: providerLabel,
       model,
+      ...providerAttemptDetails,
       providerMessage: providerMessage || null
     });
   }
   return new ParseApiError('PARSE_FAILED', providerMessage || `${providerLabel} parsing failed.`, 500, {
     provider: providerLabel,
-    model
+    model,
+    ...providerAttemptDetails
   });
 };
 
@@ -471,7 +510,7 @@ export const createParseRoutes = ({
       promptRoute
     );
     const temperature = resolveRouteTemperature(promptRoute);
-    const maxOutputTokens = resolveLocalMaxOutputTokens(resolveRouteMaxOutputTokens(promptRoute, sentence));
+    const maxOutputTokens = resolveLocalMaxOutputTokens(resolveRouteMaxOutputTokens(promptRoute));
     const modelUsed = `local:${LOCAL_MODEL_NAME}`;
     const sentRequest = buildLocalRequestBody({
       transport: LOCAL_MODEL_COMMAND ? 'command' : 'http',
@@ -572,7 +611,7 @@ export const createParseRoutes = ({
       normalizedModelRoute
     );
     const routeTemperature = resolveRouteTemperature(normalizedModelRoute);
-    const routeMaxOutputTokens = resolveRouteMaxOutputTokens(normalizedModelRoute, sentence);
+    const routeMaxOutputTokens = resolveRouteMaxOutputTokens(normalizedModelRoute);
     const selectedModel = GEMINI_MODEL;
     const requestStartedAt = Date.now();
     const reasoningEffort = normalizeProviderReasoningEffort(normalizedModelRoute, options.reasoningEffort);
@@ -597,33 +636,59 @@ export const createParseRoutes = ({
       }
 
       const generationStartedAt = Date.now();
-      const generation = await withTimeout(
-        (abortSignal) => generateStructuredContent({
-          ai,
-          model: selectedModel,
-          contents: fullContents,
-          systemInstruction,
-          temperature: routeTemperature,
-          maxOutputTokens: routeMaxOutputTokens,
-          thinkingConfig,
-          abortSignal
-        }),
-        resolveRequestTimeoutMs({
-          baseTimeoutMs: resolveModelTimeoutMs(selectedModel, normalizedModelRoute),
-          remainingBudgetMs
-        }),
-        `Model generation (${selectedModel})`
-      );
-      const generationRecord = createGenerationRecord({
-        provider: normalizedModelRoute,
-        framework,
-        promptRoute: normalizedModelRoute,
-        sentRequest,
-        generationStartedAt
+      const generationReceipt = await runWithTransportRetries({
+        run: async () => {
+          const attemptRemainingBudgetMs = getRemainingRequestBudgetMs(requestStartedAt, normalizedModelRoute);
+          if (attemptRemainingBudgetMs <= 1200) {
+            throw new ParseApiError(
+              'GEMINI_UNAVAILABLE',
+              routeUnavailableMessage(normalizedModelRoute),
+              503
+            );
+          }
+          return withTimeout(
+            (abortSignal) => generateStructuredContent({
+              ai,
+              model: selectedModel,
+              contents: fullContents,
+              systemInstruction,
+              temperature: routeTemperature,
+              maxOutputTokens: routeMaxOutputTokens,
+              thinkingConfig,
+              abortSignal
+            }),
+            resolveRequestTimeoutMs({
+              baseTimeoutMs: resolveModelTimeoutMs(selectedModel, normalizedModelRoute),
+              remainingBudgetMs: attemptRemainingBudgetMs
+            }),
+            `Model generation (${selectedModel})`
+          );
+        }
       });
-
-      const generationMeta = summarizeGeneration(generation);
-      const truncatedGeneration = isTruncatedGeneration(generation);
+      const generation = generationReceipt.value;
+      const generationMeta = assertGenerationComplete({
+        generation,
+        provider: normalizedModelRoute,
+        model: selectedModel,
+        sentMaxOutputTokens: routeMaxOutputTokens,
+        runId: generationReceipt.runId,
+        attempts: generationReceipt.attempts
+      });
+      const generationRecord = {
+        ...createGenerationRecord({
+          provider: normalizedModelRoute,
+          framework,
+          promptRoute: normalizedModelRoute,
+          sentRequest,
+          generationStartedAt
+        }),
+        outcome: buildGenerationOutcome({
+          generationMeta,
+          sentMaxOutputTokens: routeMaxOutputTokens,
+          runId: generationReceipt.runId,
+          attempts: generationReceipt.attempts
+        })
+      };
       const primaryDebugPayloadPath = maybeWritePrimaryDebugPayload({
         modelRoute: normalizedModelRoute,
         model: selectedModel,
@@ -650,7 +715,7 @@ export const createParseRoutes = ({
             modelRoute: normalizedModelRoute,
             rawText: generationMeta.rawText,
             requestStartedAt,
-            failureStage: truncatedGeneration ? 'truncated_json_parse' : 'json_parse',
+            failureStage: 'json_parse',
             originalPayload: null,
             existingIntegrityFlags: []
           });
@@ -686,6 +751,7 @@ export const createParseRoutes = ({
             error.message,
             422,
             {
+              ...(error?.details && typeof error.details === 'object' ? error.details : {}),
               stage: 'json-parse',
               model: selectedModel,
               finishReason: generationMeta.finishReason || null,
@@ -694,9 +760,6 @@ export const createParseRoutes = ({
               debugPayloadPath
             }
           );
-        }
-        if (truncatedGeneration) {
-          throw new ParseApiError('BAD_MODEL_RESPONSE', 'Model output was truncated before JSON completion.', 502);
         }
         throw error;
       }
@@ -766,13 +829,15 @@ export const createParseRoutes = ({
               error.message,
               422,
               {
+                ...(error?.details && typeof error.details === 'object' ? error.details : {}),
                 stage: 'normalization',
                 model: selectedModel,
                 finishReason: generationMeta.finishReason || null,
                 textLength: generationMeta.textLength,
                 preview: generationMeta.preview || '',
                 payloadPreview,
-                debugPayloadPath
+                debugPayloadPath,
+                rawOutputArtifact: createRawOutputArtifact(generationMeta.rawText)
               }
             );
           }
@@ -816,7 +881,7 @@ export const createParseRoutes = ({
     const systemInstruction = buildSystemInstruction(framework, modelRoute);
     const fullContents = buildParseContentsPrompt(sentence, framework, modelRoute);
     const routeTemperature = resolveRouteTemperature(modelRoute);
-    const routeMaxOutputTokens = resolveRouteMaxOutputTokens(modelRoute, sentence);
+    const routeMaxOutputTokens = resolveRouteMaxOutputTokens(modelRoute);
     const requestStartedAt = Date.now();
     const reasoningEffort = normalizeProviderReasoningEffort(modelRoute, requestedReasoningEffort);
     const sentRequest = modelRoute === 'gpt'
@@ -846,34 +911,60 @@ export const createParseRoutes = ({
       }
 
       const generationStartedAt = Date.now();
-      const generation = await withTimeout(
-        (abortSignal) => generate({
-          apiKey,
-          model: selectedModel,
-          contents: fullContents,
-          systemInstruction,
-          temperature: routeTemperature,
-          maxOutputTokens: routeMaxOutputTokens,
-          reasoningEffort,
-          effort: reasoningEffort,
-          abortSignal
-        }),
-        resolveRequestTimeoutMs({
-          baseTimeoutMs: resolveModelTimeoutMs(selectedModel, modelRoute),
-          remainingBudgetMs
-        }),
-        `Model generation (${selectedModel})`
-      );
-      const generationRecord = createGenerationRecord({
-        provider: modelRoute,
-        framework,
-        promptRoute: modelRoute,
-        sentRequest,
-        generationStartedAt
+      const generationReceipt = await runWithTransportRetries({
+        run: async () => {
+          const attemptRemainingBudgetMs = getRemainingRequestBudgetMs(requestStartedAt, modelRoute);
+          if (attemptRemainingBudgetMs <= 1200) {
+            throw new ParseApiError(
+              'PROVIDER_UNAVAILABLE',
+              `${providerLabel} is unavailable; please try again in a moment.`,
+              503
+            );
+          }
+          return withTimeout(
+            (abortSignal) => generate({
+              apiKey,
+              model: selectedModel,
+              contents: fullContents,
+              systemInstruction,
+              temperature: routeTemperature,
+              maxOutputTokens: routeMaxOutputTokens,
+              reasoningEffort,
+              effort: reasoningEffort,
+              abortSignal
+            }),
+            resolveRequestTimeoutMs({
+              baseTimeoutMs: resolveModelTimeoutMs(selectedModel, modelRoute),
+              remainingBudgetMs: attemptRemainingBudgetMs
+            }),
+            `Model generation (${selectedModel})`
+          );
+        }
       });
-
-      const generationMeta = summarizeGeneration(generation);
-      const truncatedGeneration = isTruncatedGeneration(generation);
+      const generation = generationReceipt.value;
+      const generationMeta = assertGenerationComplete({
+        generation,
+        provider: modelRoute,
+        model: selectedModel,
+        sentMaxOutputTokens: routeMaxOutputTokens,
+        runId: generationReceipt.runId,
+        attempts: generationReceipt.attempts
+      });
+      const generationRecord = {
+        ...createGenerationRecord({
+          provider: modelRoute,
+          framework,
+          promptRoute: modelRoute,
+          sentRequest,
+          generationStartedAt
+        }),
+        outcome: buildGenerationOutcome({
+          generationMeta,
+          sentMaxOutputTokens: routeMaxOutputTokens,
+          runId: generationReceipt.runId,
+          attempts: generationReceipt.attempts
+        })
+      };
       const primaryDebugPayloadPath = maybeWritePrimaryDebugPayload({
         modelRoute,
         model: selectedModel,
@@ -900,15 +991,17 @@ export const createParseRoutes = ({
         });
         throw new ParseApiError(
           'BAD_MODEL_RESPONSE',
-          truncatedGeneration ? 'Model output was truncated before JSON completion.' : (error?.message || 'Model returned invalid JSON.'),
+          error?.message || 'Model returned invalid JSON.',
           422,
           {
+            ...(error?.details && typeof error.details === 'object' ? error.details : {}),
             stage: 'json-parse',
             model: selectedModel,
             finishReason: generationMeta.finishReason || null,
             textLength: generationMeta.textLength,
             preview: generationMeta.preview || '',
-            debugPayloadPath
+            debugPayloadPath,
+            rawOutputArtifact: createRawOutputArtifact(generationMeta.rawText)
           }
         );
       }
@@ -962,7 +1055,8 @@ export const createParseRoutes = ({
             textLength: generationMeta.textLength,
             preview: generationMeta.preview || '',
             payloadPreview,
-            debugPayloadPath
+            debugPayloadPath,
+            rawOutputArtifact: createRawOutputArtifact(generationMeta.rawText)
           }
         );
       }
