@@ -2,6 +2,7 @@ import * as d3 from 'd3';
 import type { DerivationStage, DerivationStep, ReplayDetailBlock, SyntaxNode } from '../types.ts';
 import type { ResolvedVisualRelation, ResolvedVisualRelationAnchor } from '../visualRelationLinks.ts';
 import { buildDerivationReplayPlan } from '../derivationReplayPlan.js';
+import { tokenizeSentenceSurfaceOrder } from '../server/babelParser/surfaceTokens.js';
 
 export type HierNode = d3.HierarchyNode<SyntaxNode>;
 export type VisibleLink = d3.HierarchyLink<SyntaxNode>;
@@ -5001,24 +5002,8 @@ export const normalizeToken = (value: string): string => {
     .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 };
 
-const POSSESSIVE_SUFFIX_RE = /^(.+?)(['\u2019]s)$/iu;
-
-const splitReplaySurfaceToken = (value: string): string[] => {
-  const trimmed = String(value || '').trim();
-  if (!trimmed) return [];
-  const normalizedApostrophe = trimmed.replace(/\u2019/g, "'");
-  const match = normalizedApostrophe.match(POSSESSIVE_SUFFIX_RE);
-  if (match?.[1] && match?.[2]) return [match[1], match[2]];
-  return [normalizedApostrophe];
-};
-
 export const tokenizeReplaySentenceSurface = (sentence: string): string[] =>
-  String(sentence || '')
-    .trim()
-    .split(/\s+/)
-    .flatMap(splitReplaySurfaceToken)
-    .map((token) => String(token || '').trim().replace(/^[^\p{L}\p{N}\p{M}']+|[^\p{L}\p{N}\p{M}']+$/gu, ''))
-    .filter(Boolean);
+  tokenizeSentenceSurfaceOrder(sentence);
 
 export const extractMovementIndex = (label: string): string | null => {
   const text = [...label.trim()].map((ch) => SUBSCRIPT_MAP[ch] || ch).join('');
