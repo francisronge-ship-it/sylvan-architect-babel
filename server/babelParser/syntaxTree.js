@@ -8,7 +8,6 @@ import {
   PRIME_MARK_RE,
   nextGeneratedNodeId,
   canonicalizeCovertSurface,
-  canonicalizeBareNullHeadChildren,
   collectNodeReferencesById,
   normalizeLabelForFramework,
   normalizeSurfaceSpan,
@@ -271,7 +270,7 @@ export const createSyntaxTreeHelpers = ({
           path: `${currentPath}.children[${childIndex}]`
         }))
       : [];
-    const children = canonicalizeBareNullHeadChildren(label, rawChildren, usedIds, counterRef);
+    const children = rawChildren;
 
     if (children.length > 0) {
       normalized.children = children;

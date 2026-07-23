@@ -51,41 +51,6 @@ export const canonicalizeCovertSurface = (surface) => {
   return raw;
 };
 
-const normalizeCategoryKey = (label) => String(label || '').trim().replace(/['′\s]/g, '').toUpperCase();
-
-const inferHeadFromPrimeLabel = (label) => {
-  const trimmed = String(label || '').trim();
-  const match = trimmed.match(/^(.+?)['′]+$/);
-  if (!match?.[1]) return null;
-  return match[1].trim() || null;
-};
-
-export const canonicalizeBareNullHeadChildren = (parentLabel, children, usedIds, counterRef) => {
-  if (!Array.isArray(children) || children.length === 0) return children;
-  const headLabel = inferHeadFromPrimeLabel(parentLabel);
-  if (!headLabel) return children;
-
-  const headKey = normalizeCategoryKey(headLabel);
-  const hasExplicitHeadChild = children.some((child) => normalizeCategoryKey(child?.label) === headKey);
-  if (hasExplicitHeadChild) return children;
-
-  return children.map((child) => {
-    const childChildren = Array.isArray(child?.children) ? child.children : [];
-    if (childChildren.length > 0) return child;
-
-    const childLabel = String(child?.label || '').trim();
-    const childWord = typeof child?.word === 'string' ? child.word.trim() : '';
-    const surface = canonicalizeCovertSurface(childWord || childLabel);
-    if (!NULL_SYMBOL_LABEL.test(surface)) return child;
-
-    return {
-      id: nextGeneratedNodeId(usedIds, counterRef),
-      label: headLabel,
-      children: [child]
-    };
-  });
-};
-
 export const collectNodeReferencesById = (value) => {
   const references = new Map();
   const seen = new Set();

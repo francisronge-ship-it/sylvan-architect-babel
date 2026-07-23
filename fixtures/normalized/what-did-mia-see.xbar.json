@@ -4,98 +4,85 @@
       "tree": {
         "id": "cp_question",
         "label": "CP",
-        "surfaceSpan": [
-          0,
-          3
-        ],
         "children": [
           {
             "id": "dp_what_high",
             "label": "DP",
             "lineageId": "what-chain",
-            "surfaceSpan": [
-              0,
-              0
-            ],
             "children": [
               {
                 "id": "what_high",
                 "label": "What",
+                "word": "What",
+                "tokenIndex": 0,
                 "lineageId": "what-chain-terminal",
+                "children": [],
                 "surfaceSpan": [
                   0,
                   0
-                ],
-                "tokenIndex": 0,
-                "word": "What"
+                ]
               }
+            ],
+            "surfaceSpan": [
+              0,
+              0
             ]
           },
           {
             "id": "cbar_question",
             "label": "C'",
-            "surfaceSpan": [
-              1,
-              3
-            ],
             "children": [
               {
                 "id": "c_question",
                 "label": "C",
                 "lineageId": "did-chain",
-                "surfaceSpan": [
-                  1,
-                  1
-                ],
                 "children": [
                   {
                     "id": "did_high",
                     "label": "did",
+                    "word": "did",
+                    "tokenIndex": 1,
                     "lineageId": "did-chain-terminal",
+                    "children": [],
                     "surfaceSpan": [
                       1,
                       1
-                    ],
-                    "tokenIndex": 1,
-                    "word": "did"
+                    ]
                   }
+                ],
+                "surfaceSpan": [
+                  1,
+                  1
                 ]
               },
               {
                 "id": "tp_question",
                 "label": "TP",
-                "surfaceSpan": [
-                  2,
-                  3
-                ],
                 "children": [
                   {
                     "id": "np_mia_question",
                     "label": "NP",
-                    "surfaceSpan": [
-                      2,
-                      2
-                    ],
                     "children": [
                       {
                         "id": "mia_question_terminal",
                         "label": "Mia",
+                        "word": "Mia",
+                        "tokenIndex": 2,
+                        "children": [],
                         "surfaceSpan": [
                           2,
                           2
-                        ],
-                        "tokenIndex": 2,
-                        "word": "Mia"
+                        ]
                       }
+                    ],
+                    "surfaceSpan": [
+                      2,
+                      2
                     ]
                   },
                   {
                     "id": "tbar_question",
                     "label": "T'",
-                    "surfaceSpan": [
-                      3,
-                      3
-                    ],
                     "children": [
                       {
                         "id": "t_did",
@@ -107,36 +94,34 @@
                             "id": "did_terminal",
                             "label": "did",
                             "lineageId": "did-chain-terminal",
-                            "silent": true
+                            "silent": true,
+                            "children": []
                           }
                         ]
                       },
                       {
                         "id": "vp_see",
                         "label": "VP",
-                        "surfaceSpan": [
-                          3,
-                          3
-                        ],
                         "children": [
                           {
                             "id": "v_see",
                             "label": "V",
-                            "surfaceSpan": [
-                              3,
-                              3
-                            ],
                             "children": [
                               {
                                 "id": "see_terminal",
                                 "label": "see",
+                                "word": "see",
+                                "tokenIndex": 3,
+                                "children": [],
                                 "surfaceSpan": [
                                   3,
                                   3
-                                ],
-                                "tokenIndex": 3,
-                                "word": "see"
+                                ]
                               }
+                            ],
+                            "surfaceSpan": [
+                              3,
+                              3
                             ]
                           },
                           {
@@ -149,18 +134,39 @@
                                 "id": "what_low",
                                 "label": "what",
                                 "lineageId": "what-chain-terminal",
-                                "silent": true
+                                "silent": true,
+                                "children": []
                               }
                             ]
                           }
+                        ],
+                        "surfaceSpan": [
+                          3,
+                          3
                         ]
                       }
+                    ],
+                    "surfaceSpan": [
+                      3,
+                      3
                     ]
                   }
+                ],
+                "surfaceSpan": [
+                  2,
+                  3
                 ]
               }
+            ],
+            "surfaceSpan": [
+              1,
+              3
             ]
           }
+        ],
+        "surfaceSpan": [
+          0,
+          3
         ]
       },
       "surfaceOrder": [
@@ -183,9 +189,9 @@
                 {
                   "id": "what_low",
                   "label": "What",
-                  "lineageId": "what-chain-terminal",
-                  "tokenIndex": 0,
                   "word": "What",
+                  "tokenIndex": 0,
+                  "lineageId": "what-chain-terminal",
                   "children": []
                 }
               ]
@@ -208,8 +214,8 @@
                     {
                       "id": "see_terminal",
                       "label": "see",
-                      "tokenIndex": 3,
                       "word": "see",
+                      "tokenIndex": 3,
                       "children": []
                     }
                   ]
@@ -222,9 +228,9 @@
                     {
                       "id": "what_low",
                       "label": "What",
-                      "lineageId": "what-chain-terminal",
-                      "tokenIndex": 0,
                       "word": "What",
+                      "tokenIndex": 0,
+                      "lineageId": "what-chain-terminal",
                       "children": []
                     }
                   ]
@@ -249,8 +255,8 @@
                     {
                       "id": "mia_question_terminal",
                       "label": "Mia",
-                      "tokenIndex": 2,
                       "word": "Mia",
+                      "tokenIndex": 2,
                       "children": []
                     }
                   ]
@@ -267,9 +273,9 @@
                         {
                           "id": "did_terminal",
                           "label": "did",
-                          "lineageId": "did-chain-terminal",
-                          "tokenIndex": 1,
                           "word": "did",
+                          "tokenIndex": 1,
+                          "lineageId": "did-chain-terminal",
                           "children": []
                         }
                       ]
@@ -285,8 +291,8 @@
                             {
                               "id": "see_terminal",
                               "label": "see",
-                              "tokenIndex": 3,
                               "word": "see",
+                              "tokenIndex": 3,
                               "children": []
                             }
                           ]
@@ -299,9 +305,9 @@
                             {
                               "id": "what_low",
                               "label": "What",
-                              "lineageId": "what-chain-terminal",
-                              "tokenIndex": 0,
                               "word": "What",
+                              "tokenIndex": 0,
+                              "lineageId": "what-chain-terminal",
                               "children": []
                             }
                           ]
@@ -346,9 +352,9 @@
                     {
                       "id": "what_high",
                       "label": "What",
-                      "lineageId": "what-chain-terminal",
-                      "tokenIndex": 0,
                       "word": "What",
+                      "tokenIndex": 0,
+                      "lineageId": "what-chain-terminal",
                       "children": []
                     }
                   ]
@@ -365,9 +371,9 @@
                         {
                           "id": "did_high",
                           "label": "did",
-                          "lineageId": "did-chain-terminal",
-                          "tokenIndex": 1,
                           "word": "did",
+                          "tokenIndex": 1,
+                          "lineageId": "did-chain-terminal",
                           "children": []
                         }
                       ]
@@ -383,8 +389,8 @@
                             {
                               "id": "mia_question_terminal",
                               "label": "Mia",
-                              "tokenIndex": 2,
                               "word": "Mia",
+                              "tokenIndex": 2,
                               "children": []
                             }
                           ]
@@ -419,8 +425,8 @@
                                     {
                                       "id": "see_terminal",
                                       "label": "see",
-                                      "tokenIndex": 3,
                                       "word": "see",
+                                      "tokenIndex": 3,
                                       "children": []
                                     }
                                   ]
@@ -477,11 +483,9 @@
               "visibleInStage": true
             }
           ],
-          "sourceNodeId": "dp_what_low",
-          "targetNodeId": "dp_what_high",
-          "renderFamily": "trajectory",
-          "renderable": true,
-          "renderStatus": "trajectory-compatible",
+          "renderFamily": "unknown",
+          "renderable": false,
+          "renderStatus": "anchors-resolved-not-rendered",
           "evidence": "What is pronounced at the left edge of the complementizer phrase with a silent lower object occurrence, while the finite auxiliary raises to the complementizer head and leaves a silent tense occurrence."
         },
         {
@@ -507,92 +511,23 @@
               "visibleInStage": true
             }
           ],
-          "sourceNodeId": "t_did",
-          "targetNodeId": "c_question",
-          "renderFamily": "trajectory",
-          "renderable": true,
-          "renderStatus": "trajectory-compatible",
+          "renderFamily": "unknown",
+          "renderable": false,
+          "renderStatus": "anchors-resolved-not-rendered",
           "evidence": "What is pronounced at the left edge of the complementizer phrase with a silent lower object occurrence, while the finite auxiliary raises to the complementizer head and leaves a silent tense occurrence."
         }
       ],
-      "derivationSteps": [
-        {
-          "stepId": "d1",
-          "operation": "Checkpoint",
-          "targetNodeId": "dp_what_low",
-          "targetLabel": "DP",
-          "sourceLabels": [
-            "DP"
-          ],
-          "recipe": "The interrogative object enters the derivation.",
-          "workspaceAfter": [
-            "DP"
-          ]
-        },
-        {
-          "stepId": "d2",
-          "operation": "Checkpoint",
-          "targetNodeId": "vp_see",
-          "targetLabel": "VP",
-          "sourceLabels": [
-            "VP"
-          ],
-          "recipe": "The verb combines with its interrogative object.",
-          "workspaceAfter": [
-            "VP"
-          ]
-        },
-        {
-          "stepId": "d3",
-          "operation": "Checkpoint",
-          "targetNodeId": "tp_question",
-          "targetLabel": "TP",
-          "sourceLabels": [
-            "TP"
-          ],
-          "recipe": "The subject and finite auxiliary form the tense phrase.",
-          "workspaceAfter": [
-            "TP"
-          ]
-        },
-        {
-          "stepId": "d4",
-          "operation": "A-Move",
-          "recipe": "The interrogative phrase moves to the clause edge.",
-          "workspaceAfter": [
-            "CP"
-          ]
-        },
-        {
-          "stepId": "gf5",
-          "operation": "SpellOut",
-          "targetNodeId": "cp_question",
-          "targetLabel": "CP",
-          "sourceNodeIds": [
-            "cp_question"
-          ],
-          "sourceLabels": [
-            "CP"
-          ],
-          "recipe": "SpellOut(CP)",
-          "workspaceAfter": [
-            "CP"
-          ],
-          "spelloutOrder": [
-            "What",
-            "did",
-            "Mia",
-            "see"
-          ],
-          "note": "Final spellout of the committed derivation state."
-        }
-      ],
+      "derivationSteps": [],
       "provenance": {
         "modelRoute": "gemini",
         "framework": "xbar",
         "treeSource": "derivationStages",
         "payloadIntegrityFlags": [
-          "derivation_stages_compiled_to_derivation_frames"
+          "derivation_stages_compiled_to_derivation_frames",
+          "prior_stage_refid_expanded:2:dp_what_low",
+          "prior_stage_refid_expanded:3:vp_see",
+          "prior_stage_refid_expanded:4:np_mia_question",
+          "prior_stage_refid_expanded:4:v_see"
         ],
         "hasDerivationStages": true,
         "hasResolvedVisualRelations": true

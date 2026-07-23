@@ -56,14 +56,20 @@ const sourceSurfaces = Object.freeze([
   'server/babelParser/parseRoutes.js',
   'server/babelParser/parseNormalization.js',
   'server/babelParser/derivationCompiler.js',
+  'server/babelParser/derivationHelpers.js',
+  'server/babelParser/inventionDetector.js',
   'server/babelParser/surfaceTokens.js',
+  'server/babelParser/syntaxTree.js',
+  'server/babelParser/treeBasics.js',
   'replay/replayCompiler.ts',
   'replay/replaySnapshot.ts',
   'derivationReplayPlan.js',
   'types.ts',
+  'tests/inventionDetector.test.mjs',
   'scripts/captureProviderFreeBaseline.mjs',
   'scripts/providerFreeNetworkGuard.cjs',
-  'docs/implementation/baselines/provider-free-baseline-spec.md'
+  'docs/implementation/baselines/provider-free-baseline-spec.md',
+  'docs/implementation/invention-boundary.md'
 ]);
 
 const sha256 = (value) => crypto

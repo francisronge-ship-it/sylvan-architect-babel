@@ -9,12 +9,8 @@ import {
 import {
   STRUCTURAL_LEAF_LABELS,
   PRIME_CATEGORY_LABEL_RE,
-  PRIME_MARK_RE,
-  nextGeneratedNodeId,
   canonicalizeCovertSurface,
-  collectNodeReferencesById,
-  addNodeAliasIds,
-  getLabelProfile
+  collectNodeReferencesById
 } from './babelParser/treeBasics.js';
 import {
   buildParseContentsPrompt
@@ -38,36 +34,15 @@ import { parseStrictModelJson, parseStrictModelJsonDetailed } from './babelParse
 export { ParseApiError } from './babelParser/error.js';
 
 const {
-  normalizeKey,
-  normalizeDerivationOperation,
-  normalizeSpelloutOrder,
   normalizeOptionalStepText,
-  normalizeOptionalStringArray,
   normalizeNodeIdArray,
-  normalizeMovementOperation,
-  normalizeIndexedText,
-  extractMovementIndex,
-  stripMovementIndex
+  normalizeMovementOperation
 } = createNormalizationUtils({
   MOVEMENT_INDEX_SUBSCRIPT_MAP
 });
 
-let syntaxTreeHelpersRef = null;
-
-const subtreeHasOvertYield = (...args) => {
-  if (!syntaxTreeHelpersRef) {
-    throw new Error('syntaxTreeHelpers not initialized');
-  }
-  return syntaxTreeHelpersRef.subtreeHasOvertYield(...args);
-};
-
 const {
-  isMoveLikeOperation,
-  buildNodeLabelIndexFromTree,
-  normalizeVisualRelationEvents,
   isAbstractFeatureSurface,
-  getNodeOvertYield,
-  normalizeTraceLikeSurface,
   isNullLikeSurface,
   buildNodeIndexFromTree,
   buildParentIndexFromTree,
@@ -77,30 +52,14 @@ const {
   isTraceLikeSurface,
   isTraceLikeNode,
   isNullLikeNode,
-  subtreeContainsOnlyCovertCategoryLeaves,
-  subtreeContainsNamedCovertCategoryLeaf,
-  stripMovementIndicesFromTree,
-  materializeEmptyStructuralLeaves,
-  promoteSentenceMatchingLeaves,
-  buildCanonicalVisualRelationEvents,
-  normalizeMovementLabelKey,
-  resolveHeadMovementLandingNode
+  normalizeMovementLabelKey
 } = createDerivationHelpers({
-  MOVEMENT_INDEX_SUBSCRIPT_MAP,
   STRUCTURAL_LEAF_LABELS,
   PRIME_CATEGORY_LABEL_RE,
-  canonicalizeCovertSurface,
-  normalizeSurfaceToken,
-  subtreeHasOvertYield,
-  getLabelProfile,
-  normalizeOptionalStepText,
-  normalizeOptionalStringArray,
-  normalizeMovementOperation,
-  extractMovementIndex,
-  stripMovementIndex
+  canonicalizeCovertSurface
 });
 
-syntaxTreeHelpersRef = createSyntaxTreeHelpers({
+const syntaxTreeHelpersRef = createSyntaxTreeHelpers({
   ParseApiError,
   normalizeOptionalStepText,
   normalizeNodeIdArray,
@@ -119,73 +78,28 @@ syntaxTreeHelpersRef = createSyntaxTreeHelpers({
 });
 
 const {
-  normalizeSyntaxNode,
-  normalizeSyntaxTreeWithIds,
   collectOvertTerminalNodes,
   sameTokenSequence,
-  isTraceOrNullOnlySubtree,
   anchorOvertLeavesToSentenceTokens,
   deriveCanonicalSurfaceSpans,
-  collectExistingNodeIds,
-  collapseOvertHeadLandingChains,
-  validateAndCommitSurfaceOrder,
-  validateSpelloutConsistency
+  validateAndCommitSurfaceOrder
 } = syntaxTreeHelpersRef;
 
 const {
-  normalizeTransportJsonArray,
   normalizeDerivationStagesToDerivationFrames,
   normalizeDerivationFrames,
-  materializeImplicitPhrasalTraceShellsInDerivationFrames,
-  materializeCommittedTraceShells,
   canonicalizeDerivationRootCandidateForSentence,
   selectCommittedDerivationRoot,
   findLatestCommittedDerivationFrame,
-  buildCanonicalVisualRelationEventsFromDerivationFrames,
-  buildCanonicalDerivationFromDerivationFrames,
-  assignDerivationStepIds
+  buildCanonicalDerivationFromDerivationFrames
 } = createDerivationCompilerHelpers({
   ParseApiError,
-  nextGeneratedNodeId,
-  normalizeSurfaceToken,
-  normalizeDerivationOperation,
   normalizeOptionalStepText,
-  normalizeNodeIdArray,
-  normalizeOptionalStringArray,
-  normalizeSpelloutOrder,
-  normalizeMovementOperation,
-  normalizeIndexedText,
-  normalizeSyntaxNode,
-  normalizeSyntaxTreeWithIds,
   collectNodeReferencesById,
   collectOvertTerminalNodes,
-  promoteSentenceMatchingLeaves,
-  stripMovementIndicesFromTree,
-  materializeEmptyStructuralLeaves,
   resolveNodeSurface,
-  subtreeHasOvertYield,
-  isTraceOrNullOnlySubtree,
-  getLabelProfile,
-  isTraceLikeNode,
-  isNullLikeNode,
   sameTokenSequence,
-  isMoveLikeOperation,
-  PRIME_CATEGORY_LABEL_RE,
-  PRIME_MARK_RE,
-  buildNodeIndexFromTree,
-  buildParentIndexFromTree,
-  collectLeafNodes,
-  collectExistingNodeIds,
-  getNodeOvertYield,
-  isTraceLikeSurface,
-  isNullLikeSurface,
-  resolveHeadMovementLandingNode,
-  anchorOvertLeavesToSentenceTokens,
-  deriveCanonicalSurfaceSpans,
-  subtreeContainsOnlyCovertCategoryLeaves,
-  subtreeContainsNamedCovertCategoryLeaf,
-  collapseOvertHeadLandingChains,
-  addNodeAliasIds
+  deriveCanonicalSurfaceSpans
 });
 
 const {
@@ -193,27 +107,15 @@ const {
   normalizeParseBundle
 } = createParseNormalizationHelpers({
   ParseApiError,
-  normalizeKey,
   normalizeOptionalStepText,
   tokenizeSentenceSurfaceOrder,
   normalizeDerivationStagesToDerivationFrames,
   normalizeDerivationFrames,
-  materializeImplicitPhrasalTraceShellsInDerivationFrames,
   buildCanonicalDerivationFromDerivationFrames,
   collectNodeReferencesById,
-  normalizeSyntaxTreeWithIds,
-  buildNodeIndexFromTree,
-  buildNodeLabelIndexFromTree,
-  assignDerivationStepIds,
-  normalizeVisualRelationEvents,
-  validateAndCommitSurfaceOrder,
-  validateSpelloutConsistency,
-  buildCanonicalVisualRelationEvents,
   sameTokenSequence,
-  stripMovementIndicesFromTree,
   collectOvertTerminalNodes,
-  resolveNodeSurface,
-  materializeCommittedTraceShells,
+  resolveNodeSurface
 });
 
 const parseModelJson = (rawText) => parseStrictModelJson(
@@ -267,8 +169,6 @@ export const __test__ = {
   canonicalizeDerivationRootCandidateForSentence,
   selectCommittedDerivationRoot,
   findLatestCommittedDerivationFrame,
-  buildCanonicalVisualRelationEvents,
-  buildCanonicalVisualRelationEventsFromDerivationFrames,
   buildCanonicalDerivationFromDerivationFrames,
   buildSystemInstruction,
   buildParseContentsPrompt,

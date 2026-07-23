@@ -9,57 +9,7 @@ const cloneJson = (value) => {
 
 const nodeId = (node) => asText(node?.id || node?.refId);
 
-const nodeLabel = (node) => asText(node?.label || node?.word || node?.refId || node?.id);
-
-const isSilentLabel = (value) => /^(?:t|trace|copy|gap|empty|silent|null|epsilon|eps|e|\u2205|\u00f8)$/i.test(asText(value));
-
-const isSilentLeaf = (node) => {
-  const children = asArray(node?.children);
-  if (children.length > 0) return false;
-  if (node?.silent === true) return true;
-  return !asText(node?.word) && isSilentLabel(node?.label);
-};
-
-const stripProjectionSuffix = (value) =>
-  asText(value)
-    .replace(/['′]+$/g, '')
-    .replace(/P$/i, '');
-
-const isHeadForParent = (parentLabel, child) => {
-  const parentCore = stripProjectionSuffix(parentLabel);
-  const childCore = stripProjectionSuffix(nodeLabel(child));
-  return Boolean(parentCore && childCore && parentCore.toLowerCase() === childCore.toLowerCase());
-};
-
-const COMPLEMENT_FIRST_FUNCTIONAL_PROJECTIONS = new Set(['CP', 'TP']);
-
-const orderChildrenForDerivation = (parent, children) => {
-  const indexed = children.map((child, index) => ({ child, index }));
-  if (children.length < 2) return indexed;
-  const parentLabel = nodeLabel(parent);
-  const headEntries = indexed.filter(({ child }) => isHeadForParent(parentLabel, child));
-  if (headEntries.length !== 1) return indexed;
-
-  const parentIsPhrase = /P$/i.test(parentLabel);
-  if (!parentIsPhrase) return indexed;
-
-  const headIndex = headEntries[0].index;
-  if (COMPLEMENT_FIRST_FUNCTIONAL_PROJECTIONS.has(parentLabel) && headIndex === 0) {
-    return [
-      ...indexed.filter(({ index }) => index !== headIndex),
-      headEntries[0]
-    ];
-  }
-
-  if (headIndex > 0) {
-    return [
-      headEntries[0],
-      ...indexed.filter(({ index }) => index !== headIndex)
-    ];
-  }
-
-  return indexed;
-};
+const nodeLabel = (node) => asText(node?.label || node?.word);
 
 const flattenAnchorNodeIds = (anchors = {}) => {
   const ids = [];
@@ -77,17 +27,34 @@ const flattenAnchorNodeIds = (anchors = {}) => {
   return Array.from(new Set(ids));
 };
 
-const firstAnchor = (anchors = {}, names = []) => {
-  for (const name of names) {
-    const value = anchors?.[name];
-    if (Array.isArray(value)) {
-      const first = value.map(asText).find(Boolean);
-      if (first) return first;
-    }
-    const text = asText(value);
-    if (text) return text;
-  }
-  return '';
+const collectWorkspaceNodeIds = (workspaceForest = []) => {
+  const ids = new Set();
+  const visit = (node) => {
+    if (!node || typeof node !== 'object') return;
+    const id = asText(node.id);
+    if (id) ids.add(id);
+    asArray(node.children).forEach(visit);
+  };
+  asArray(workspaceForest).forEach(visit);
+  return ids;
+};
+
+export const resolveRelationAnchors = (anchors = {}, workspaceForest = []) => {
+  const workspaceNodeIds = collectWorkspaceNodeIds(workspaceForest);
+  let authoredAnchorIndex = 0;
+  return Object.entries(anchors).flatMap(([role, rawValue]) => {
+    const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+    return values.flatMap((value) => {
+      const nodeId = asText(value);
+      const anchor = {
+        role,
+        nodeId,
+        authoredAnchorIndex
+      };
+      authoredAnchorIndex += 1;
+      return nodeId && workspaceNodeIds.has(nodeId) ? [anchor] : [];
+    });
+  });
 };
 
 const normalizeVisualRelations = (value) => asArray(value)
@@ -135,7 +102,7 @@ const buildNodeMicrosteps = (node, stage, path = []) => {
   if (node.refId && !node.id) {
     return [
       makeStep('micro', stage, {
-        operation: 'preserve',
+        operation: 'Preserve',
         label: `Preserve ${label}`,
         targetNodeId: id,
         targetLabel: label,
@@ -145,11 +112,10 @@ const buildNodeMicrosteps = (node, stage, path = []) => {
   }
 
   if (children.length === 0) {
-    const operation = isSilentLeaf(node) ? 'introduce-silent' : 'select';
     return [
       makeStep('micro', stage, {
-        operation,
-        label: operation === 'introduce-silent' ? `Introduce silent ${label}` : `Select ${label}`,
+        operation: 'LexicalSelect',
+        label: `Select ${label}`,
         targetNodeId: id,
         targetLabel: label,
         nodePath: path
@@ -157,13 +123,12 @@ const buildNodeMicrosteps = (node, stage, path = []) => {
     ];
   }
 
-  const orderedChildren = orderChildrenForDerivation(node, children);
-  const childSteps = orderedChildren.flatMap(({ child, index: childIndex }) =>
+  const childSteps = children.flatMap((child, childIndex) =>
     buildNodeMicrosteps(child, stage, [...path, id || label || String(childIndex)])
   );
   const childLabels = children.map(nodeLabel).filter(Boolean);
-  const operation = children.length === 1 ? 'project' : 'merge';
-  const labelText = operation === 'project'
+  const operation = children.length === 1 ? 'Project' : 'ExternalMerge';
+  const labelText = operation === 'Project'
     ? `Project ${label}`
     : `Merge ${childLabels.join(' + ')} as ${label}`;
   return [
@@ -183,34 +148,23 @@ const buildNodeMicrosteps = (node, stage, path = []) => {
 const buildStageMicrosteps = (stage) =>
   stage.workspaceForest.flatMap((root, rootIndex) => buildNodeMicrosteps(root, stage, [String(rootIndex)]));
 
-const buildRelationSteps = (stage) => stage.visualRelations.map((relation) => {
-  const anchors = relation.anchors || {};
-  const targetNodeId = firstAnchor(anchors, [
-    'target',
-    'landing',
-    'to',
-    'moved',
-    'moving',
-    'operator',
-    'head_copy',
-    'movedCopy',
-    'pronouncedCopy',
-    'pronouncedOccurrence'
-  ]);
-  const sourceNodeIds = flattenAnchorNodeIds(anchors).filter((id) => id !== targetNodeId);
-  return makeStep('relation', stage, {
-    operation: 'visual-relation',
+const buildRelationSteps = (stage) => stage.visualRelations.map((relation, authoredRelationIndex) => (
+  makeStep('relation', stage, {
+    operation: 'VisualRelation',
     label: relation.relation,
     relation: relation.relation,
-    anchors: cloneJson(anchors),
-    targetNodeId,
-    sourceNodeIds,
+    anchors: cloneJson(relation.anchors),
+    authoredRelationIndex,
+    resolvedAnchors: resolveRelationAnchors(
+      relation.anchors,
+      stage.workspaceForest
+    ),
     stageRecord: stage.stageRecord
-  });
-});
+  })
+));
 
 const buildMacroStep = (stage) => makeStep('macro', stage, {
-  operation: 'stage-record',
+  operation: 'StageRecord',
   label: stage.statement || `Stage ${stage.stageNumber}`,
   stageRecord: stage.stageRecord,
   workspaceForest: cloneJson(stage.workspaceForest),
@@ -256,7 +210,8 @@ export const buildDerivationReplayPlan = (input = {}) => {
 export const __test__ = {
   buildNodeMicrosteps,
   buildRelationSteps,
+  collectWorkspaceNodeIds,
   flattenAnchorNodeIds,
-  isSilentLeaf,
+  resolveRelationAnchors,
   normalizeStage
 };
