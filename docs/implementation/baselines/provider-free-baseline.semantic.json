@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "semantic": {
+    "architecturePacket": {
+      "artifacts": [
+        {
+          "classification": "normative",
+          "name": "babel-corrected-canonical-architecture.md",
+          "sha256": "87c37c0083ff964e338643d5e904a48f3d067d11c92f485eb8653417fa73c652"
+        },
+        {
+          "classification": "normative",
+          "name": "babel-provider-grade-benchmark-architecture.md",
+          "sha256": "59f004581b759c03c724e3e29e65c29f153e1c18e99bfc7d5025408a9fc91668"
+        },
+        {
+          "classification": "normative",
+          "name": "babel-universal-visual-relations-architecture.md",
+          "sha256": "cea3b84f5da1c919717527f3999bb585c50199c88c11cafd838eebf716f6f651"
+        },
+        {
+          "classification": "normative",
+          "name": "babel-corrected-sol-implementation-program.md",
+          "sha256": "38cc54c0c5cfa02bab80a83ce02bb23f4124aa36c7d4668ba5bc21cb71d3a6e0"
+        },
+        {
+          "classification": "normative",
+          "name": "babel-relations-values-exhaustive-coverage-proof.md",
+          "sha256": "0b86068f627119d06e0a023a5e5eac9607e5d971e2c9795b64b7aeb4f3689c44"
+        },
+        {
+          "classification": "supporting",
+          "name": "babel-answered-unknowns-dossier.md",
+          "sha256": "3c69e1b42f1c77a9d09643e3cce4ee133eb12e8e3fd3d8c44e8f73d5e97029da"
+        }
+      ],
+      "normativeArtifactCount": 5,
+      "supportingArtifactCount": 1
+    },
+    "behaviorProbes": {
+      "malformedPayloads": {
+        "invalidJson": {
+          "code": "BAD_MODEL_RESPONSE",
+          "details": null,
+          "message": "Model returned malformed JSON.",
+          "name": "ParseApiError",
+          "outcome": "rejected",
+          "status": 502
+        },
+        "tokenMismatch": {
+          "code": "BAD_MODEL_RESPONSE",
+          "details": null,
+          "message": "Derivation frames never produced a committed final structure whose overt terminals match the input sentence.",
+          "name": "ParseApiError",
+          "outcome": "rejected",
+          "status": 502
+        },
+        "topLevelArray": {
+          "code": "BAD_MODEL_RESPONSE",
+          "details": null,
+          "message": "Model returned malformed JSON.",
+          "name": "ParseApiError",
+          "outcome": "rejected",
+          "status": 502
+        },
+        "unresolvedRelationAnchor": {
+          "outcome": "accepted",
+          "resultSha256": "3287901859d2635c9d9e313026359f56747f712e085e4636729179ce22d3fb9d"
+        }
+      },
+      "maskingObservation": {
+        "description": "Legacy multi-stage fixture mutations are masked at the API boundary by a downstream refId error after stage 1 is discarded.",
+        "extraFieldOnFirstStage": {
+          "code": "BAD_MODEL_RESPONSE",
+          "details": null,
+          "message": "Malformed tree node from model at frame[0].after.workspaceForest[0] (unresolved subtree refId: np_mia).",
+          "name": "ParseApiError",
+          "outcome": "rejected",
+          "status": 502
+        },
+        "intendedStageRuleVisibleAtApiBoundary": false,
+        "missingStatementFieldOnFirstStage": {
+          "code": "BAD_MODEL_RESPONSE",
+          "details": null,
+          "message": "Malformed tree node from model at frame[0].after.workspaceForest[0] (unresolved subtree refId: np_mia).",
+          "name": "ParseApiError",
+          "outcome": "rejected",
+          "status": 502
+        }
+      },
+      "stageRuleProbes": {
+        "emptyStatementValue": {
+          "expectedFlag": "statement_missing_on_derivation_stage:d1",
+          "frameCount": 0,
+          "integrityFlags": [
+            "statement_missing_on_derivation_stage:d1"
+          ],
+          "mutation": "set statement to an empty string while retaining the authored key",
+          "reachedTargetRule": true
+        },
+        "missingStatementFieldContract": {
+          "expectedFlag": "derivation_stage_contract_fields_invalid:d1",
+          "frameCount": 0,
+          "integrityFlags": [
+            "derivation_stage_contract_fields_invalid:d1"
+          ],
+          "mutation": "delete statement",
+          "reachedTargetRule": true
+        },
+        "missingWorkspaceForestValue": {
+          "expectedFlag": "workspace_forest_missing_on_derivation_stage:d1",
+          "frameCount": 0,
+          "integrityFlags": [
+            "workspace_forest_missing_on_derivation_stage:d1"
+          ],
+          "mutation": "set workspaceForest to undefined while retaining the authored key",
+          "reachedTargetRule": true
+        },
+        "unexpectedStageFieldContract": {
+          "expectedFlag": "derivation_stage_contract_fields_invalid:d1",
+          "frameCount": 0,
+          "integrityFlags": [
+            "derivation_stage_contract_fields_invalid:d1"
+          ],
+          "mutation": "add unexpected field",
+          "reachedTargetRule": true
+        },
+        "validMinimalStage": {
+          "outcome": "accepted",
+          "resultSha256": "15487c7cee8ebd4596477cf5880a9e6f2379cbffec4aa5c9f29b02325b8a13df"
+        }
+      }
+    },
+    "contract": {
+      "authoredDerivationStageFields": [
+        "statement",
+        "stageRecord",
+        "visualRelations",
+        "workspaceForest"
+      ],
+      "modelFacingRolloutChanged": false,
+      "nodeRuntimeFloor": {
+        "minimumMajor": 24,
+        "reason": "The replay snapshot import uses Node built-in type stripping for an erasable .ts module."
+      },
+      "provenanceFieldsExcludedFromSemanticComparison": [
+        "timestamp",
+        "promptVersion",
+        "parserVersion",
+        "uiVersion"
+      ]
+    },
+    "fixtureOutputs": {
+      "mia-laughed.xbar.json": {
+        "framework": "xbar",
+        "parsedProjections": {
+          "committedNormalizedSha256": "d28f02b0476ad0e5a494341246e7d3204a05c2973dcd0ee9d1b9406a6142e1ed",
+          "committedReplaySnapshotSha256": "dee09b5f504f84f735045d1e0492c90a506096806d960298d47f9629e65e437c",
+          "currentNormalizedSha256": "d28f02b0476ad0e5a494341246e7d3204a05c2973dcd0ee9d1b9406a6142e1ed",
+          "normalizedParity": true,
+          "renderPlanParity": true,
+          "renderPlanSha256": "dee09b5f504f84f735045d1e0492c90a506096806d960298d47f9629e65e437c",
+          "renderPlanStepCount": 15,
+          "replayPlanSha256": "584235e6fd44311c5eb0201e8906cfa515c46c43d609553f6d6cbbfcd223e2f2",
+          "replayPlanStepCount": 36
+        },
+        "rawByteHashes": {
+          "normalizedFixtureSha256": "6493d05f6b0fcfbeaa98299bf20e889a9d67c8affc7f985c8fc0ec75e8116724",
+          "rawFixtureSha256": "1bf323587593ddfbe5c1364728309e555550fa29212774492aa43388dcb1fb0e",
+          "replaySnapshotSha256": "63365f32ecfa59c0e6ed949899b535f541af20857a50ad109662815d9ddb30dc"
+        },
+        "sentence": "Mia laughed."
+      },
+      "what-did-mia-see.xbar.json": {
+        "framework": "xbar",
+        "parsedProjections": {
+          "committedNormalizedSha256": "0a4533017d1d77e8804b23d7a8637aff0e6d4961692d867489e26d8bfaf927ad",
+          "committedReplaySnapshotSha256": "aaf00bb921cc6d55598ac32322a13bd41f8c3a72589cb07ca18c955a6c45e00f",
+          "currentNormalizedSha256": "0a4533017d1d77e8804b23d7a8637aff0e6d4961692d867489e26d8bfaf927ad",
+          "normalizedParity": true,
+          "renderPlanParity": true,
+          "renderPlanSha256": "aaf00bb921cc6d55598ac32322a13bd41f8c3a72589cb07ca18c955a6c45e00f",
+          "renderPlanStepCount": 19,
+          "replayPlanSha256": "b13a33c4eba1aa4b3331f7ea794729c52dd441515a3723c50fa171aa0b3dc59b",
+          "replayPlanStepCount": 41
+        },
+        "rawByteHashes": {
+          "normalizedFixtureSha256": "2d5106f5df41155d5e3453e6cb60d0e0cc3707ed2f368bae4654c3e28dd4fee6",
+          "rawFixtureSha256": "c497813f531aef76acb19153b1119015ed9547c26fd9e1d6ba0ddadb32265a6e",
+          "replaySnapshotSha256": "acfe6e91075844aee33041bd97f31c1ef80950a79ec45ddaa03438e2b4cf0895"
+        },
+        "sentence": "What did Mia see?"
+      }
+    },
+    "sourceHashes": {
+      "derivationReplayPlan.js": "f43053f32eaf60a7427a0cfe5c7c1a4c8e9e424ff353d9516368941d5cd93cdc",
+      "docs/implementation/baselines/provider-free-baseline-spec.md": "c378fc5e982bf849d7497d2bd88957065b9453973d81248a17e37ed16b0fde6c",
+      "replay/replayCompiler.ts": "0b2c2ed22fa8c1817301f4bd649b55ec797e9481e9dab9e6adfda1c54c5bd9dd",
+      "replay/replaySnapshot.ts": "baf3a3a0a26d7e4f2b25ae87f7d2996dbc44d2cc6d369814fae6fe2172596a20",
+      "scripts/captureProviderFreeBaseline.mjs": "40bc35af7fca98d8df08514743606f990ab0fa06466c9d4b9dd70d577e8e07a5",
+      "scripts/providerFreeNetworkGuard.cjs": "bf06a80eb6128f20addcf0dd4165b299477c4e6bd527ee8459f0e1a96df12ca8",
+      "server/babelParser.js": "c3c0be4a859d4ffcfd785ac61846283d0c8eb00341c758bcd22f1c4a19f136da",
+      "server/babelParser/derivationCompiler.js": "a4dd2cdc9420bbbc7d1ecc0307919861a7176b4385c58ffe7f56dfb099e9b8a8",
+      "server/babelParser/modelRuntime.js": "2d3726fd1457e721a4a3b6eebd09d19389a43fecffb060243740275e75eee705",
+      "server/babelParser/parseNormalization.js": "a48b7cb39cdd8ff03faa6a67f779ab2f42d7c6553fd138def3d677b5389af1d6",
+      "server/babelParser/parseRoutes.js": "0220c4f569cb5fd0700e2c39fc106ee200f6e5040487545a7693320ad77d2df4",
+      "server/babelParser/prompts.js": "c866617865f8a6a886dcb225821d4ab6c9bb88ae1851f4e2eb615648cb017fbe",
+      "server/babelParser/routeConfig.js": "c9f0c0c6b37422c99fad7872c260ff49855c96573982b2eeb5fa09862972eced",
+      "server/babelParser/surfaceTokens.js": "173f75eb2d261688663d2fd3b507a1e9c07fffa2339c150ac6bc0f75f510ef31",
+      "server/babelParser/systemInstruction.js": "24843c855961b1f73ed72edd6054ce402cdede5c3f31fbf54c937a6af7977b18",
+      "types.ts": "46d81588df5f6c5cfefa1c165d3bcc232a96cfc9ab4c937030380026fcb0bdb0"
+    }
+  },
+  "semanticSha256": "d5a0a3452602dd4d3f0b2693c2b59b44f6a9f8052a59023b62d16a648209fb7e"
+}
