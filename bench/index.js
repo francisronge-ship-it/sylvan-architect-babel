@@ -5,6 +5,10 @@ export {
   validateContractValidationPlan
 } from './contractValidation.js';
 export {
+  estimateClusteredProportion,
+  estimatePairedClusteredDifference
+} from './clusteredEstimators.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';

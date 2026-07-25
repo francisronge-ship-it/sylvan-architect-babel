@@ -40,5 +40,14 @@ expected counts. Comparison receipts report only matched or mismatched fixture
 evidence. They do not convert instruction-stated constraints into measured
 model capability.
 
+The W13 clustered-estimator base computes item-cluster robust proportions and
+paired differences. Callers must supply the estimand identity, confidence
+level, critical value and its source, and cluster specification. Intervals are
+not clipped, inputs are hash-bound, and fewer than two clusters yields an
+explicit `insufficient-clusters` result. Equal-observation weighting and the
+intercept-only CR1 cluster-sandwich estimator and symmetric two-sided interval
+must be named explicitly; none is silently selected. Resampling policy and
+measurement-model selection are not part of this base.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
