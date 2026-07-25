@@ -33,5 +33,12 @@ rerun index. Archives resolve a run from a fully revalidated schedule and accept
 only a hash-valid dry-run receipt carrying the canonical run-plan contract.
 No carrier, framework, item, rerun count, or partition is defaulted.
 
+The W13 contract-validation boundary is an engineering traceability tool, not a
+conformance score. Externally supplied register IDs and source references bind
+rules from a hash-bound engine catalog to provider-free fixtures with exact
+expected counts. Comparison receipts report only matched or mismatched fixture
+evidence. They do not convert instruction-stated constraints into measured
+model capability.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

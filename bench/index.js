@@ -1,5 +1,10 @@
 export { runBenchmarkDryRun } from './benchmarkDryRun.js';
 export {
+  compareContractValidationCounts,
+  createContractValidationPlan,
+  validateContractValidationPlan
+} from './contractValidation.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';
