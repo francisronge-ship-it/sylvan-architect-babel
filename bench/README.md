@@ -58,5 +58,14 @@ distribution, quantile convention, interval level, or adoption rule. It
 preserves the supplied replication order in the receipt and supports both
 clustered proportions and paired shared-item differences without clipping.
 
+The W13 variance-component boundary is an end-to-end provider-free dry run for
+a future method-approved local fitter. Callers supply and hash-bind the outcome,
+model formula, crossed component definitions, complete prior parameters,
+sampler implementation/configuration, exact input data, execution identity,
+posterior draws, diagnostics, and provenance. The stub validates complete
+posterior component coverage and returns immutable comparison receipts. It does
+not fit data, invent priors, choose a sampler, interpret diagnostics, or adopt a
+measurement model; non-stub fitters remain refused until separately approved.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

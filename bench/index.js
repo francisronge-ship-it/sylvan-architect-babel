@@ -13,6 +13,11 @@ export {
   estimateWildClusterBootstrapProportion
 } from './clusterBootstrap.js';
 export {
+  createVarianceComponentFitPlan,
+  hashVarianceComponentFitData,
+  runVarianceComponentFitDryRun
+} from './varianceComponentFit.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';
@@ -38,5 +43,6 @@ export { createBenchmarkRunPlan } from './runPlan.js';
 export {
   createMemoryArtifactSink,
   createStubEngine,
-  createStubTransport
+  createStubTransport,
+  createVarianceComponentFitterStub
 } from './stubs.js';

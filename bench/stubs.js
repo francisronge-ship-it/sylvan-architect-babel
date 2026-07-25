@@ -1,9 +1,10 @@
-import { isPlainRecord } from './jsonData.js';
+import { copyJsonData, isPlainRecord } from './jsonData.js';
 
 export const STUB_BOUNDARIES = Object.freeze({
   artifactSink: 'provider-free-memory-artifacts',
   engine: 'provider-free-stub-engine',
-  transport: 'provider-free-stub-transport'
+  transport: 'provider-free-stub-transport',
+  varianceComponentFitter: 'provider-free-variance-component-fitter-stub'
 });
 
 const cloneBytes = (value) => (
@@ -33,6 +34,14 @@ export const createStubEngine = ({
   parse: async () => ({ ...parseOutcome }),
   compile: async () => ({ ...compileOutcome })
 });
+
+export const createVarianceComponentFitterStub = (outcome) => {
+  const snapshot = copyJsonData(outcome, 'variance component fitter stub outcome');
+  return Object.freeze({
+    boundary: STUB_BOUNDARIES.varianceComponentFitter,
+    fit: async () => copyJsonData(snapshot, 'variance component fitter stub outcome')
+  });
+};
 
 export const createMemoryArtifactSink = () => {
   const writes = [];
