@@ -23,5 +23,15 @@ probe, chooses a tier scope, or treats a development fixture as release
 authorization. Actual selections, probes, launch authorization, and scored
 runs remain W14/Francis-gated.
 
+The W13 runner-planning boundary binds externally supplied carrier, framework,
+host, tier, request-parameter, service-metadata, and partition identities to a
+frozen manifest. It expands only the item references and rerun counts in an
+external design record, covers every manifest-required host/tier combination,
+and hashes the resulting condition matrix. Each deterministic run identity
+binds that matrix hash plus the external design, partition, item reference, and
+rerun index. Archives resolve a run from a fully revalidated schedule and accept
+only a hash-valid dry-run receipt carrying the canonical run-plan contract.
+No carrier, framework, item, rerun count, or partition is defaulted.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

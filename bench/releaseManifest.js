@@ -39,6 +39,12 @@ const DRAFT_FIELDS = Object.freeze([
   'admissionProbeSnapshot'
 ]);
 
+const FROZEN_FIELDS = Object.freeze([
+  ...DRAFT_FIELDS,
+  'launchAuthorization',
+  'manifestSha256'
+]);
+
 const SELECTION_FIELDS = Object.freeze([
   'registryId',
   'hostRoutes',
@@ -51,9 +57,26 @@ const sha256CanonicalJson = (value) => createHash('sha256')
   .update(JSON.stringify(canonicalizeJsonData(value)))
   .digest('hex');
 
+const assertDigest = (value, path) => {
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/u.test(value)) {
+    throw new TypeError(`${path} must be a lowercase SHA-256 digest.`);
+  }
+};
+
 const pickFields = (value, fields) => Object.fromEntries(
   fields.map((field) => [field, value[field]])
 );
+
+const validateLaunchAuthorization = (launchAuthorization) => {
+  assertExactFields(
+    launchAuthorization,
+    ['authorizationRef', 'authorizedAt', 'authorizedBy'],
+    'launch authorization'
+  );
+  Object.entries(launchAuthorization).forEach(([field, value]) => {
+    assertNonemptyText(value, `launch authorization.${field}`);
+  });
+};
 
 const validateSelection = ({
   selection,
@@ -228,14 +251,7 @@ export const freezeReleaseManifest = ({ draft, launchAuthorization }) => {
   ) {
     throw new TypeError('release manifest draft does not match its evidence snapshots.');
   }
-  assertExactFields(
-    launchAuthorization,
-    ['authorizationRef', 'authorizedAt', 'authorizedBy'],
-    'launch authorization'
-  );
-  Object.entries(launchAuthorization).forEach(([field, value]) => {
-    assertNonemptyText(value, `launch authorization.${field}`);
-  });
+  validateLaunchAuthorization(launchAuthorization);
   const frozenBody = {
     ...copyJsonData(draft, 'release manifest draft'),
     lifecycle: 'frozen',
@@ -245,4 +261,45 @@ export const freezeReleaseManifest = ({ draft, launchAuthorization }) => {
     ...frozenBody,
     manifestSha256: sha256CanonicalJson(frozenBody)
   });
+};
+
+export const validateFrozenReleaseManifest = (manifest) => {
+  assertExactFields(manifest, FROZEN_FIELDS, 'frozen release manifest');
+  assertTextChoice(
+    manifest.lifecycle,
+    ['frozen'],
+    'frozen release manifest.lifecycle'
+  );
+  assertDigest(
+    manifest.manifestSha256,
+    'frozen release manifest.manifestSha256'
+  );
+  validateLaunchAuthorization(manifest.launchAuthorization);
+  const { manifestSha256, launchAuthorization, ...frozenDraft } = manifest;
+  const draft = {
+    ...frozenDraft,
+    lifecycle: 'draft'
+  };
+  const rebuiltDraft = buildReleaseManifest({
+    manifest: pickFields(draft, MANIFEST_FIELDS),
+    registryEntries: draft.registrySnapshot,
+    admissionProbeReceipts: draft.admissionProbeSnapshot
+  });
+  if (
+    JSON.stringify(canonicalizeJsonData(rebuiltDraft))
+    !== JSON.stringify(canonicalizeJsonData(draft))
+  ) {
+    throw new TypeError(
+      'frozen release manifest does not match its selected evidence snapshots.'
+    );
+  }
+  const frozenBody = {
+    ...copyJsonData(draft, 'release manifest draft'),
+    lifecycle: 'frozen',
+    launchAuthorization: copyJsonData(launchAuthorization, 'launch authorization')
+  };
+  if (sha256CanonicalJson(frozenBody) !== manifestSha256) {
+    throw new TypeError('frozen release manifest hash does not match its content.');
+  }
+  return freezeJsonData(copyJsonData(manifest, 'frozen release manifest'));
 };
