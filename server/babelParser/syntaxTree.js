@@ -239,14 +239,6 @@ export const createSyntaxTreeHelpers = ({
     if (node.silentFeature === true) {
       normalized.silentFeature = true;
     }
-    const caseValue = normalizeOptionalMetadataText(node.case);
-    const assigner = normalizeOptionalMetadataText(node.assigner);
-    const caseEvidence = normalizeOptionalMetadataText(node.caseEvidence);
-    const caseOvert = normalizeOptionalMetadataBoolean(node.caseOvert);
-    if (caseValue) normalized.case = caseValue;
-    if (assigner) normalized.assigner = assigner;
-    if (caseEvidence) normalized.caseEvidence = caseEvidence;
-    if (caseOvert !== undefined) normalized.caseOvert = caseOvert;
     const surfaceSpan = normalizeSurfaceSpan(node.surfaceSpan);
     if (surfaceSpan) normalized.surfaceSpan = surfaceSpan;
 

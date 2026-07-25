@@ -1,3 +1,7 @@
+import {
+  stripLegacyCaseMetadataFromParseBundle
+} from './legacyCaseMetadata.js';
+
 const CURRENT_PROVENANCE_FIELDS = [
   'modelRoute',
   'framework',
@@ -43,6 +47,9 @@ const CURRENT_BUNDLE_FIELDS = [
   'generationRecord'
 ];
 
+export const loadTreeBankBundleSnapshot = (bundle) =>
+  stripLegacyCaseMetadataFromParseBundle(JSON.parse(JSON.stringify(bundle)));
+
 const projectFields = (source, fields) => {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
   return fields.reduce((projected, field) => {
@@ -60,7 +67,7 @@ const snapshotCurrentAnalysis = (analysis) => {
 };
 
 export const createTreeBankBundleSnapshot = (bundle) => {
-  const snapshot = JSON.parse(JSON.stringify(bundle));
+  const snapshot = loadTreeBankBundleSnapshot(bundle);
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return snapshot;
   const current = projectFields(snapshot, CURRENT_BUNDLE_FIELDS);
   return {

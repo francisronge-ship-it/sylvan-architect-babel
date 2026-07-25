@@ -12,7 +12,10 @@ import TreeVisualizer from './components/TreeVisualizer';
 import RootLogo from './components/RootLogo';
 import FailurePanel from './components/FailurePanel';
 import { collectDerivationStageRecords } from './derivationNotes.js';
-import { createTreeBankBundleSnapshot } from './treeBankSnapshot.js';
+import {
+  createTreeBankBundleSnapshot,
+  loadTreeBankBundleSnapshot
+} from './treeBankSnapshot.js';
 import { 
   RotateCcw, 
   Sparkles,
@@ -321,7 +324,9 @@ const normalizeTreeBankEntry = (value: unknown): TreeBankEntry | null => {
   const activeParseIndex = Number.isInteger(activeParseIndexRaw) && activeParseIndexRaw >= 0 ? activeParseIndexRaw : 0;
   const createdAt = String(candidate.createdAt || '').trim();
   const updatedAt = String(candidate.updatedAt || '').trim();
-  const bundle = candidate.bundle as ParseBundle | undefined;
+  const bundle = candidate.bundle
+    ? loadTreeBankBundleSnapshot(candidate.bundle) as ParseBundle
+    : undefined;
   const snapshotRaw = typeof candidate.treeSnapshotDataUrl === 'string' ? candidate.treeSnapshotDataUrl : '';
   const treeSnapshotDataUrl = snapshotRaw.startsWith('data:image/') ? snapshotRaw : undefined;
 

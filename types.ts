@@ -8,10 +8,6 @@ export interface SyntaxNode {
   id?: string; // Optional ID for D3 indexing
   aliasIds?: string[];
   lineageId?: string;
-  case?: string;
-  assigner?: string;
-  caseEvidence?: string;
-  caseOvert?: boolean;
 }
 
 export type OpenOntologyLabel = string & {};
