@@ -15,6 +15,13 @@ output to an injected stub engine, preserves normative typed failures, and
 returns a deterministic comparison receipt. Receipts contain references and
 hashes rather than raw or normalized linguistic content.
 
+The W13 manifest boundary builds and freezes only externally supplied release
+selections. Registry entries record per-model documentation and version facts;
+admission-probe receipts are externally produced evidence that this package
+compares mechanically. The tooling never discovers candidates, launches a
+probe, chooses a tier scope, or treats a development fixture as release
+authorization. Actual selections, probes, launch authorization, and scored
+runs remain W14/Francis-gated.
+
 Provider transports, benchmark items, review workflows, statistical models,
-release manifests, publication tooling, and product/database integration
-remain separately gated.
+publication tooling, and product/database integration remain separately gated.
