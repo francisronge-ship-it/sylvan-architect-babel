@@ -83,6 +83,10 @@ export const buildStubPlan = (repoRoot) => {
     id: 'baseline',
     role: 'baseline'
   });
+  const selfPairRun = makeRun({
+    id: 'baseline-self-pair',
+    role: 'self-pair'
+  });
   const factorRuns = FACTOR_KEYS.map((factor) => {
     const factors = baseAssignments();
     factors[factor] = assignment(factor, 'probe-marker');
@@ -108,15 +112,91 @@ export const buildStubPlan = (repoRoot) => {
       text: '{"derivationStages":'
     }
   });
+  const assignmentsWith = (...factors) => {
+    const assignments = baseAssignments();
+    factors.forEach((factor) => {
+      assignments[factor] = assignment(factor, 'probe-marker');
+    });
+    return assignments;
+  };
+  const smallFactorKeys = [
+    'fieldNameWording',
+    'carrier',
+    'incompleteLeafRule',
+    'ambiguityCriterion',
+    'xbarNaryEscape'
+  ];
+  const sequenceSpecs = [
+    {
+      addedFactor: null,
+      factors: smallFactorKeys,
+      id: 'interaction-small-factor-combo',
+      role: 'interaction-arm'
+    },
+    {
+      addedFactor: 'restructuring',
+      factors: [...smallFactorKeys, 'restructuring'],
+      id: 'sequence-restructuring',
+      role: 'sequence-arm'
+    },
+    {
+      addedFactor: 'values',
+      factors: [...smallFactorKeys, 'restructuring', 'values'],
+      id: 'sequence-values',
+      role: 'sequence-arm'
+    },
+    {
+      addedFactor: 'priorAnchors',
+      factors: [...smallFactorKeys, 'restructuring', 'values', 'priorAnchors'],
+      id: 'sequence-priorAnchors',
+      role: 'sequence-arm'
+    },
+    {
+      addedFactor: 'dormantSkeletonUse',
+      factors: [...FACTOR_KEYS],
+      id: 'sequence-dormantSkeletonUse',
+      role: 'sequence-arm'
+    }
+  ];
+  const sequenceRuns = sequenceSpecs.map(({ factors, id, role }) => makeRun({
+    factors: assignmentsWith(...factors),
+    id,
+    role
+  }));
 
   return {
-    comparisons: FACTOR_KEYS.map((factor) => ({
-      baselineRunId: baselineRun.id,
-      factor,
-      id: `compare-${factor}`,
-      mode: 'single-factor',
-      targetRunId: `factor-${factor}`
-    })),
+    comparisons: [
+      {
+        baselineRunId: baselineRun.id,
+        factors: [],
+        id: 'compare-baseline-self-pair',
+        mode: 'self-pair',
+        targetRunId: selfPairRun.id
+      },
+      ...FACTOR_KEYS.map((factor) => ({
+        baselineRunId: baselineRun.id,
+        factors: [factor],
+        id: `compare-${factor}`,
+        mode: 'single-factor',
+        targetRunId: `factor-${factor}`
+      })),
+      {
+        baselineRunId: baselineRun.id,
+        factors: smallFactorKeys,
+        id: 'compare-interaction-small-factor-combo',
+        mode: 'multi-factor',
+        targetRunId: 'interaction-small-factor-combo'
+      },
+      ...sequenceSpecs.slice(1).map((spec, index) => {
+        return {
+          baselineRunId: sequenceSpecs[index].id,
+          factors: [spec.addedFactor],
+          id: `compare-${spec.id}`,
+          mode: 'single-factor',
+          targetRunId: spec.id
+        };
+      })
+    ],
     contract: {
       authoredStageFields: [...AUTHORED_STAGE_FIELDS],
       productionContractMutationAllowed: false,
@@ -126,11 +206,12 @@ export const buildStubPlan = (repoRoot) => {
     planId: 'slice4-provider-free-stub',
     runs: [
       baselineRun,
+      selfPairRun,
       ...factorRuns,
+      ...sequenceRuns,
       diagnosticCompileFailure,
       diagnosticParseFailure
     ],
     schemaVersion: 1
   };
 };
-

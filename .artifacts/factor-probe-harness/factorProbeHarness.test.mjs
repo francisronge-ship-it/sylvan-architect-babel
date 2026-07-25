@@ -32,14 +32,17 @@ const expectInvalid = (mutate, pattern) => {
   );
 };
 
-test('factor registry names all and only the six authorized attribution axes', () => {
+test('factor registry covers the bounded tranche axes and remaining W3 wording rules', () => {
   assert.deepEqual(FACTOR_KEYS, [
     'restructuring',
     'values',
     'priorAnchors',
     'fieldNameWording',
     'carrier',
-    'dormantSkeletonUse'
+    'dormantSkeletonUse',
+    'incompleteLeafRule',
+    'ambiguityCriterion',
+    'xbarNaryEscape'
   ]);
 });
 
@@ -128,10 +131,10 @@ test('provider-free stub run archives raw bytes and emits comparison-ready outco
     plan: buildStubPlan(repoRoot),
     transport: createProviderFreeStubTransport(repoRoot)
   });
-  assert.equal(receipt.semantic.comparisons.length, FACTOR_KEYS.length);
+  assert.equal(receipt.semantic.comparisons.length, 15);
   receipt.semantic.comparisons.forEach((comparison) => {
     assert.equal(comparison.attributionEligible, true);
-    assert.deepEqual(comparison.changedFactors, [comparison.factor]);
+    assert.deepEqual(comparison.changedFactors, comparison.factors);
   });
   const acceptedRuns = receipt.semantic.runs.filter((run) => run.role !== 'diagnostic');
   acceptedRuns.forEach((run) => {
@@ -171,6 +174,26 @@ test('provider-free stub run archives raw bytes and emits comparison-ready outco
     parseDiagnostic.parseOutcome.error.failure.class,
     'transport_serialization'
   );
+});
+
+test('stub program carries self-pair, interaction, and sequential attribution without conclusions', () => {
+  const plan = validateFactorProbePlan(buildStubPlan(repoRoot));
+  const modes = plan.comparisons.map(({ mode }) => mode);
+  assert.equal(modes.filter((mode) => mode === 'self-pair').length, 1);
+  assert.equal(modes.filter((mode) => mode === 'multi-factor').length, 1);
+  assert.equal(modes.filter((mode) => mode === 'single-factor').length, 13);
+  assert.equal(JSON.stringify(plan).includes('winner'), false);
+  assert.equal(JSON.stringify(plan).includes('adopted'), false);
+});
+
+test('self-pair comparison rejects changed prompt or contract material', () => {
+  expectInvalid((plan) => {
+    const selfPair = plan.runs.find((run) => run.id === 'baseline-self-pair');
+    selfPair.artifacts = {
+      ...selfPair.artifacts,
+      contractSha256: '4'.repeat(64)
+    };
+  }, /self-pair must preserve all material artifact hashes/u);
 });
 
 test('identical stub plans produce identical semantic receipts', async (t) => {

@@ -8,7 +8,10 @@ export const FACTOR_KEYS = Object.freeze([
   'priorAnchors',
   'fieldNameWording',
   'carrier',
-  'dormantSkeletonUse'
+  'dormantSkeletonUse',
+  'incompleteLeafRule',
+  'ambiguityCriterion',
+  'xbarNaryEscape'
 ]);
 
 export const SETTLED_FIELD_IDENTITIES = Object.freeze({
@@ -212,8 +215,17 @@ const validateRun = (run, index) => {
   const fieldPath = `$.runs[${index}]`;
   requirePlainObject(run, fieldPath);
   requireSafeId(run.id, `${fieldPath}.id`);
-  if (!['baseline', 'factor-arm', 'diagnostic'].includes(run.role)) {
-    fail(`${fieldPath}.role must be baseline, factor-arm, or diagnostic.`);
+  if (![
+    'baseline',
+    'diagnostic',
+    'factor-arm',
+    'interaction-arm',
+    'self-pair',
+    'sequence-arm'
+  ].includes(run.role)) {
+    fail(
+      `${fieldPath}.role must identify a baseline, diagnostic, factor, interaction, self-pair, or sequence run.`
+    );
   }
   validateInput(run.input, `${fieldPath}.input`);
   validateRunnerIdentity(run.runnerIdentity, `${fieldPath}.runnerIdentity`);
@@ -262,11 +274,24 @@ const validateComparisons = (plan) => {
     requireSafeId(comparison.id, `$.comparisons[${index}].id`);
     if (comparisonIds.has(comparison.id)) fail(`Duplicate comparison id: ${comparison.id}.`);
     comparisonIds.add(comparison.id);
-    if (comparison.mode !== 'single-factor') {
-      fail(`$.comparisons[${index}].mode must be single-factor.`);
+    if (!['multi-factor', 'self-pair', 'single-factor'].includes(comparison.mode)) {
+      fail(`$.comparisons[${index}].mode is unknown.`);
     }
-    if (!FACTOR_KEYS.includes(comparison.factor)) {
-      fail(`$.comparisons[${index}].factor is unknown.`);
+    if (
+      !Array.isArray(comparison.factors)
+      || comparison.factors.some((factor) => !FACTOR_KEYS.includes(factor))
+      || new Set(comparison.factors).size !== comparison.factors.length
+    ) {
+      fail(`$.comparisons[${index}].factors must contain unique known factor names.`);
+    }
+    if (comparison.mode === 'self-pair' && comparison.factors.length !== 0) {
+      fail(`$.comparisons[${index}].self-pair must declare no changed factors.`);
+    }
+    if (comparison.mode === 'single-factor' && comparison.factors.length !== 1) {
+      fail(`$.comparisons[${index}].single-factor must declare exactly one changed factor.`);
+    }
+    if (comparison.mode === 'multi-factor' && comparison.factors.length < 2) {
+      fail(`$.comparisons[${index}].multi-factor must declare at least two changed factors.`);
     }
     const baselineRun = runById.get(comparison.baselineRunId);
     const targetRun = runById.get(comparison.targetRunId);
@@ -277,9 +302,19 @@ const validateComparisons = (plan) => {
       fail(`$.comparisons[${index}] changes input, runner identity, or engine identity.`);
     }
     const changedFactors = changedFactorsBetweenRuns(baselineRun, targetRun);
-    if (changedFactors.length !== 1 || changedFactors[0] !== comparison.factor) {
+    if (
+      comparison.mode === 'self-pair'
+      && sha256(canonicalJson(baselineRun.artifacts))
+        !== sha256(canonicalJson(targetRun.artifacts))
+    ) {
+      fail(`$.comparisons[${index}].self-pair must preserve all material artifact hashes.`);
+    }
+    if (
+      changedFactors.length !== comparison.factors.length
+      || changedFactors.some((factor, factorIndex) => factor !== comparison.factors[factorIndex])
+    ) {
       fail(
-        `$.comparisons[${index}] is confounded; expected only ${comparison.factor}, changed ${changedFactors.join(', ') || 'none'}.`
+        `$.comparisons[${index}] is confounded; expected ${comparison.factors.join(', ') || 'none'}, changed ${changedFactors.join(', ') || 'none'}.`
       );
     }
   }
@@ -395,7 +430,10 @@ export const executeFactorProbePlan = async ({
       runById.get(comparison.targetRunId)
     );
     return {
-      attributionEligible: changedFactors.length === 1 && changedFactors[0] === comparison.factor,
+      attributionEligible: (
+        changedFactors.length === comparison.factors.length
+        && changedFactors.every((factor, index) => factor === comparison.factors[index])
+      ),
       baselineOutcome: {
         compile: receiptByRunId.get(comparison.baselineRunId).compileOutcome.status,
         parse: receiptByRunId.get(comparison.baselineRunId).parseOutcome.status
@@ -403,7 +441,7 @@ export const executeFactorProbePlan = async ({
       baselineRunId: comparison.baselineRunId,
       changedFactors,
       comparisonId: comparison.id,
-      factor: comparison.factor,
+      factors: [...comparison.factors],
       mode: comparison.mode,
       targetOutcome: {
         compile: receiptByRunId.get(comparison.targetRunId).compileOutcome.status,

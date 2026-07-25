@@ -6,7 +6,7 @@ types, or authored contract. It contains no benchmark items, scoring, winner
 logic, roster, tier policy, sample sizes, reviewer quantities, or publication
 rules.
 
-The harness records six independent assignment axes:
+The harness records nine independent assignment axes:
 
 1. `restructuring`
 2. `values`
@@ -14,10 +14,16 @@ The harness records six independent assignment axes:
 4. `fieldNameWording`
 5. `carrier`
 6. `dormantSkeletonUse`
+7. `incompleteLeafRule`
+8. `ambiguityCriterion`
+9. `xbarNaryEscape`
 
 `values` and `priorAnchors` are settled identities. `fieldNameWording` can
 describe externally supplied explanatory wording, but cannot rename either
-field. Every run must also declare the settled four-field authored baseline:
+field. In the corrected program mapping, `fieldNameWording` carries F-A-style
+wording material without reopening an identity, `carrier` carries F-E material,
+and the final three axes carry F-C, F-D, and F-G respectively. Every run must
+also declare the settled four-field authored baseline:
 `statement`, `stageRecord`, `visualRelations`, and `workspaceForest`.
 
 Factor levels are opaque caller-supplied identities with exact material hashes.
@@ -52,3 +58,27 @@ The launcher re-executes under Babel's deny-by-default network guard, runs the
 harness tests, executes two deterministic stub captures, runs
 `npm run verify:all`, and writes ignored output under
 `bench-baseline/slice4-factor-probe/`.
+
+## W3 planning remainder
+
+The provider-free planning utilities remain descriptive and refusal-oriented:
+
+- the stub program includes an A0 self-pair, all nine single-factor arms, one
+  declared small-factor interaction arm, and sequential steps for
+  restructuring, `values`, `priorAnchors`, and dormant-skeleton use;
+- `probeRecords.mjs` validates blinded verdicts and evidence-bearing loss
+  adjudications without producing a verdict;
+- `probeDesign.mjs` evaluates every externally supplied candidate design
+  against externally supplied targets over externally supplied posterior
+  projection draws, but never selects a candidate or supplies a quantity;
+- `probeCost.mjs` evaluates the BM §12 API/human-cost formulas from externally
+  supplied run, token, price, and review quantities;
+- `probeRequest.mjs` creates an immutable carrier-parameterized envelope for an
+  external runner, contains no provider client, and either omits temperature or
+  requires an externally documented provider-forced default to be recorded and
+  sent exactly.
+
+These modules contain no S0 declaration, starting batch size, posterior,
+precision target, carrier choice, price, reviewer quantity, winner, adoption
+rule, or launch path. Development numbers exist only in tests and carry no
+policy force.

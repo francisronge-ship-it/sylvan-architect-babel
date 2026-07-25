@@ -103,7 +103,11 @@ const runCommand = (name, command, args) => {
 const testReceipt = runCommand(
   'factor-harness-tests',
   process.execPath,
-  ['--test', '.artifacts/factor-probe-harness/factorProbeHarness.test.mjs']
+  [
+    '--test',
+    '.artifacts/factor-probe-harness/factorProbeHarness.test.mjs',
+    '.artifacts/factor-probe-harness/probePlanning.test.mjs'
+  ]
 );
 if (testReceipt.exitCode !== 0) {
   throw new Error('Factor harness tests failed; see the proof log.');
@@ -145,6 +149,12 @@ const harnessSources = [
   '.artifacts/factor-probe-harness/factorProbeHarness.test.mjs',
   '.artifacts/factor-probe-harness/captureProviderFreeProof.mjs',
   '.artifacts/factor-probe-harness/stubTransport.mjs',
+  '.artifacts/factor-probe-harness/planningData.mjs',
+  '.artifacts/factor-probe-harness/probeRecords.mjs',
+  '.artifacts/factor-probe-harness/probeDesign.mjs',
+  '.artifacts/factor-probe-harness/probeCost.mjs',
+  '.artifacts/factor-probe-harness/probeRequest.mjs',
+  '.artifacts/factor-probe-harness/probePlanning.test.mjs',
   '.artifacts/factor-probe-harness/README.md'
 ];
 const sourceHashes = Object.fromEntries(harnessSources.map((relativePath) => [
