@@ -49,5 +49,14 @@ intercept-only CR1 cluster-sandwich estimator and symmetric two-sided interval
 must be named explicitly; none is silently selected. Resampling policy and
 measurement-model selection are not part of this base.
 
+The W13 wild-cluster-bootstrap boundary consumes an explicit, externally
+produced cluster-multiplier schedule. The caller supplies its distribution
+identity, source reference and canonical hash, every multiplier, the confidence
+identity, and the two order-statistic indices. The tooling supplies no
+random-number generator, seed convention, replication count, multiplier
+distribution, quantile convention, interval level, or adoption rule. It
+preserves the supplied replication order in the receipt and supports both
+clustered proportions and paired shared-item differences without clipping.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

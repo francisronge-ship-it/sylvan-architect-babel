@@ -9,6 +9,10 @@ export {
   estimatePairedClusteredDifference
 } from './clusteredEstimators.js';
 export {
+  estimatePairedWildClusterBootstrapDifference,
+  estimateWildClusterBootstrapProportion
+} from './clusterBootstrap.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';

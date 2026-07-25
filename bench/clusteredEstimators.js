@@ -9,6 +9,10 @@ import {
   assertExactFields,
   assertNonemptyText
 } from './benchmarkValidation.js';
+import {
+  normalizeBinaryObservations,
+  normalizePairedBinaryObservations
+} from './statisticalObservations.js';
 
 const PLAN_FIELDS = Object.freeze([
   'estimandId',
@@ -19,19 +23,6 @@ const PLAN_FIELDS = Object.freeze([
   'clusterSpecification',
   'pointWeighting',
   'varianceEstimator'
-]);
-
-const PROPORTION_FIELDS = Object.freeze([
-  'observationId',
-  'clusterId',
-  'outcome'
-]);
-
-const PAIR_FIELDS = Object.freeze([
-  'pairId',
-  'clusterId',
-  'left',
-  'right'
 ]);
 
 const sha256CanonicalJson = (value) => createHash('sha256')
@@ -78,12 +69,6 @@ const validatePlan = (plan) => {
     || plan.criticalValue <= 0
   ) {
     throw new TypeError('estimator plan.criticalValue must be positive and finite.');
-  }
-};
-
-const validateBinary = (value, path) => {
-  if (value !== 0 && value !== 1) {
-    throw new TypeError(`${path} must be exactly 0 or 1.`);
   }
 };
 
@@ -142,59 +127,18 @@ const estimateClusteredMean = ({ method, plan, observations }) => {
 
 export const estimateClusteredProportion = ({ plan, observations }) => {
   validatePlan(plan);
-  if (!Array.isArray(observations) || observations.length === 0) {
-    throw new TypeError('proportion observations must be a non-empty array.');
-  }
-  const observationIds = [];
-  const normalized = observations.map((observation, index) => {
-    const path = `proportion observations[${index}]`;
-    assertExactFields(observation, PROPORTION_FIELDS, path);
-    assertNonemptyText(observation.observationId, `${path}.observationId`);
-    assertNonemptyText(observation.clusterId, `${path}.clusterId`);
-    validateBinary(observation.outcome, `${path}.outcome`);
-    observationIds.push(observation.observationId);
-    return {
-      observationId: observation.observationId,
-      clusterId: observation.clusterId,
-      value: observation.outcome
-    };
-  });
-  if (new Set(observationIds).size !== observationIds.length) {
-    throw new TypeError('proportion observations must have unique observationId values.');
-  }
   return estimateClusteredMean({
     method: 'clustered-proportion',
     plan,
-    observations: normalized
+    observations: normalizeBinaryObservations(observations, 'proportion observations')
   });
 };
 
 export const estimatePairedClusteredDifference = ({ plan, pairs }) => {
   validatePlan(plan);
-  if (!Array.isArray(pairs) || pairs.length === 0) {
-    throw new TypeError('paired observations must be a non-empty array.');
-  }
-  const pairIds = [];
-  const normalized = pairs.map((pair, index) => {
-    const path = `paired observations[${index}]`;
-    assertExactFields(pair, PAIR_FIELDS, path);
-    assertNonemptyText(pair.pairId, `${path}.pairId`);
-    assertNonemptyText(pair.clusterId, `${path}.clusterId`);
-    validateBinary(pair.left, `${path}.left`);
-    validateBinary(pair.right, `${path}.right`);
-    pairIds.push(pair.pairId);
-    return {
-      pairId: pair.pairId,
-      clusterId: pair.clusterId,
-      value: pair.left - pair.right
-    };
-  });
-  if (new Set(pairIds).size !== pairIds.length) {
-    throw new TypeError('paired observations must have unique pairId values.');
-  }
   return estimateClusteredMean({
     method: 'paired-clustered-difference',
     plan,
-    observations: normalized
+    observations: normalizePairedBinaryObservations(pairs, 'paired observations')
   });
 };
