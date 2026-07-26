@@ -82,6 +82,10 @@ export {
   hashDevelopmentBundleData
 } from './developmentBundle.js';
 export {
+  createCorrectionLedgerReceipt,
+  hashCorrectionLedgerData
+} from './correctionLedger.js';
+export {
   BM13_D3_PRECONDITION_IDS,
   createReleaseBundleReceipt,
   hashReleaseBundleData

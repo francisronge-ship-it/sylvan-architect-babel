@@ -252,5 +252,17 @@ created. The resulting self-contained integrity receipt validates evidence
 shape and binding only. It does not validate external authority or truth,
 publish development results, authorize a release, or satisfy any D3 gate.
 
+The W16c correction-ledger boundary joins one complete external item-audit cycle
+to one W13 report receipt. Every revised audit must have exactly one correction
+row and one republication record; every correction row must trace back to a
+revised audit. Per-score from/to artifact pairs exactly cover the affected score
+set, including an honestly empty set. Item/version coordinates, finding
+taxonomy, the external affected-score-set artifact, and the external
+republication-plan artifact are bound without interpreting their linguistic or
+statistical content. The versioned score artifacts remain external evidence.
+The receipt performs no audit, score computation, republication, release, or
+publication action and makes no claim that an external authority or archive is
+truthful.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
