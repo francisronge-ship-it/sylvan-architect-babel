@@ -244,5 +244,13 @@ truth, infer stage readiness, advance a stage, authorize a release, or publish
 anything. In particular, a D3 label still requires the separate BM13 release
 bundle before any claim scope exists.
 
+The W16b development-bundle boundary reconstructs an exact D0 stage receipt and
+W13 report receipt, requires exactly BM13 preconditions 1–5, and refuses
+Judgment, Score, or Correction rows. Run-level validity and typed-failure
+evidence remains unchanged; no conformance or linguistic-adequacy layer is
+created. The resulting self-contained integrity receipt validates evidence
+shape and binding only. It does not validate external authority or truth,
+publish development results, authorize a release, or satisfy any D3 gate.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

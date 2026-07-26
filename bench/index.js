@@ -77,6 +77,11 @@ export {
   hashBenchmarkStageEvidence
 } from './benchmarkStage.js';
 export {
+  BM13_D0_PRECONDITION_IDS,
+  createDevelopmentBundleReceipt,
+  hashDevelopmentBundleData
+} from './developmentBundle.js';
+export {
   BM13_D3_PRECONDITION_IDS,
   createReleaseBundleReceipt,
   hashReleaseBundleData
