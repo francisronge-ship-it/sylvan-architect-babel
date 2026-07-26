@@ -99,5 +99,18 @@ nor repaired. This boundary does not fit a rater model, estimate an effect,
 assume independence, choose a confidence convention, set a reliability
 threshold, classify precision, or authorize claim-bearing reporting.
 
+The W13 judged-unit planning boundary validates an externally produced blinded
+assignment plan. Its target set is every valid run whose item version is in the
+externally declared adjudicated set; invalid and out-of-set runs cannot receive
+assignments. The caller supplies the complete randomized run order, reviewer
+pool, one-or-two-reviewer assignments, blinded artifacts, and exact complete
+reviewer-pair counts. The validator enforces no self-review, complete coverage,
+source-run binding, declared model and item-author blinding, and pair and
+counts differing by at most one. Reviewer workloads are reported descriptively,
+not constrained by an invented balancing policy. It generates no assignments
+and chooses no reviewer quantity, adjudicated set, double-rating share, or workload.
+Judgment content, rationales, split adjudication, calibration, and expert
+recruitment remain separate gated work.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

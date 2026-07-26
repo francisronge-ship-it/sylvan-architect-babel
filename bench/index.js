@@ -31,6 +31,10 @@ export {
   propagateRaterEffects
 } from './raterEffectPropagation.js';
 export {
+  hashJudgedUnitPlanData,
+  validateJudgedUnitPlan
+} from './judgedUnitPlan.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';
