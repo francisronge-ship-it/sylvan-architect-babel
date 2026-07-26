@@ -66,6 +66,11 @@ export {
   hashReportPreviewData
 } from './reportPreview.js';
 export {
+  createReportAccessibilityAuditReceipt,
+  hashReportAccessibilityAuditData,
+  REPORT_ACCESSIBILITY_CHECK_IDS
+} from './reportAccessibilityAudit.js';
+export {
   BM13_D3_PRECONDITION_IDS,
   createReleaseBundleReceipt,
   hashReleaseBundleData

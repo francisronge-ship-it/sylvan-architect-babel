@@ -227,5 +227,14 @@ figure, accessibility result, or claim is inferred. The receipt is a
 reproducibility manifest for development data only: it creates no site,
 publication authorization, deployment target, or release action.
 
+The W15b accessibility-evidence boundary reconstructs the W15a preview chain
+and requires one external observation for each preview artifact across BM12's
+colorblind-safety, non-color-redundancy, reduced-motion, and static-
+reproducibility checks. Each observation binds the exact preview artifact,
+auditor, opaque observation time, evidence artifact, optional finding
+artifacts, and provenance. Observation labels remain external and open; the
+inventory computes no accessibility verdict, design approval, publication
+authorization, deployment state, or release action.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
