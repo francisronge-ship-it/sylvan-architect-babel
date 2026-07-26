@@ -73,6 +73,11 @@ export {
   ITEM_NOVELTY_CLASSES
 } from './draftItems.js';
 export {
+  createDraftTaxonomyAuditReceipt,
+  DRAFT_TAXONOMY_AUDIT_OUTCOMES,
+  hashDraftTaxonomyAuditData
+} from './draftTaxonomyAudit.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';

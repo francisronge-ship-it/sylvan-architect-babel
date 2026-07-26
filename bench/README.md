@@ -200,5 +200,15 @@ keys. Every output remains lifecycle `draft`; human linguistic-validity review,
 taxonomy audit, piloting, activation, scoring, and release authorization remain
 outside this boundary.
 
+The W14b draft taxonomy-audit boundary requires one externally authored,
+hash-bound audit record for every W14a draft item. Each record names its
+auditors, opaque audit time, evidence artifact, external taxonomy catalog, and
+either no recorded findings or exact finding references. The boundary verifies
+only receipt reconstruction, source integrity, evidence shape, and complete
+item coverage. It does not perform a linguistic or taxonomy judgment, validate
+the truth or authority of the referenced evidence, choose an auditor count,
+resolve findings, change lifecycle, activate an item, score it, or authorize a
+release. Every item remains a W14a `draft`.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
