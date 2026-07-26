@@ -47,6 +47,12 @@ export {
   hashMemorizationProbeData
 } from './memorizationProbe.js';
 export {
+  createItemAuditReceipt,
+  hashItemAuditData,
+  ITEM_AUDIT_DISPOSITIONS,
+  ITEM_AUDIT_TAXONOMY
+} from './itemAudit.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';

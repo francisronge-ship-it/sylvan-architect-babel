@@ -147,5 +147,17 @@ observation set. The boundary chooses no provider roster, probe content,
 extraction method, cadence, risk budget, rotation trigger, retirement action,
 or study conclusion.
 
+The W13 item-audit boundary validates an externally declared complete
+item-version scope and one externally authored human-audit disposition per
+target. It recognizes exactly the five lifecycle error classes and the three
+settled dispositions: verified, revised, and documented-uncertain. Verified
+records contain no defect finding; revised records bind the next item version,
+affected-score set, and an external dual-version republication plan;
+documented-uncertain records are mechanically excluded from claim-bearing
+scores until resolved. A verified record removes only this audit exclusion and
+never authorizes a release. The tooling performs no linguistic review, creates
+no item content, samples no audit targets, recruits no reviewer, chooses no
+retirement trigger, and changes no item or score artifact.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
