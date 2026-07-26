@@ -88,5 +88,16 @@ resampling generator, confidence convention, coefficient-ranking rule, or
 adoption default. Ordinal coefficients and error-propagation analysis remain
 separate method-gated work.
 
+The W13 rater-effect propagation boundary consumes separately hash-bound score
+draws and signed rater-effect draws from an external method, pairs them by exact
+draw ID, and reports the base, effect, and propagated empirical distributions.
+The caller must declare how the base score treated rater effects, the common
+additive scale, joint-draw construction, pairing and combination identities,
+confidence identity, source references, and percentile order indices. Paired
+draws retain their externally established covariance; inputs are neither clipped
+nor repaired. This boundary does not fit a rater model, estimate an effect,
+assume independence, choose a confidence convention, set a reliability
+threshold, classify precision, or authorize claim-bearing reporting.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

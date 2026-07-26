@@ -27,6 +27,10 @@ export {
   hashAgreementData
 } from './agreementCoefficients.js';
 export {
+  hashRaterEffectPropagationData,
+  propagateRaterEffects
+} from './raterEffectPropagation.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';
