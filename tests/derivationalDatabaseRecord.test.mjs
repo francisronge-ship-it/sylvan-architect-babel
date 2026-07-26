@@ -310,18 +310,18 @@ test('does not mutate caller data while validating a serialized record', () => {
   assert.deepEqual(decoded, before);
 });
 
-test('durable-record core imports only Node crypto and its local module', async () => {
+test('durable-record core imports only Node crypto and W17 local modules', async () => {
   const [coreSource, indexSource] = await Promise.all([
     readFile('derivationalDatabase/durableRecord.js', 'utf8'),
     readFile('derivationalDatabase/index.js', 'utf8')
   ]);
   assert.deepEqual(
     [...coreSource.matchAll(/from ['"]([^'"]+)['"]/gu)].map((match) => match[1]),
-    ['node:crypto']
+    ['node:crypto', './jsonData.js']
   );
   assert.deepEqual(
     [...indexSource.matchAll(/from ['"]([^'"]+)['"]/gu)].map((match) => match[1]),
-    ['./durableRecord.js']
+    ['./durableRecord.js', './recordEvidence.js']
   );
   assert.doesNotMatch(
     `${coreSource}\n${indexSource}`,

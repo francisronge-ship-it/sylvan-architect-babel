@@ -33,3 +33,21 @@ boundaries. Because artifact values and provenance are intentionally opaque,
 the caller remains responsible for keeping raw bytes outside them. Hashes prove
 content integrity, not source authenticity; the caller must verify every
 external source reference.
+
+## W17b record-evidence schemas
+
+`recordEvidence.js` validates the four non-derivational evidence artifacts
+carried by W17a:
+
+- generation provenance, including externally supplied provider, model,
+  effort, prompt hashes, sent configuration, timing, token use, and labeled
+  cost estimate;
+- review state with open tier and judgment labels;
+- ambiguity grouping by bundle ID and nonnegative analysis index;
+- dated provider-notice references and hashes.
+
+These schemas preserve the caller's JSON values and add no provider roster,
+reasoning policy, review taxonomy, cost policy, legal conclusion, publication
+state, or source-authenticity claim. The returned copies are deeply frozen.
+They are not a product integration and do not validate the opaque normalized
+derivation.
