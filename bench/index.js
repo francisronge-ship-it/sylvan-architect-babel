@@ -35,6 +35,10 @@ export {
   validateJudgedUnitPlan
 } from './judgedUnitPlan.js';
 export {
+  createExposureLedgerReceipt,
+  hashExposureLedgerData
+} from './exposureLedger.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';

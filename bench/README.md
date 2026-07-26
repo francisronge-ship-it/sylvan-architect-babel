@@ -105,12 +105,24 @@ externally declared adjudicated set; invalid and out-of-set runs cannot receive
 assignments. The caller supplies the complete randomized run order, reviewer
 pool, one-or-two-reviewer assignments, blinded artifacts, and exact complete
 reviewer-pair counts. The validator enforces no self-review, complete coverage,
-source-run binding, declared model and item-author blinding, and pair and
-counts differing by at most one. Reviewer workloads are reported descriptively,
+source-run binding, declared model and item-author blinding, and pair counts
+differing by at most one. Reviewer workloads are reported descriptively,
 not constrained by an invented balancing policy. It generates no assignments
-and chooses no reviewer quantity, adjudicated set, double-rating share, or workload.
+and chooses no reviewer quantity, adjudicated set, double-rating share, or
+workload.
 Judgment content, rationales, split adjudication, calibration, and expert
 recruitment remain separate gated work.
+
+The W13 exposure-ledger boundary requires exactly one evidence event for every
+externally declared execution. Provider-API execution is always recorded as
+exposure with provider, date, retention tier, and retention evidence; retention
+commitments remain observations and never reverse exposure. Operator-controlled
+local open-weight execution records custody evidence but creates no provider
+exposure state. The externally supplied complete chronological order determines
+first exposure; the ledger retains every later exposure event without call
+budgets, provider rosters, risk scores, rotation rules, or non-exposure claims
+beyond the ledger evidence. Twin-gap and memorization-probe analysis remain
+separate dependent packages.
 
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
