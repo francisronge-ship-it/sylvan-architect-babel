@@ -124,5 +124,15 @@ budgets, provider rosters, risk scores, rotation rules, or non-exposure claims
 beyond the ledger evidence. Twin-gap and memorization-probe analysis remain
 separate dependent packages.
 
+The W13 twin-gap boundary consumes externally matched exposed-anchor and
+unexposed-twin records for externally named providers, per-window conditions,
+outcomes, and chronologically ordered window pairs. Every record carries
+exposure-ledger, twin-non-exposure, matching, outcome, and four-run evidence.
+The tooling reports signed anchor-minus-twin gaps and their absolute magnitudes
+without clipping or recoding. Only an increase in the absolute gap is labeled
+`widening-evidence-not-proof`, under an externally sourced method identity;
+there is no gap aggregation, threshold, cadence, causal conclusion, memorization
+verdict, rotation action, or provider call.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

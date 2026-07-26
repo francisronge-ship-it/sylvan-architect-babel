@@ -39,6 +39,10 @@ export {
   hashExposureLedgerData
 } from './exposureLedger.js';
 export {
+  createTwinGapReceipt,
+  hashTwinGapData
+} from './twinGap.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';
