@@ -170,5 +170,15 @@ an item, or authorize a release. The tooling chooses no content, reviewer,
 ordering, cadence, quota, ranking, score, retirement action, or publication
 rule.
 
+The W13 star-schema report boundary emits the eight BM §12 tables for one
+externally declared release. It hash-binds every source table, validates primary
+keys and the Condition→Release/Model, Run→Condition/ItemVersion,
+Judgment→Run, Score→Condition, and Correction→ItemVersion/Score joins, and
+preserves every row without computing or rewriting a score. Resolved model
+versions and alias windows stay mutually exclusive, measured token/cost/latency
+facts remain non-negative, and score intervals remain finite but unclipped.
+Generating this deterministic dataset does not select a model, method, measure,
+view, claim, composite, ranking, figure, publication policy, or release action.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

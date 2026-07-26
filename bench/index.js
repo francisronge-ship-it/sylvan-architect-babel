@@ -57,6 +57,11 @@ export {
   hashRollingIntakeData
 } from './rollingIntake.js';
 export {
+  createReportStarSchemaReceipt,
+  hashReportStarSchemaData,
+  REPORT_TABLE_NAMES
+} from './reportStarSchema.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';
