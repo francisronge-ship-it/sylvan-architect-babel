@@ -67,5 +67,14 @@ posterior component coverage and returns immutable comparison receipts. It does
 not fit data, invent priors, choose a sampler, interpret diagnostics, or adopt a
 measurement model; non-stub fitters remain refused until separately approved.
 
+The W13 S2 boundary expands externally supplied candidate designs across an
+externally selected posterior-draw set and requires one hash-bound simulator
+result for every candidate/draw cell. It mechanically evaluates externally
+declared at-least/at-most targets and reports complete or incomplete candidate
+evidence without ranking candidates or selecting a design. Posterior-window
+selection, N, k, adjudicated-subset size, double-rating share, thresholds,
+simulation implementation/configuration, and random schedule remain external.
+Only the provider-free simulator stub is admitted in this package.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

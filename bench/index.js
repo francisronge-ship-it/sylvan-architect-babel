@@ -18,6 +18,11 @@ export {
   runVarianceComponentFitDryRun
 } from './varianceComponentFit.js';
 export {
+  createS2SimulationPlan,
+  hashS2SimulationData,
+  runS2SimulationDryRun
+} from './s2Simulation.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';
@@ -42,6 +47,7 @@ export {
 export { createBenchmarkRunPlan } from './runPlan.js';
 export {
   createMemoryArtifactSink,
+  createS2SimulatorStub,
   createStubEngine,
   createStubTransport,
   createVarianceComponentFitterStub
