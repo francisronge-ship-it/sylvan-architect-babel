@@ -71,6 +71,12 @@ export {
   REPORT_ACCESSIBILITY_CHECK_IDS
 } from './reportAccessibilityAudit.js';
 export {
+  BENCHMARK_STAGE_DEFINITIONS,
+  createBenchmarkStageReceipt,
+  hashBenchmarkStageData,
+  hashBenchmarkStageEvidence
+} from './benchmarkStage.js';
+export {
   BM13_D3_PRECONDITION_IDS,
   createReleaseBundleReceipt,
   hashReleaseBundleData

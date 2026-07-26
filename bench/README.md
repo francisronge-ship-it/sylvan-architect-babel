@@ -236,5 +236,13 @@ artifacts, and provenance. Observation labels remain external and open; the
 inventory computes no accessibility verdict, design approval, publication
 authorization, deployment state, or release action.
 
+The W16a benchmark-stage boundary mechanically pairs D0–D3 with their settled
+BM8 identities and claim boundaries, then binds a nonempty, externally authored
+evidence set to that label. Evidence roles, authorities, and opaque observation
+times remain external. The receipt does not validate evidence authority or
+truth, infer stage readiness, advance a stage, authorize a release, or publish
+anything. In particular, a D3 label still requires the separate BM13 release
+bundle before any claim scope exists.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
