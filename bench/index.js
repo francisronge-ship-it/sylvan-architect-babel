@@ -43,6 +43,10 @@ export {
   hashTwinGapData
 } from './twinGap.js';
 export {
+  createMemorizationProbeReceipt,
+  hashMemorizationProbeData
+} from './memorizationProbe.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';

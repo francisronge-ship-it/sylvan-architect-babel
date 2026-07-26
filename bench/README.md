@@ -134,5 +134,18 @@ without clipping or recoding. Only an increase in the absolute gap is labeled
 there is no gap aggregation, threshold, cadence, causal conclusion, memorization
 verdict, rotation action, or provider call.
 
+The W13 memorization-probe evidence boundary compares raw continuation bytes
+that an external method has already extracted. Probe definitions bind the
+input and expected-continuation artifacts; observations bind the provider,
+condition, window, exposure-ledger event, and observed continuation artifact.
+Only exact byte equality is reported, with no Unicode normalization, repair,
+fuzzy matching, threshold, or memorization verdict. An externally supplied
+complete observation order mechanically marks a probe spent and exposed at its
+first declared use; timestamps are retained as opaque evidence and never order
+observations. Unobserved probes are described only as unspent in the declared
+observation set. The boundary chooses no provider roster, probe content,
+extraction method, cadence, risk budget, rotation trigger, retirement action,
+or study conclusion.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
