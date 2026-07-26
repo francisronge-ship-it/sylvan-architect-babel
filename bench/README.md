@@ -190,5 +190,15 @@ external attestation, publish artifacts, authorize a release, or implement the
 separate D0/W16 release workflow. Evidence authenticity remains the
 responsibility of each referenced authority/archive join.
 
+The W14a draft-item boundary records externally authored BM §5 content axes,
+purpose flags, conditional checklist entries, draft family-documentation
+artifacts, ambiguity metadata, exact UTF-8 input text, and provenance. Its lint
+is structural only: framework and phenomenon names remain open, checklist prose
+is never interpreted, family documentation is explicitly draft and
+non-normative, and foundational/adversarial flags never become gates or scoring
+keys. Every output remains lifecycle `draft`; human linguistic-validity review,
+taxonomy audit, piloting, activation, scoring, and release authorization remain
+outside this boundary.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

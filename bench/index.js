@@ -67,6 +67,12 @@ export {
   hashReleaseBundleData
 } from './releaseBundle.js';
 export {
+  CHECKLIST_OBLIGATION_CLASSES,
+  createDraftItemSetReceipt,
+  hashDraftItemData,
+  ITEM_NOVELTY_CLASSES
+} from './draftItems.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';
