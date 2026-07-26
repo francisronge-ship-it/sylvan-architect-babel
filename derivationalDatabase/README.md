@@ -51,3 +51,14 @@ reasoning policy, review taxonomy, cost policy, legal conclusion, publication
 state, or source-authenticity claim. The returned copies are deeply frozen.
 They are not a product integration and do not validate the opaque normalized
 derivation.
+
+## W17c evidence-bound envelope adapter
+
+`recordEnvelopeAdapter.js` is the single join between the W17a envelope and
+W17b evidence schemas. It validates the complete evidence set, requires the
+generation record's framework identity to equal the W17a plan's framework
+identity, and then creates or validates the canonical durable record.
+
+The adapter does not interpret the normalized derivation, infer a framework,
+repair evidence, add defaults, or authenticate external hashes. It introduces
+no persistence or product path.

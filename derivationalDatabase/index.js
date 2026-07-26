@@ -16,3 +16,7 @@ export {
   validateRecordEvidenceArtifacts,
   validateReviewStateEvidence
 } from './recordEvidence.js';
+export {
+  createEvidenceBoundDurableRecord,
+  validateEvidenceBoundDurableRecord
+} from './recordEnvelopeAdapter.js';

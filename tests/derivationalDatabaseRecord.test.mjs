@@ -321,7 +321,11 @@ test('durable-record core imports only Node crypto and W17 local modules', async
   );
   assert.deepEqual(
     [...indexSource.matchAll(/from ['"]([^'"]+)['"]/gu)].map((match) => match[1]),
-    ['./durableRecord.js', './recordEvidence.js']
+    [
+      './durableRecord.js',
+      './recordEvidence.js',
+      './recordEnvelopeAdapter.js'
+    ]
   );
   assert.doesNotMatch(
     `${coreSource}\n${indexSource}`,
