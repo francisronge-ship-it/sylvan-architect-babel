@@ -219,5 +219,13 @@ reuse without generating an authorization, selecting a model, validating the
 external authority or evidence artifact, launching a run, or authorizing
 publication.
 
+The W15a report-preview boundary reconstructs an exact W13 star-schema receipt
+and binds development-only preview artifacts to their declared BM12 source
+tables, external reproducer artifacts, output hashes, order, and provenance.
+Artifact roles stay externally supplied and no view, score, transformation,
+figure, accessibility result, or claim is inferred. The receipt is a
+reproducibility manifest for development data only: it creates no site,
+publication authorization, deployment target, or release action.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
