@@ -12,6 +12,7 @@ import {
   createStubEngine,
   createStubTransport,
   freezeReleaseManifest,
+  hashReleaseManifestDraft,
   runBenchmarkDryRun,
   validateConditionMatrix,
   validateRunSchedule
@@ -84,49 +85,57 @@ const probeReceipt = {
   }
 };
 
-const frozenManifest = () => freezeReleaseManifest({
-  draft: buildReleaseManifest({
-    manifest: {
-      releaseId: 'external-release',
-      manifestVersion: 'external-manifest-version',
-      suiteVersion: 'external-suite-version',
-      contractHashes: {
-        prompt: digest('prompt'),
-        contract: digest('contract')
-      },
-      engineVersion: 'external-engine-version',
-      runWindow: 'external-run-window',
-      policyVersion: 'external-policy-version',
-      selectionAuthority: {
-        authorityRef: 'external-authority',
-        selectedAt: 'external-selection-date',
-        selectionEvidenceRef: 'external-selection-evidence'
-      },
-      selections: [{
-        registryId: 'external-registry-id',
-        hostRoutes: ['external-host'],
-        tierCoverage: {
-          scope: 'full-characterization',
-          requiredNativeReasoningTiers: ['external-default', 'external-maximum'],
-          scopeStatement: 'external-full-characterization-scope'
-        },
-        requestParameters: {
-          temperaturePolicy: 'external-policy',
-          completionLimit: 'external-completion-limit'
-        },
-        admissionProbeRef: 'external-probe'
-      }],
-      amendmentRefs: []
+const manifestDraft = () => buildReleaseManifest({
+  manifest: {
+    releaseId: 'external-release',
+    manifestVersion: 'external-manifest-version',
+    suiteVersion: 'external-suite-version',
+    contractHashes: {
+      prompt: digest('prompt'),
+      contract: digest('contract')
     },
-    registryEntries: [registryEntry],
-    admissionProbeReceipts: [probeReceipt]
-  }),
-  launchAuthorization: {
-    authorizationRef: 'external-authorization',
-    authorizedAt: 'external-authorization-date',
-    authorizedBy: 'external-authority'
-  }
+    engineVersion: 'external-engine-version',
+    runWindow: 'external-run-window',
+    policyVersion: 'external-policy-version',
+    selectionAuthority: {
+      authorityRef: 'external-authority',
+      selectedAt: 'external-selection-date',
+      selectionEvidenceRef: 'external-selection-evidence'
+    },
+    selections: [{
+      registryId: 'external-registry-id',
+      hostRoutes: ['external-host'],
+      tierCoverage: {
+        scope: 'full-characterization',
+        requiredNativeReasoningTiers: ['external-default', 'external-maximum'],
+        scopeStatement: 'external-full-characterization-scope'
+      },
+      requestParameters: {
+        temperaturePolicy: 'external-policy',
+        completionLimit: 'external-completion-limit'
+      },
+      admissionProbeRef: 'external-probe'
+    }],
+    amendmentRefs: []
+  },
+  registryEntries: [registryEntry],
+  admissionProbeReceipts: [probeReceipt]
 });
+
+const frozenManifest = () => {
+  const draft = manifestDraft();
+  return freezeReleaseManifest({
+    draft,
+    launchAuthorization: {
+      authorizationRef: 'external-authorization',
+      authorizationEvidenceSha256:
+        digest('external-authorization-evidence'),
+      authorizedDraftSha256: hashReleaseManifestDraft(draft),
+      authorizedAt: 'external-authorization-date',
+      authorizedBy: 'external-authority'
+    }
+  });
+};
 
 const condition = (conditionId, nativeTier, overrides = {}) => ({
   conditionId,

@@ -8,6 +8,7 @@ import {
   createReleaseBundleReceipt,
   createReportStarSchemaReceipt,
   freezeReleaseManifest,
+  hashReleaseManifestDraft,
   hashReleaseBundleData,
   hashReportStarSchemaData,
   REPORT_TABLE_NAMES
@@ -106,14 +107,17 @@ const manifestInput = {
   amendmentRefs: []
 };
 
+const manifestDraft = buildReleaseManifest({
+  manifest: manifestInput,
+  registryEntries: [registryEntry],
+  admissionProbeReceipts: [admissionProbe]
+});
 const frozenManifest = freezeReleaseManifest({
-  draft: buildReleaseManifest({
-    manifest: manifestInput,
-    registryEntries: [registryEntry],
-    admissionProbeReceipts: [admissionProbe]
-  }),
+  draft: manifestDraft,
   launchAuthorization: {
     authorizationRef: 'authority://francis/launch',
+    authorizationEvidenceSha256: digest('launch-authorization-evidence'),
+    authorizedDraftSha256: hashReleaseManifestDraft(manifestDraft),
     authorizedAt: 'opaque-launch-record',
     authorizedBy: 'external-authority'
   }
@@ -397,7 +401,7 @@ test('the frozen manifest must validate and match the bundle plan', () => {
   };
   assert.throws(
     () => createReceipt({ manifest: tamperedManifest }),
-    /frozen release manifest hash does not match its content/
+    /authorizedDraftSha256 must match the canonical release manifest draft/
   );
 });
 

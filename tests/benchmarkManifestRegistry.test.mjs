@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -7,8 +8,14 @@ import {
   createAdmissionProbeReceipt,
   createModelRegistryEntry,
   freezeReleaseManifest,
+  hashReleaseManifestDraft,
+  validateFrozenReleaseManifest,
   verifyAdmissionProbeReceipt
 } from '../bench/index.js';
+
+const digest = (text) => createHash('sha256')
+  .update(text, 'utf8')
+  .digest('hex');
 
 const registryEntryInput = (overrides = {}) => ({
   registryId: 'externally-selected-model',
@@ -112,6 +119,16 @@ const buildDraft = (manifest = manifestInput(), {
   manifest,
   registryEntries,
   admissionProbeReceipts
+});
+
+const launchAuthorization = (draft, overrides = {}) => ({
+  authorizationRef: 'external-launch-authorization',
+  authorizationEvidenceSha256:
+    digest('external-launch-authorization-evidence'),
+  authorizedDraftSha256: hashReleaseManifestDraft(draft),
+  authorizedAt: 'external-authorization-date',
+  authorizedBy: 'external-authority-identity',
+  ...overrides
 });
 
 test('registry entries preserve external model facts without defaults', () => {
@@ -287,22 +304,23 @@ test('manifest construction fails on mismatched probe or undeclared host evidenc
 });
 
 test('freezing requires external authorization and is deterministic', () => {
-  const authorization = {
-    authorizationRef: 'external-launch-authorization',
-    authorizedAt: 'external-authorization-date',
-    authorizedBy: 'external-authority-identity'
-  };
+  const draft = buildDraft();
+  const authorization = launchAuthorization(draft);
   const first = freezeReleaseManifest({
-    draft: buildDraft(),
+    draft,
     launchAuthorization: authorization
   });
   const second = freezeReleaseManifest({
-    draft: buildDraft(),
+    draft,
     launchAuthorization: authorization
   });
 
   assert.equal(first.lifecycle, 'frozen');
   assert.match(first.manifestSha256, /^[0-9a-f]{64}$/u);
+  assert.equal(
+    first.launchAuthorization.authorizedDraftSha256,
+    hashReleaseManifestDraft(draft)
+  );
   assert.deepEqual(second, first);
   assert.ok(Object.isFrozen(first.launchAuthorization));
   assert.ok(Object.isFrozen(first.registrySnapshot));
@@ -318,6 +336,35 @@ test('freezing requires external authorization and is deterministic', () => {
   );
   assert.throws(
     () => freezeReleaseManifest({
+      draft,
+      launchAuthorization: {
+        authorizationRef: authorization.authorizationRef,
+        authorizedAt: authorization.authorizedAt,
+        authorizedBy: authorization.authorizedBy
+      }
+    }),
+    /missing=\[authorizationEvidenceSha256,authorizedDraftSha256\]/
+  );
+  assert.throws(
+    () => freezeReleaseManifest({
+      draft,
+      launchAuthorization: launchAuthorization(draft, {
+        authorizationEvidenceSha256: 'not-a-sha'
+      })
+    }),
+    /authorizationEvidenceSha256 must be a lowercase SHA-256 digest/
+  );
+  assert.throws(
+    () => freezeReleaseManifest({
+      draft,
+      launchAuthorization: launchAuthorization(draft, {
+        authorizedDraftSha256: digest('different-manifest-draft')
+      })
+    }),
+    /must match the canonical release manifest draft/
+  );
+  assert.throws(
+    () => freezeReleaseManifest({
       draft: {
         ...buildDraft(),
         hiddenRoster: ['unselected']
@@ -326,15 +373,32 @@ test('freezing requires external authorization and is deterministic', () => {
     }),
     /extra=\[hiddenRoster\]/
   );
-  const changedEvidence = freezeReleaseManifest({
-    draft: buildDraft(manifestInput(), {
-      registryEntries: [registryEntryInput({
-        provider: 'Different External Provider'
-      })]
+  const changedDraft = buildDraft(manifestInput(), {
+    registryEntries: [registryEntryInput({
+      provider: 'Different External Provider'
+    })]
+  });
+  assert.throws(
+    () => freezeReleaseManifest({
+      draft: changedDraft,
+      launchAuthorization: authorization
     }),
-    launchAuthorization: authorization
+    /must match the canonical release manifest draft/
+  );
+  const changedEvidence = freezeReleaseManifest({
+    draft: changedDraft,
+    launchAuthorization: launchAuthorization(changedDraft)
   });
   assert.notEqual(changedEvidence.manifestSha256, first.manifestSha256);
+
+  const tamperedFrozen = structuredClone(first);
+  tamperedFrozen.launchAuthorization.authorizationEvidenceSha256 = digest(
+    'different-authorization-evidence'
+  );
+  assert.throws(
+    () => validateFrozenReleaseManifest(tamperedFrozen),
+    /manifest hash does not match its content/
+  );
 });
 
 test('manifest tooling contains no roster, launch, provider, or product client', async () => {

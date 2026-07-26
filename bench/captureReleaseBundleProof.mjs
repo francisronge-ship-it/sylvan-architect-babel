@@ -8,6 +8,7 @@ import {
   createReleaseBundleReceipt,
   createReportStarSchemaReceipt,
   freezeReleaseManifest,
+  hashReleaseManifestDraft,
   hashReleaseBundleData,
   hashReportStarSchemaData,
   REPORT_TABLE_NAMES
@@ -100,14 +101,18 @@ const manifestInput = {
   }],
   amendmentRefs: []
 };
+const manifestDraft = buildReleaseManifest({
+  manifest: manifestInput,
+  registryEntries: [registryEntry],
+  admissionProbeReceipts: [admissionProbe]
+});
 const frozenManifest = freezeReleaseManifest({
-  draft: buildReleaseManifest({
-    manifest: manifestInput,
-    registryEntries: [registryEntry],
-    admissionProbeReceipts: [admissionProbe]
-  }),
+  draft: manifestDraft,
   launchAuthorization: {
     authorizationRef: 'proof://authority/launch',
+    authorizationEvidenceSha256:
+      digest('proof-launch-authorization-evidence'),
+    authorizedDraftSha256: hashReleaseManifestDraft(manifestDraft),
     authorizedAt: 'proof-launch-record',
     authorizedBy: 'proof-external-authority'
   }

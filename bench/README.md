@@ -210,5 +210,14 @@ the truth or authority of the referenced evidence, choose an auditor count,
 resolve findings, change lifecycle, activate an item, score it, or authorize a
 release. Every item remains a W14a `draft`.
 
+The W14c manifest launch-integrity boundary computes the canonical hash of a
+fully reconstructed W13 manifest draft before freezing it. Externally supplied
+launch authorization must name that exact draft hash and carry its own evidence
+hash; the final frozen-manifest hash then covers both the reconstructed draft
+and the authorization record. This closes stale or cross-draft authorization
+reuse without generating an authorization, selecting a model, validating the
+external authority or evidence artifact, launching a run, or authorizing
+publication.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.

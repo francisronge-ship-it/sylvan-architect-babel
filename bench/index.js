@@ -84,6 +84,7 @@ export {
 export {
   buildReleaseManifest,
   freezeReleaseManifest,
+  hashReleaseManifestDraft,
   validateFrozenReleaseManifest
 } from './releaseManifest.js';
 export {
