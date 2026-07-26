@@ -62,6 +62,11 @@ export {
   REPORT_TABLE_NAMES
 } from './reportStarSchema.js';
 export {
+  BM13_D3_PRECONDITION_IDS,
+  createReleaseBundleReceipt,
+  hashReleaseBundleData
+} from './releaseBundle.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';

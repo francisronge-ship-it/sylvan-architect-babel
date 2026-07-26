@@ -180,5 +180,15 @@ facts remain non-negative, and score intervals remain finite but unclipped.
 Generating this deterministic dataset does not select a model, method, measure,
 view, claim, composite, ranking, figure, publication policy, or release action.
 
+The W13 BM §13 release-bundle boundary accepts only a first-D3 bundle candidate.
+It requires the exact ten externally attested preconditions, binds every
+attestation to the same release and frozen-manifest hash, reconstructs the
+frozen manifest and W13 star-schema receipt, and verifies their release tuple
+and selected-model set agree. The resulting immutable receipt is an integrity
+and completeness record only: it does not verify the truth or authority of an
+external attestation, publish artifacts, authorize a release, or implement the
+separate D0/W16 release workflow. Evidence authenticity remains the
+responsibility of each referenced authority/archive join.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
