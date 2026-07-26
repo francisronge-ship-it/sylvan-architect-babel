@@ -53,6 +53,10 @@ export {
   ITEM_AUDIT_TAXONOMY
 } from './itemAudit.js';
 export {
+  createRollingIntakeReceipt,
+  hashRollingIntakeData
+} from './rollingIntake.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';

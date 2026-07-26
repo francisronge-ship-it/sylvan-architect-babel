@@ -159,5 +159,16 @@ never authorizes a release. The tooling performs no linguistic review, creates
 no item content, samples no audit targets, recruits no reviewer, chooses no
 retirement trigger, and changes no item or score artifact.
 
+The W13 rolling-intake boundary records candidate item versions accompanied by
+externally supplied review-record evidence as an additive queue. Each snapshot
+hash-binds complete prior and current entry sets, requires the prior order as an
+unchanged prefix, and preserves every prior candidate record exactly. Entries
+carry item, submission, submitter, review-record, review-authority, and
+opaque-time provenance. The boundary preserves those external declarations; it
+does not validate the referenced review artifact at its archive join, activate
+an item, or authorize a release. The tooling chooses no content, reviewer,
+ordering, cadence, quota, ranking, score, retirement action, or publication
+rule.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
