@@ -324,7 +324,8 @@ test('durable-record core imports only Node crypto and W17 local modules', async
     [
       './durableRecord.js',
       './recordEvidence.js',
-      './recordEnvelopeAdapter.js'
+      './recordEnvelopeAdapter.js',
+      './nativeRecordExport.js'
     ]
   );
   assert.doesNotMatch(

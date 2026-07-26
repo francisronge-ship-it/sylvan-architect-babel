@@ -20,3 +20,8 @@ export {
   createEvidenceBoundDurableRecord,
   validateEvidenceBoundDurableRecord
 } from './recordEnvelopeAdapter.js';
+export {
+  createNativeRecordExport,
+  NATIVE_RECORD_EXPORT_SCHEMA_IDENTITY,
+  validateNativeRecordExport
+} from './nativeRecordExport.js';

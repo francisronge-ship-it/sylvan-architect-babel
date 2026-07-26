@@ -62,3 +62,15 @@ identity, and then creates or validates the canonical durable record.
 The adapter does not interpret the normalized derivation, infer a framework,
 repair evidence, add defaults, or authenticate external hashes. It introduces
 no persistence or product path.
+
+## W17d native-record export boundary
+
+`nativeRecordExport.js` creates the sole full-derivation export: the canonical
+native-JSON bytes of an already validated W17c record. Its validator checks the
+raw byte hash, parses the canonical carrier, revalidates the complete W17
+record, and binds the export to that record's hash.
+
+Calling the pure function is the explicit export action. The module writes
+nothing, persists nothing, and has no product, Tree Bank, server, publication,
+license-selection, or alternate-carrier path. Final-tree-only interchange
+formats remain outside this package.
