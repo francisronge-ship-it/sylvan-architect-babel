@@ -23,6 +23,10 @@ export {
   runS2SimulationDryRun
 } from './s2Simulation.js';
 export {
+  estimateGwetAc1,
+  hashAgreementData
+} from './agreementCoefficients.js';
+export {
   createAdmissionProbeReceipt,
   verifyAdmissionProbeReceipt
 } from './admissionProbe.js';

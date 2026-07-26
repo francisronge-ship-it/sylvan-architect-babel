@@ -76,5 +76,17 @@ selection, N, k, adjudicated-subset size, double-rating share, thresholds,
 simulation implementation/configuration, and random schedule remain external.
 Only the provider-free simulator stub is admitted in this package.
 
+The W13 agreement boundary computes Gwet's AC1 for externally declared nominal
+categories using explicitly named equal-unit weighting and multicategory chance
+agreement. Every unit retains its authored rater/category evidence, and the
+caller supplies the missingness and confidence policy identities and sources,
+plus a hash-bound unit-bootstrap schedule and percentile order indices. Inputs
+are copied without recoding and hash-bound; the receipt preserves the supplied
+replication order and reports an explicit insufficient-unit outcome. This
+boundary supplies no category ontology, adjudication policy, missingness rule,
+resampling generator, confidence convention, coefficient-ranking rule, or
+adoption default. Ordinal coefficients and error-propagation analysis remain
+separate method-gated work.
+
 Provider transports, benchmark items, review workflows, statistical models,
 publication tooling, and product/database integration remain separately gated.
