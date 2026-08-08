@@ -1,7 +1,10 @@
 ---
 title: Low Reasoning Effort On A Tiny Babel Derivation
 description: Mini research devlog comparing Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.8 at low reasoning effort on Mia laughed.
+archived: true
 ---
+
+> **Archived Codex-generated research note.** Codex generated this page during an earlier phase of Babel. It preserves old project history and helps show how Babel progressed and evolved over time, but it does not represent Babel today or my current work and standards as its developer. [Browse the research archive](/sylvan-architect-babel/research/archive/).
 
 <div class="paper-hero">
   <p class="paper-kicker">Mini Research Devlog</p>
@@ -39,13 +42,13 @@ description: Mini research devlog comparing Gemini 3.1 Pro, GPT-5.5, and Claude 
 
 This run tested a deliberately tiny sentence at low reasoning effort across the three frontier routes currently under comparison in Babel: Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.8. Each provider received one parse request. There were no retries and no provider fallbacks.
 
-All three routes produced usable derivational analyses for `Mia laughed.` after the compact-stage prompt fix. The result is encouraging, but narrow. Low effort can handle a very small intransitive clause. This does not prove that low effort is enough for real Babel benchmark sentences with embedding, wh-movement, passive structure, head movement, or multiple copy chains.
+After the compact-stage prompt fix, all three routes produced usable derivations for `Mia laughed.` This is a narrow result: low effort can handle a very small intransitive clause. It tells us nothing yet about sentences with embedding, wh-movement, passive structure, head movement, or multiple copy chains.
 
-The run was also useful as renderer research. GPT exposed two renderer assumptions that were too brittle: relation index handling when an unrendered Agree relation precedes movement, and pending movement-target display when a stage snapshot already contains both lower and higher occurrences. Fixing those made the saved GPT render replayable without changing the provider output. Its projection-label mismatch remains visible as model evidence.
+The run also exposed two brittle renderer assumptions through GPT's output: relation indexes broke when an unrendered Agree relation preceded movement, and a stage containing both lower and higher occurrences displayed the movement target too early. I fixed both without changing the provider output. GPT's projection-label mismatch remains visible as model evidence.
 
 ## Method
 
-The test sentence was intentionally simple. The goal was not linguistic difficulty. The goal was to scout whether low reasoning effort can still return a forward, sentence-specific Babel derivation under the current contract.
+The sentence was intentionally simple. I was testing whether low reasoning effort could still return a forward, sentence-specific Babel derivation under the current contract, not whether the models could handle difficult syntax.
 
 Rules for this run:
 
@@ -77,7 +80,7 @@ Low effort did not collapse on this tiny sentence. The three providers returned 
 
 For this sentence, GPT's 2-stage result is acceptable. The first stage builds the verbal predicate with the subject in the verbal domain. The second stage adds finite T and records the subject movement relation. A numerical stage floor would be wrong here; it previously caused the model to pad or repeat structure.
 
-The important constraint is not stage count. The important constraint is whether each stage makes a real sentence-specific derivational claim witnessed by `workspaceForest`.
+Stage count is not the constraint. Each stage needs to make a real, sentence-specific derivational claim witnessed by `workspaceForest`.
 
 ## Linguistic Baseline
 
@@ -97,7 +100,7 @@ Gemini produced the most compact successful derivation. It built the verbal doma
 
 ### Linguistic Audit
 
-Gemini gives the most textbook Minimalist shape for this sentence. It treats `laughed` as an intransitive verbal predicate, introduces `Mia` as the external argument in the verbal domain, then adds finite T with EPP, phi-agreement, nominative case, and subject raising. That is the right linguistic story for an unergative predicate.
+Gemini gives the most textbook Minimalist shape for this sentence. It treats `laughed` as an intransitive verbal predicate, introduces `Mia` as the external argument in the verbal domain, then adds finite T with EPP, phi-agreement, nominative case, and subject raising. This is a standard unergative analysis.
 
 The DP analysis is clean: `Mia` is pronounced under D inside a DP shell, and the moved/lower subject occurrences share lineage. The lower copy is silent only after the T-stage movement relation licenses it. Gemini also separates Agree from Movement in `visualRelations`, which is linguistically right: Agree is a dependency, but it should not be drawn as a movement arrow.
 
@@ -113,11 +116,11 @@ Claude returned the cleanest low-effort output. It built the proper-name DP, sel
 
 ### Linguistic Audit
 
-Claude's output is the best pedagogical object in this small run. It starts from lexical selection, then builds the verbal projection, then adds T, then moves the subject to the clausal subject position. That gives the clearest visible derivational path.
+Claude's output is the easiest to follow in this small run. It starts from lexical selection, builds the verbal projection, adds T, and then moves the subject to the clausal subject position.
 
 There is one linguistic choice to notice: Claude represents the proper name directly as D rather than as a full DP shell in the earliest stage, and its verbal projection is labeled V rather than vP. For this tiny sentence, that is not a serious analytic failure if read as a compact Bare Phrase Structure notation. It preserves the core claims: `Mia` is the sole argument of an unergative predicate, T supplies finite clausal structure, and the subject raises to satisfy the T-domain requirement.
 
-Claude does not add a null declarative C. That is acceptable here. The final TP can be treated as the converged clause for this smoke sentence. Compared with Gemini, Claude is less explicit about clausal typing but clearer about the stepwise growth of the derivation.
+Claude does not add a null declarative C, which is fine here. The final TP can be treated as the converged clause for this smoke sentence. Compared with Gemini, Claude is less explicit about clausal typing but clearer about the stepwise growth of the derivation.
 
 ## GPT-5.5 Low
 
@@ -133,7 +136,7 @@ The current renderer now preserves the original relation index before filtering.
 
 GPT's linguistic analysis is intelligible. It correctly treats `laughed` as an intransitive predicate with no internal complement, places `Mia` as the external argument of the v-domain, then introduces finite T with past, EPP, agreement, and subject raising. It also correctly avoids inventing an extra overt tense token; the finite verbal form is realized on `laughed`.
 
-The problem is not the syntactic analysis of `Mia laughed.` The problem is the authored tree-label contract. GPT says in prose that the proper name projects a DP, and its node ids also say DP/TP/vP, but the visible labels on those phrasal nodes are the head labels: `DP1` is labeled `D`, `TP1` is labeled `T`, and `vP1` is labeled `v`. That makes the tree visually say something narrower than the prose says. Babel should preserve that mismatch as model evidence, not repair it in the renderer.
+The syntax of `Mia laughed.` is not the problem; the authored tree labels are. GPT says in prose that the proper name projects a DP, and its node ids also say DP/TP/vP, but the visible labels on those phrasal nodes are the head labels: `DP1` is labeled `D`, `TP1` is labeled `T`, and `vP1` is labeled `v`. The tree therefore says something narrower than the prose. Babel should preserve that mismatch as model evidence instead of repairing it in the renderer.
 
 GPT's stage granularity is also compressed. The second stage already contains both the lower silent occurrence and the higher pronounced occurrence. That is linguistically acceptable only because the same stage explicitly authors the movement relation. The renderer therefore has to replay the lifecycle carefully: lower occurrence active first, movement relation fires, then lower occurrence becomes silent. After the renderer fixes, the saved render does that.
 
@@ -150,7 +153,7 @@ The `DP1` / `D` mismatch is not a renderer fix. It is a model-output defect. Bab
 
 ## What This Means
 
-Low effort is viable for a tiny smoke sentence. It is not yet a shipping setting for hard Babel derivations.
+For now, low effort works as a smoke-test setting, not as the default for hard Babel derivations.
 
 The practical next step is a graded effort ladder:
 
@@ -158,7 +161,7 @@ The practical next step is a graded effort ladder:
 - test medium on simple classroom sentences;
 - keep high or stronger effort for benchmark-grade sentences until repeated evidence shows lower effort preserves derivational quality.
 
-This result is still good news. The renderer now handles a failure class that previously made good model output look broken, and all three frontier routes can produce a saved, inspectable low-effort derivation for the simplest possible clause.
+It was still a useful result. The renderer now handles a failure class that previously made good model output look broken, and all three frontier routes produced a saved, inspectable low-effort derivation for the simplest possible clause.
 
 ## Saved Local Artifacts
 

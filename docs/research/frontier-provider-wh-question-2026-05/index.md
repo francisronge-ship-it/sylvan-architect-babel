@@ -1,7 +1,10 @@
 ---
 title: Three Frontier Models Under One Babel Prompt
 description: Mini research devlog comparing Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.7 on one derivational Minimalist wh-question inside Babel.
+archived: true
 ---
+
+> **Archived Codex-generated research note.** Codex generated this page during an earlier phase of Babel. It preserves old project history and helps show how Babel progressed and evolved over time, but it does not represent Babel today or my current work and standards as its developer. [Browse the research archive](/sylvan-architect-babel/research/archive/).
 
 <div class="paper-hero">
   <p class="paper-kicker">Mini Research Devlog</p>
@@ -33,13 +36,13 @@ description: Mini research devlog comparing Gemini 3.1 Pro, GPT-5.5, and Claude 
 
 ## Abstract
 
-This is a deliberately small comparison. The same neutral Babel contract was used to ask three frontier models for a derivational Minimalist analysis of the same wh-question. All three models converged on the core analysis: the wh-object is built in object position, the subject is introduced in the verbal domain, finite T and interrogative C create the English auxiliary pattern, and the wh-DP moves to the left periphery.
+This is a deliberately small comparison. I used the same neutral Babel contract to ask three frontier models for a derivational Minimalist analysis of one wh-question. All three converged on the core analysis: the wh-object begins in object position, the subject is introduced in the verbal domain, finite T and interrogative C create the English auxiliary pattern, and the wh-DP moves to the left periphery.
 
-The interesting result is not convergence alone. The interesting result is that the models made different public syntactic commitments under the same prompt. Claude Opus 4.7 produced the strongest analysis in this run. It was also the fastest stored successful run and the cheapest estimated run. GPT-5.5 produced the most expansive prose and the most segmented derivational staging. Gemini 3.1 Pro produced a compact usable analysis, but it made one extra theoretical commitment: lexical V-to-v movement for English `buy`.
+The models agreed on that skeleton but made different theoretical commitments under the same prompt. Claude Opus 4.7 produced the strongest analysis and was also the fastest stored successful run and the cheapest estimate. GPT-5.5 wrote the most expansive prose and the most segmented derivation. Gemini 3.1 Pro returned a compact usable analysis, but added lexical V-to-v movement for English `buy`.
 
 ## Method
 
-The benchmark asked for a single Babel derivation, not a list of possible theories. The model had to return a committed tree, derivation stages, visual relations, and notes. The prompt did not tell the models which syntactic phenomena to use. That matters because this is not only a parsing test. It is a test of public syntactic theory: what the model chooses to expose when it has to make its analysis inspectable.
+The benchmark asked for a single Babel derivation, not a list of possible theories. The model had to return a committed tree, derivation stages, visual relations, and notes. The prompt did not tell the models which syntactic phenomena to use. The comparison therefore records what each model chose to expose when it had to make one analysis inspectable.
 
 The cost estimates below use the persisted token counts in the local artifacts and public provider pricing checked on May 16, 2026. Gemini output cost counts both visible output tokens and thinking tokens, because the Gemini artifact records 11,999 provider thinking tokens in addition to 2,629 visible output tokens.
 
@@ -62,7 +65,7 @@ All three models saw the sentence as a standard matrix wh-question with object e
 5. interrogative C attracts the wh-DP;
 6. the lower wh-object position remains silent.
 
-That is the correct broad family of analyses for this sentence. The decisive differences are not about whether the models can identify wh-movement. They are about theory choice, granularity, economy, and whether the model exposes enough derivational reasoning without adding unnecessary machinery.
+All three are in the right broad family of analyses. They differ in theory choice, granularity, economy, and how much derivational reasoning they expose without adding unnecessary machinery.
 
 ## Claude Opus 4.7
 
@@ -74,9 +77,9 @@ Claude gave the cleanest linguistic analysis. It built the wh-DP first, merged i
 
 ### Linguistic Audit
 
-Claude's derivation is economical without being shallow. It separates the wh-object from the verbal predicate, then treats the later wh dependency as a dependency over an already established theta position. That is the right order: the object must be an argument before it can become an operator.
+Claude's derivation is economical without being shallow. It first establishes the wh-object as an argument of the verbal predicate, then builds the later operator dependency over that theta position.
 
-The best part is its treatment of English finite verb placement. Claude does not move lexical `buy` to a higher functional head. It keeps the lexical verb low and lets the finite auxiliary pattern come from the T/C system. That is a strong English-specific choice. The model is not merely naming "movement"; it is choosing which movement is actually motivated.
+Its treatment of English finite verb placement is especially good. Claude keeps lexical `buy` low and derives the finite auxiliary pattern through the T/C system instead of moving the verb to a higher functional head. It distinguishes the movement the sentence motivates from movement that is merely available in the theory.
 
 Claude also gives a good division of labor between theta role, case, and clause typing. `Which book` receives the internal role from `buy`; `John` receives the agent role in the light-verbal domain; finite T values nominative on the subject; interrogative C hosts the do-supported finite head and attracts the wh-DP. That makes the analysis more than a surface-order derivation.
 
@@ -124,9 +127,9 @@ GPT produced the most expansive analysis. It leaned into Bare Phrase Structure l
 
 ### Linguistic Audit
 
-GPT is the most theory-explicit model in this run. It makes the wh-DP's internal architecture part of the analysis instead of treating `which book` as a flat chunk. It also explains the final operator position through an edge requirement on interrogative C, not through a generic surface-fronting rule. That is a strong public derivational commitment.
+GPT is the most theory-explicit model in this run. It analyzes the wh-DP's internal architecture instead of treating `which book` as a flat chunk, and derives the final operator position from an edge requirement on interrogative C rather than a generic fronting rule.
 
-GPT's strongest virtue is traceability. Every major dependency has a prose reason: internal argument selection, external argument introduction, finite T, subject movement, T-to-C movement, and wh movement. It also says why `did buy` is not a single lexical verb. That matters, because English do-support is a functional-head effect, not lexical selection by `did`.
+GPT is also easy to audit. It gives a prose reason for every major dependency: internal argument selection, external argument introduction, finite T, subject movement, T-to-C movement, and wh movement. It also explains why `did buy` is not a single lexical verb: English do-support is a functional-head effect, not lexical selection by `did`.
 
 The weakness is output economy. GPT writes a rich analysis, but it spends more tokens than the other two models and sometimes phrases ordinary operations in heavier theoretical language than the sentence requires. It also makes the derivation feel more segmented than Claude's, because it separates C-merge/T-to-C and wh movement into adjacent final stages. That split is not wrong. It is useful if the benchmark values explicitness, but less elegant if the benchmark values compact derivational sufficiency.
 
@@ -178,13 +181,13 @@ Gemini returned the most compact analysis. It built the wh-object and lexical VP
 
 ### Linguistic Audit
 
-Gemini's answer is successful at the level of core dependencies. It builds the wh-object as the complement of `buy`, introduces `John` in the verbal domain, raises the subject to TP, moves T to C, and moves the wh-object to Spec-CP. That is the right derivational skeleton.
+Gemini gets the core dependencies right. It builds the wh-object as the complement of `buy`, introduces `John` in the verbal domain, raises the subject to TP, moves T to C, and moves the wh-object to Spec-CP.
 
 The main linguistic weakness is the V-to-v movement commitment. Gemini says that `buy` undergoes head movement to little-v to check affixal features. This is not impossible in a Minimalist grammar, but the English sentence does not force that commitment. Since `buy` surfaces after the subject and after `did`, the cleaner English analysis keeps the lexical verb low and lets the auxiliary behavior come from T/C. Claude does that. GPT also keeps the lexical verb low.
 
 Gemini is also less explicit about case and theta-role separation. It says the wh-DP satisfies internal selection and that `John` receives the external role, but it does not unpack nominative, accusative, do-support, and C-edge probing with the same precision as Claude or GPT. The result is correct and compact, but less useful as a research artifact.
 
-The positive lesson is that Gemini still converges on the main derivational architecture under the same neutral contract. It does not merely output a final tree. It outputs a staged derivation with the right major dependencies. The negative lesson is that compactness can hide theory choices. V-to-v movement is one small clause in the prose, but it changes the analysis.
+Gemini still returns a staged derivation with the right major dependencies under the same neutral contract. Its compactness does, however, hide theory choices: V-to-v movement occupies one small clause in the prose but changes the analysis.
 
 ### Full Stage Record
 
@@ -235,7 +238,7 @@ All three models introduce `John` low and raise it to the finite subject positio
 
 ### Labeling Theory
 
-GPT is the most theoretically marked. Its Bare Phrase Structure vocabulary makes the final tree more abstract and less familiar, but it also shows a real theoretical stance. Claude and Gemini use more conventional phrase-structure language. This is important for Babel as a benchmark: the same prompt does not erase theoretical personality. It exposes it.
+GPT is the most theoretically marked. Its Bare Phrase Structure vocabulary makes the final tree more abstract and less familiar, while Claude and Gemini use more conventional phrase-structure language. The shared prompt does not erase those differences; it makes them visible.
 
 ### Case And Theta Roles
 
@@ -243,6 +246,6 @@ Claude is strongest here. It distinguishes internal theta role, agent theta role
 
 ### Benchmark Takeaway
 
-Claude wins this micro-benchmark because it combines correctness, economy, and linguistic restraint. GPT is the best if the goal is maximal explicitness and formal public reasoning. Gemini is strong enough to be useful, but it reveals a tendency to add an extra head-movement analysis when a leaner English analysis is available.
+Claude gave the best result in this micro-benchmark because it combined correctness, economy, and linguistic restraint. GPT is stronger if the goal is maximal explicitness and formal public reasoning. Gemini is useful, but tends to add head movement where a leaner English analysis is available.
 
-The broader result is the important one: under one neutral Babel prompt, three frontier models converged on the same syntactic core while exposing different theoretical instincts. That is what makes Babel useful as a benchmark. It does not only ask whether a model knows that `which book` is connected to `buy`. It asks what derivation the model is willing to make public.
+Under one neutral Babel prompt, the three models converged on the same syntactic core while exposing different theoretical instincts. Babel does not only test whether a model connects `which book` to `buy`; it records the derivation the model is willing to make public.

@@ -1,7 +1,10 @@
 ---
 title: Frontier Models On A Harder Babel Derivation
 description: Mini research devlog comparing Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.7 on a longer Minimalist wh-question with passive, embedding, and successive-cyclic movement.
+archived: true
 ---
+
+> **Archived Codex-generated research note.** Codex generated this page during an earlier phase of Babel. It preserves old project history and helps show how Babel progressed and evolved over time, but it does not represent Babel today or my current work and standards as its developer. [Browse the research archive](/sylvan-architect-babel/research/archive/).
 
 <div class="paper-hero">
   <p class="paper-kicker">Mini Research Devlog</p>
@@ -35,9 +38,9 @@ description: Mini research devlog comparing Gemini 3.1 Pro, GPT-5.5, and Claude 
 
 This run is a harder successor to the May wh-question comparison. The sentence requires a wh-object inside an embedded perfect clause, an embedded subject, a bridge predicate, a passive matrix subject, finite auxiliary inversion, and successive-cyclic movement through an intermediate edge.
 
-Gemini and Claude both returned provider-native derivations that passed Babel normalization and rendered cleanly. GPT returned strong linguistic material, but failed the top-level Babel contract by placing later stage-shaped objects directly inside `analyses[]` instead of inside `analyses[0].derivationStages`. A shape-only diagnostic repair moved those leaked stages into the first analysis so the derivation could be inspected. That repaired GPT render is useful evidence about GPT's syntactic content, but it is not a provider pass.
+Gemini and Claude returned provider-native derivations that passed Babel normalization and rendered cleanly. GPT wrote strong linguistic material, but placed its later stages directly inside `analyses[]` instead of `analyses[0].derivationStages`, so it failed the top-level contract. I moved those leaked stages into the first analysis only for diagnosis. The repaired render lets us inspect GPT's syntax, but the provider result remains a failure.
 
-The main result is that the renderer is no longer the story. The current replay captures are stable across all three inspected trees: no disappearing subtrees, no no-op frames, no unresolved movement arrows, no duplicate visible tokenIndex, and no tree-shoving camera failure. The remaining distinction is model behavior: Claude and Gemini obeyed the contract; GPT wrote an excellent derivation in the wrong top-level shape.
+By this run, the renderer had stopped obscuring the comparison. All three inspected captures are stable: no disappearing subtrees, no no-op frames, no unresolved movement arrows, no duplicate visible tokenIndex, and no tree-shoving camera failure. What remains is a model difference: Claude and Gemini obeyed the contract, while GPT wrote an excellent derivation in the wrong top-level shape.
 
 ## Method
 
@@ -81,7 +84,7 @@ All three inspected derivations converge on the same broad analysis:
 7. matrix T `was` moves or is copied into C for inversion;
 8. the wh-DP moves from the embedded edge to the matrix CP edge.
 
-The important differences are contract discipline and staging. Claude gives the clearest provider-native derivational record. Gemini gives the shortest successful provider-native record. GPT gives very rich syntactic content, but violates the JSON shape that Babel needs to read the derivation as one analysis.
+They differ mainly in contract discipline and staging. Claude gives the clearest provider-native record. Gemini gives the shortest successful one. GPT gives the richest staging, but in a JSON shape Babel cannot read as one analysis.
 
 ## Gemini 3.1 Pro
 
@@ -97,7 +100,7 @@ Gemini correctly identifies the embedded wh-object as the argument of `defended`
 
 The weakness is granularity. Four stages are enough for a correct public derivation, but they compress several local operations into large checkpoints. For example, the final matrix stage contains matrix T, passive subject movement, interrogative C, T-to-C movement, and final wh movement. Babel can render that now, but the model did not expose every micro-history as separate authored stages.
 
-The positive result is that compactness no longer breaks replay. The renderer can show the derivational commitments without duplicating trees or inventing relations. The model output is not perfect as pedagogy, but it is a clean provider pass.
+Compactness no longer breaks replay. The renderer shows Gemini's commitments without duplicating trees or inventing relations. The output is not ideal for teaching, but it is a clean provider pass.
 
 ### Full Stage Record
 
@@ -138,9 +141,9 @@ Claude produced the strongest provider-native analysis in this run. It used seve
 
 ### Linguistic Audit
 
-Claude's main virtue is ordered explanation. It does not start from the final CP and backfill. It first establishes the wh-object in its theta position, then closes the embedded verbal domain, then raises `Julian`, then moves the wh-DP to the embedded edge. Only after that does it build the matrix passive predicate around the embedded CP.
+Claude is easy to follow because it builds in order. It establishes the wh-object in its theta position, closes the embedded verbal domain, raises `Julian`, moves the wh-DP to the embedded edge, and only then builds the matrix passive predicate around the embedded CP.
 
-The passive analysis is also clean. `Mara` is not treated as a surface subject from the beginning. It is first the internal argument of `convinced`; passive v fails to license accusative, so matrix T attracts it to Spec,TP. This is exactly the kind of derivational lifecycle Babel is supposed to make visible.
+The passive analysis is also clean. `Mara` begins as the internal argument of `convinced`; because passive v does not license accusative, matrix T attracts it to Spec,TP. Babel is supposed to make exactly this sequence visible.
 
 The final CP stage combines T-to-C and final wh movement, but it does so after all required lower structure is public. That makes the final movement intelligible: `which thesis` moves from an already established embedded edge, not from nowhere.
 
@@ -196,11 +199,11 @@ That is why the raw GPT run failed normalization: Babel read the first analysis,
 
 ### Linguistic Audit
 
-The repaired GPT derivation is impressive as syntactic content. It uses eight stages, gives a clear embedded VP and vP, adds embedded T with `Julian` movement, moves the wh-DP to the embedded CP edge, builds the matrix passive predicate, raises `Mara`, moves `was` to C, and finally moves the wh-DP to the matrix edge.
+The repaired GPT derivation contains a strong eight-stage analysis: embedded VP and vP, embedded T with `Julian` movement, wh movement to the embedded CP edge, the matrix passive predicate, `Mara` raising, `was` moving to C, and final wh movement to the matrix edge.
 
-GPT is especially clear about the bridge configuration. It says the wh occurrence at the embedded CP edge remains accessible to the matrix interrogative C, while the object occurrence inside the completed embedded phase is no longer the local goal. That is the right shape for successive-cyclic extraction.
+GPT is especially clear about the bridge configuration. The wh occurrence at the embedded CP edge remains accessible to matrix interrogative C, while the object occurrence inside the completed embedded phase is no longer the local goal. This gives the expected shape for successive-cyclic extraction.
 
-The failure is not linguistic absence. The failure is contract bookkeeping. GPT wrote the missing stages, but put them in the wrong top-level place. For Babel as a benchmark, that still matters. A model that writes a beautiful derivation outside the required derivation container has not produced a usable provider-native Babel result.
+The missing syntax was there; the bookkeeping was wrong. GPT wrote the later stages, but put them in the wrong top-level place. A derivation outside the required container is not a usable provider-native Babel result, however good its content may be.
 
 ### Full Stage Record
 
@@ -251,7 +254,7 @@ The matrix interrogative C satisfies its wh feature by probing its complement. T
 
 ### Provider Discipline
 
-Claude and Gemini are provider passes. GPT is not. That is the sharpest operational result. GPT's linguistic content is strong, but Babel cannot treat the raw response as a successful provider parse when later derivation stages leak into sibling `analyses[]` entries.
+Claude and Gemini are provider passes; GPT is not. Its linguistic content is strong, but later stages leaked into sibling `analyses[]` entries, so Babel could not treat the raw response as a successful parse.
 
 ### Derivational Granularity
 
@@ -277,14 +280,14 @@ This run became useful only after renderer stabilization. The final inspected ca
 - Claude: 61 replay frames, no visual regressions found.
 - GPT diagnostic repair: 59 replay frames, no visual regressions found.
 
-That matters for Babel as a benchmark. If the renderer invents, hides, or teleports structure, model comparison becomes impossible. In this run, the visual evidence is finally clean enough to let the model-output differences matter.
+If the renderer invents, hides, or teleports structure, the models cannot be compared honestly. In this run, the visual evidence is finally clean enough to compare the outputs themselves.
 
 ## Benchmark Takeaway
 
-Claude wins this harder run as the best complete provider-native Babel result. It obeys the contract, gives strong staging, and provides a serious Minimalist analysis of the embedded wh-chain and passive matrix subject.
+Claude gave the best complete provider-native result in this harder run. It obeyed the contract, staged the derivation clearly, and provided a serious Minimalist analysis of the embedded wh-chain and passive matrix subject.
 
 Gemini is a valid compact pass. It is faster and structurally correct, but less explicit about the local derivational logic that a syntactician would want to inspect.
 
-GPT is the most interesting failure. It produced a rich derivation, but not a valid Babel response shape. The diagnostic repair shows that the syntactic content was there. The raw provider result still failed because a benchmark is not only about having the right ideas; it is about making those ideas public in the required derivational record.
+GPT failed in an informative way. It produced a rich derivation, but not a valid Babel response shape. The diagnostic repair shows that the syntactic content was there. The raw provider result still failed because the model did not put that content into the derivational record Babel requires.
 
-The broader lesson is that Babel is becoming sharp enough to separate three layers that used to blur together: linguistic competence, contract discipline, and renderer honesty. That is exactly what a serious syntactic benchmark needs.
+This run separated three things that used to blur together in Babel: linguistic competence, contract discipline, and renderer honesty.

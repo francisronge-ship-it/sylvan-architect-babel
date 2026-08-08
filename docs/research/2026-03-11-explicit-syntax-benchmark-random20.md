@@ -1,7 +1,8 @@
 ---
 title: Explicit Syntax Under Forced Commitment
-description: Mini Paper v1: A paired 20-case Babel benchmark of Gemini 3.1 Pro and Gemini 3.1 Flash Lite.
+description: "Mini Paper v1: A paired 20-case Babel benchmark of Gemini 3.1 Pro and Gemini 3.1 Flash Lite."
 permalink: /research/explicit-syntax-benchmark-random20/
+published: false
 ---
 
 <div class="paper-hero">

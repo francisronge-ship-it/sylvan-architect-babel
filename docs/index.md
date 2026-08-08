@@ -3,17 +3,17 @@ title: Sylvan Architect Babel Research
 permalink: /
 ---
 
-This site documents Babel's work on explicit syntax: model-authored analyses, replayable derivations, visual relation rendering, and comparisons across models and languages.
+This site contains my current Babel research and the interactive Relation Atlas. Earlier Codex-generated experiments remain available in the archive as a record of how the project progressed and evolved.
 
 <div class="research-card">
   <p><strong>Featured note.</strong> <a href="./research/visual-relations-atlas/?v=2026-08-08-2">Drawing an Open-Ended Syntax: The Babel Relation Atlas</a> shows how Babel turns open, model-authored syntactic relations into finite, inspectable renderer marks without pretending that deterministic code can enumerate every relation syntacticians may need.</p>
   <p class="research-meta">Published August 8, 2026</p>
 </div>
 
-## Latest Research Note
+## Current Research
 
 - [Drawing an Open-Ended Syntax: The Babel Relation Atlas](./research/visual-relations-atlas/?v=2026-08-08-2)
-  Research devlog and interactive atlas: how Babel learned to draw open-ended syntactic relations using finite renderer marks.
+  My report on how Babel learned to draw open-ended syntactic relations using finite renderer marks.
 
 ## Interactive Atlas
 
@@ -21,5 +21,6 @@ This site documents Babel's work on explicit syntax: model-authored analyses, re
 
 ## Browse
 
-- [All research notes](./research/?v=2026-08-08)
+- [Current research](./research/)
 - [Open the Babel Relation Atlas](./research/visual-relations-atlas/atlas.html)
+- [Earlier Codex-generated work](./research/archive/)
