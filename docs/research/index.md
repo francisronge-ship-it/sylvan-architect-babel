@@ -3,11 +3,17 @@ title: Research Notes
 permalink: /research/
 ---
 
+<nav class="research-nav" aria-label="Research navigation">
+  <a class="btn" href="/sylvan-architect-babel/?v=2026-08-08">Research home</a>
+  <a class="btn" href="./visual-relations-atlas/?v=2026-08-08-2">Latest devlog</a>
+  <a class="btn" href="./visual-relations-atlas/atlas.html">Relation Atlas</a>
+</nav>
+
 This section collects short papers and devlogs produced from Babel benchmark batches.
 
 ## August 2026
 
-### [Drawing an Open-Ended Syntax: The Babel Relation Atlas](./visual-relations-atlas/)
+### [Drawing an Open-Ended Syntax: The Babel Relation Atlas](./visual-relations-atlas/?v=2026-08-08-2)
 
 Research devlog and interactive atlas: how Babel turns open, model-authored syntactic relations into finite, inspectable renderer marks without pretending that deterministic code can enumerate every relation syntacticians may need.
 
