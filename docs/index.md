@@ -6,21 +6,20 @@ permalink: /
 This site collects mini papers and devlogs from explicit syntax benchmarking in Sylvan Architect Babel. The current focus is forced syntactic commitment: visible trees, replayable derivations, and prose explanations that can be compared across model routes.
 
 <div class="research-card">
-  <p><strong>Featured note.</strong> <a href="./research/provider-reasoning-effort-mia-laughed-2026-06-03/">Low Reasoning Effort On A Tiny Babel Derivation</a> compares Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.8 at low reasoning effort on a two-word Minimalist derivation.</p>
-  <p class="research-meta">Batch date: June 3, 2026</p>
+  <p><strong>Featured note.</strong> <a href="./research/visual-relations-atlas/?v=2026-08-08-2">Drawing an Open-Ended Syntax: The Babel Relation Atlas</a> shows how Babel turns open, model-authored syntactic relations into finite, inspectable renderer marks without pretending that deterministic code can enumerate every relation syntacticians may need.</p>
+  <p class="research-meta">Published August 8, 2026</p>
 </div>
 
 ## Latest Research Note
 
-- [Low Reasoning Effort On A Tiny Babel Derivation](./research/provider-reasoning-effort-mia-laughed-2026-06-03/)
-  Mini research devlog: a one-sentence Babel comparison of Gemini 3.1 Pro, GPT-5.5, and Claude Opus 4.8 at low reasoning effort on `Mia laughed.`
+- [Drawing an Open-Ended Syntax: The Babel Relation Atlas](./research/visual-relations-atlas/?v=2026-08-08-2)
+  Research devlog and interactive atlas: how Babel learned to draw open-ended syntactic relations using finite renderer marks.
 
-## Preview Figures
+## Interactive Atlas
 
-| Gemini 3.1 Pro Low | GPT-5.5 Low | Claude Opus 4.8 Low |
-| --- | --- | --- |
-| ![Gemini low-effort replay preview](./research/assets/provider-reasoning-effort-mia-laughed-2026-06-03/gemini-low-replay.gif) | ![GPT low-effort replay preview](./research/assets/provider-reasoning-effort-mia-laughed-2026-06-03/gpt-low-replay.gif) | ![Claude low-effort replay preview](./research/assets/provider-reasoning-effort-mia-laughed-2026-06-03/claude-low-replay.gif) |
+[![Babel Relation Atlas](./research/visual-relations-atlas/assets/relation-atlas-overview.png)](./research/visual-relations-atlas/atlas.html)
 
 ## Browse
 
-- [Research notes](./research/)
+- [All research notes](./research/?v=2026-08-08)
+- [Open the Babel Relation Atlas](./research/visual-relations-atlas/atlas.html)

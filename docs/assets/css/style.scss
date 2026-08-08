@@ -154,6 +154,18 @@ body::before {
   font-size: 0.95rem;
 }
 
+.research-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0 0 1.25rem;
+}
+
+.research-nav .btn {
+  margin: 0;
+  text-decoration: none;
+}
+
 .paper-hero {
   margin: 0 0 2.5rem;
   padding: 2rem 2rem 1.75rem;

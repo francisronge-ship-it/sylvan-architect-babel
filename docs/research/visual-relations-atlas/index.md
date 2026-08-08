@@ -3,6 +3,12 @@ title: "Drawing an Open-Ended Syntax: The Babel Relation Atlas"
 permalink: /research/visual-relations-atlas/
 ---
 
+<nav class="research-nav" aria-label="Research navigation">
+  <a class="btn" href="/sylvan-architect-babel/?v=2026-08-08">Research home</a>
+  <a class="btn" href="/sylvan-architect-babel/research/?v=2026-08-08">All research notes</a>
+  <a class="btn" href="./atlas.html">Interactive Atlas</a>
+</nav>
+
 <div class="paper-hero">
   <p class="paper-kicker">Research Devlog</p>
   <h1 class="paper-title">Drawing an Open-Ended Syntax: The Babel Relation Atlas</h1>
