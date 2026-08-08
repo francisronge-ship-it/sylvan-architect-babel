@@ -3,7 +3,7 @@ title: Sylvan Architect Babel Research
 permalink: /
 ---
 
-This site collects mini papers and devlogs from explicit syntax benchmarking in Sylvan Architect Babel. The current focus is forced syntactic commitment: visible trees, replayable derivations, and prose explanations that can be compared across model routes.
+This site documents Babel's work on explicit syntax: model-authored analyses, replayable derivations, visual relation rendering, and comparisons across models and languages.
 
 <div class="research-card">
   <p><strong>Featured note.</strong> <a href="./research/visual-relations-atlas/?v=2026-08-08-2">Drawing an Open-Ended Syntax: The Babel Relation Atlas</a> shows how Babel turns open, model-authored syntactic relations into finite, inspectable renderer marks without pretending that deterministic code can enumerate every relation syntacticians may need.</p>
