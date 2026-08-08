@@ -1,8 +1,11 @@
 ---
 title: One Hundred Trees, One Hundred Public Syntactic Theories
-description: Research Note v1: the first benchmark of public syntax in frontier language models.
+description: "Research Note v1: the first benchmark of public syntax in frontier language models."
 permalink: /research/one-hundred-trees-under-forced-commitment/
+archived: true
 ---
+
+> **Archived Codex-generated research note.** Codex generated this page during an earlier phase of Babel. It preserves old project history and helps show how Babel progressed and evolved over time, but it does not represent Babel today or my current work and standards as its developer. [Browse the research archive](/sylvan-architect-babel/research/archive/).
 
 <div class="paper-hero">
   <p class="paper-kicker">Research Note v1</p>
@@ -42,15 +45,15 @@ permalink: /research/one-hundred-trees-under-forced-commitment/
 <a id="abstract"></a>
 ## Abstract
 
-This paper introduces a new benchmark object for language models: not sentence preference, but public syntactic theory. Inside Sylvan Architect Babel, 100 multilingual sentences are evaluated under forced commitment: each model must return one visible tree, one movement record, one replayable derivation, and one explanation that describes the same analysis. The benchmark spans 22 languages, 15 phenomena, two theoretical frameworks, and two Gemini routes: 50 runs with Gemini 3.1 Pro and 50 runs with Gemini 3.1 Flash Lite.
+This paper reports a 100-case Babel benchmark of explicit syntactic analysis. For each multilingual sentence, the model must return one visible tree, one movement record, one replayable derivation, and one explanation of the same analysis. The benchmark spans 22 languages, 15 phenomena, two theoretical frameworks, and two Gemini routes: 50 runs with Gemini 3.1 Pro and 50 runs with Gemini 3.1 Flash Lite.
 
-The headline result is unusually strong. On this 100-case batch, both routes completed all items, but they did not behave like the same syntactic system at different verbosity settings. Pro averaged 31.5 derivation steps and 3.10 movement events per item, while Flash Lite averaged 20.4 steps and 0.74 movement events. Across the 50 paired sentence-types, the routes matched the exact number of movement events in only 4 cases; Pro encoded more movement than Flash Lite in 46. This gap persists even though the smaller route receives more structural help from Babel, because the benchmark is aimed at the analysis the model chooses rather than at whether a smaller model can serialize a tree perfectly on its own. The effect is especially visible in English long-distance wh-dependencies, Dutch embedding, Hungarian focus inversion, and Bengali wh-questions in native script. This is the first public benchmark at this scale that evaluates frontier language models through forced explicit syntactic commitment rather than sentence preference alone.
+Both routes completed all 100 items, but they did not behave like the same syntactic system at different verbosity settings. Pro averaged 31.5 derivation steps and 3.10 movement events per item, while Flash Lite averaged 20.4 steps and 0.74 movement events. Across the 50 paired sentence types, the routes matched the exact number of movement events in only 4 cases; Pro encoded more movement in 46. The gap remains even though Flash Lite receives more structural help from Babel. It is clearest in English long-distance wh-dependencies, Dutch embedding, Hungarian focus inversion, and Bengali wh-questions in native script.
 
 ## 1. Introduction
 
 Most well-known syntactic evaluations for language models are string-first. They ask whether a model prefers one sentence over another or whether it distinguishes a grammatical minimal pair from an ungrammatical one. Important work in that tradition includes targeted syntactic evaluation, [Marvin and Linzen 2018](https://aclanthology.org/D18-1151/), [BLiMP](https://direct.mit.edu/tacl/article/doi/10.1162/tacl_a_00321/96452/BLiMP-The-Benchmark-of-Linguistic-Minimal-Pairs), and [SyntaxGym](https://aclanthology.org/2020.acl-demos.10/). These resources are valuable because they test whether a model is sensitive to structure. But they do not require the model to externalize the structure itself.
 
-That missing externalization matters because the contemporary argument about AI language ability is no longer only about benchmark scorecards. [Bender and Koller 2020](https://aclanthology.org/2020.acl-main.463/) argued that systems trained on linguistic form alone should not be casually credited with meaning or understanding. More recent work pulls in the other direction: [Piantadosi 2024](https://zenodo.org/records/12665933) argues that modern language models implement substantive theories of language, while [Katzir 2024](https://spacefrontiers.org/r/10.5964/bioling.13153) argues that they remain poor theories of human linguistic cognition. At the same time, newer empirical work has become much more optimistic about the amount of syntax these systems may encode, including work explicitly titled [Evidence of Generative Syntax in LLMs](https://aclanthology.org/2025.conll-1.25/). Babel makes that debate concrete at sentence scale: if Piantadosi is right that LLMs can function as scientific theories, then every Babel parse is literally one local syntactic theory made public.
+Externalizing the analysis matters because current arguments about AI language ability are not only about benchmark scores. [Bender and Koller 2020](https://aclanthology.org/2020.acl-main.463/) argued that systems trained on linguistic form alone should not be casually credited with meaning or understanding. [Piantadosi 2024](https://zenodo.org/records/12665933) argues that modern language models implement substantive theories of language, while [Katzir 2024](https://spacefrontiers.org/r/10.5964/bioling.13153) argues that they remain poor theories of human linguistic cognition. Newer empirical work has also become more optimistic about how much syntax these systems may encode, including [Evidence of Generative Syntax in LLMs](https://aclanthology.org/2025.conll-1.25/). Babel turns part of that debate into something inspectable at sentence scale: each parse is one local syntactic analysis made public.
 
 Classical annotated corpora do externalize structure, but usually only as end-state annotation. Treebanks such as the [Penn Treebank](https://catalog.ldc.upenn.edu/LDC99T42), the [Prague Dependency Treebank](https://aclanthology.org/L04-1291/), and [Universal Dependencies](https://aclanthology.org/W17-2501/) store syntactic analyses; they do not typically store replayable derivations, explicit movement chains, or sentence-by-sentence prose accounts of why one derivation rather than another was chosen. Recent surveys of multilingual LLMs likewise emphasize the growth of cross-lingual capacity while also noting persistent evaluation gaps across languages and tasks ([Jin et al. 2025](https://link.springer.com/article/10.1007/s11704-024-40579-4)). Babel is aimed directly at one of those gaps: public, inspectable syntax.
 
@@ -62,11 +65,11 @@ Sylvan Architect Babel changes the benchmark object. The model is not asked mere
 4. a replayable derivational sequence in Growth;
 5. Notes that describe the same analysis.
 
-That shift matters for both linguistics and interpretability. Once a model has to say what the structure is, not merely whether the sentence is good, we can compare models as theory-generators rather than as opaque scorers.
+Once a model has to state the structure instead of only judging the sentence, we can compare the analyses themselves.
 
 ## 2. Why This Benchmark Is Different
 
-The central claim of this paper is not simply that Babel can draw syntax trees. It is that Babel exposes a category of model behavior that most current benchmarks leave hidden.
+Babel exposes model behavior that most current benchmarks leave hidden.
 
 Standard syntactic evaluations ask:
 
@@ -80,7 +83,7 @@ Babel asks:
 - how much of the derivation does it make explicit?
 - can it tell the same story in tree, replay, and prose?
 
-This is a qualitatively different interpretability object. A model that scores the right sentence higher may still remain theoretically silent. A model that succeeds in Babel is forced to make its syntactic theory publicly inspectable.
+A model can prefer the right sentence while remaining silent about its analysis. Babel requires that analysis to be inspectable.
 
 No widely used public multilingual benchmark at this scale simultaneously requires:
 
@@ -133,7 +136,7 @@ It spans 15 phenomena, including:
 - VSO clauses
 - relative clauses
 
-Crucially, the gauntlet was not restricted to romanized text. It includes native-script items in Arabic, Bengali, Bulgarian, Greek, Hebrew, Hindi, Russian, and Serbian, among others.
+The gauntlet was not restricted to romanized text. It includes native-script items in Arabic, Bengali, Bulgarian, Greek, Hebrew, Hindi, Russian, and Serbian, among others.
 
 ### 3.3 Comparison strategy
 
@@ -144,7 +147,7 @@ The point of the benchmark is not to declare one route universally correct. The 
 - where one route exposes a richer theory than the other;
 - whether multilingual native-script analysis remains possible under the same forced-commitment regime.
 
-One methodological caveat should be made explicit because it strengthens, rather than weakens, the central result: the smaller model receives more help. Gemini 3.1 Flash Lite runs on Babel's assisted structure path, which gives it extra serialization support so that the benchmark remains focused on the analysis the model chooses rather than collapsing into a test of whether the smaller route can serialize perfect structure unaided. Gemini 3.1 Pro is closer to a raw benchmark route. If Pro still externalizes a richer syntactic theory under those conditions, that gap is not an artifact of Flash Lite being abandoned to fail. It is a difference in public syntactic commitment.
+One caveat is important: the smaller model receives more help. Gemini 3.1 Flash Lite runs on Babel's assisted structure path, which gives it extra serialization support. This keeps the benchmark focused on the chosen analysis instead of turning it into a test of whether the smaller route can serialize perfect structure unaided. Gemini 3.1 Pro is closer to a raw benchmark route. The difference in explicit syntax therefore cannot be explained by Flash Lite simply being left to fail on serialization.
 
 This distinction also matters at the model-family level. Google presents Gemini 3.1 Pro as the advanced-intelligence route in the Gemini 3 line and Gemini 3.1 Flash-Lite as the lighter, lower-cost route in the same family ([Gemini model docs](https://ai.google.dev/gemini-api/docs/models)). The comparison in this paper should therefore not be read as a contest between two equally scaled systems with identical inference budgets.
 
@@ -159,7 +162,7 @@ The full 100-case run completed successfully:
 - 100/100 produced visible Canopy, Growth, and Notes pages;
 - 100/100 yielded a usable committed analysis object for comparison.
 
-The more interesting result, however, is not the completion count. It is the shape of the analyses.
+Completion is only the baseline. The analyses themselves differ substantially.
 
 ### 4.2 Route-level summary
 
@@ -170,7 +173,7 @@ The more interesting result, however, is not the completion count. It is the sha
 | Gemini 3.1 Pro | 50 | 120.4 s | 31.5 | 3.10 | 135.1 words |
 | Gemini 3.1 Flash Lite | 50 | 12.7 s | 20.4 | 0.74 | 79.2 words |
 
-This gap is not merely stylistic. Pro is not just writing longer paragraphs. It is committing to more derivational content: more steps, more movement events, and more overt intermediate structure.
+This is not just a difference in prose length. Pro commits to more derivational content: more steps, more movement events, and more overt intermediate structure.
 
 ### 4.3 Framework split
 
@@ -189,7 +192,7 @@ First, Pro is richer in both frameworks, not only in Minimalism. Second, Flash L
 
 ### 4.4 Pairwise divergence
 
-The strongest evidence that these are not simply two verbosity settings comes from the 50 paired sentence comparisons.
+The 50 paired sentence comparisons show that these are not simply two verbosity settings.
 
 - The routes matched the exact number of movement events in only 4/50 pairs.
 - They matched movement presence versus absence in 25/50 pairs.
@@ -242,7 +245,7 @@ The family profile makes two further points. First, the Pro-versus-Flash gap is 
 <a id="case-studies"></a>
 ## 5. Screenshot-Based Case Studies
 
-The figures below are treated as primary syntactic evidence. The point is not aesthetics. The point is what the models are visibly willing to claim.
+The figures below are treated as syntactic evidence. I am comparing the analyses they display, not their aesthetics.
 
 ### 5.1 English long-distance wh: explicit successive cyclicity versus compressed dependency
 
@@ -252,11 +255,11 @@ The figures below are treated as primary syntactic evidence. The point is not ae
 | --- | --- |
 | ![Pro English long-distance wh growth](../assets/gauntlet100-v1/pro-en-longwh-growth.png) | ![Flash Lite English long-distance wh growth](../assets/gauntlet100-v1/flash-en-longwh-growth.png) |
 
-This is the clearest single contrast in the batch. In the Pro figure, the wh-DP is not simply linked to the matrix clause edge. It is threaded through the clause stack with overt intermediate positions, while `do` is separately raised to `C`. The result is a visibly successive-cyclic derivation rather than a single top-level dependency.
+This is the clearest contrast in the batch. In the Pro figure, the wh-DP passes through overt intermediate positions in the clause stack, while `do` separately raises to `C`. Flash Lite instead presents one top-level dependency.
 
-Flash Lite does capture the dependency, but the analysis is much more compact. The clause spine is there, yet the derivation has the feel of a compressed dependency representation rather than a full movement history. In other words, both routes know what the sentence is doing, but Pro is much more willing to expose how.
+Flash Lite captures the dependency in a much more compact analysis. Both routes identify the long-distance relation, but only Pro exposes a fuller movement history.
 
-For interpretability research, that distinction matters. The question is not merely whether the model “knows” long-distance wh-movement. The question is whether the model will publicize a multi-step derivational theory of it.
+The benchmark can therefore distinguish recognizing long-distance wh-movement from publishing a multi-step derivation of it.
 
 ### 5.2 Dutch embedding: a full X-bar movement story versus a shallow clause shell
 
@@ -270,7 +273,7 @@ The Dutch pair is even more dramatic numerically. Pro encodes 7 movement events;
 
 In the Pro figure, the matrix verb `zegt`, the complementizer `dat`, the embedded finite head `belt`, and both subject positions are all integrated into a visibly articulated clause architecture. This is not just a CP stacked on top of a sentence. It is an explicit theory of how matrix and embedded clausal domains are related.
 
-Flash Lite returns a much flatter shell. The broad clause order is there, but the derivational argument has been compressed away. That makes this pair a particularly strong example of Babel’s value: ordinary benchmarks would say both routes handled Dutch embedding. Babel shows that they handled it in radically different theoretical ways.
+Flash Lite returns a much flatter shell. The broad clause order is there, but the derivational argument has been compressed away. An ordinary benchmark might say that both routes handled Dutch embedding. Babel shows that they assigned it very different analyses.
 
 ### 5.3 Hungarian focus inversion: overt cartography versus reduced TP structure
 
@@ -282,7 +285,7 @@ Flash Lite returns a much flatter shell. The broad clause order is there, but th
 
 The Pro tree is unmistakably theory-rich. It introduces `FocP`, `PredP`, and `PrtP`, strands the preverb `meg`, and derives the order through V-to-Foc movement rather than through a generic fronting story. This is recognizably in the É. Kiss tradition of Hungarian clause structure.
 
-Flash Lite instead gives a much leaner `CP/TP/VP` representation. The sentence is still analyzed as involving fronting, but the higher cartographic commitment is gone. That difference is not cosmetic. It is a difference in what theory the model is willing to endorse.
+Flash Lite instead gives a much leaner `CP/TP/VP` representation. The sentence is still analyzed as involving fronting, but the higher cartographic commitment is gone. The difference is theoretical, not cosmetic.
 
 **Figure 4. Hungarian Notes comparison**
 
@@ -290,7 +293,7 @@ Flash Lite instead gives a much leaner `CP/TP/VP` representation. The sentence i
 | --- | --- |
 | ![Pro Hungarian focus notes](../assets/gauntlet100-v1/pro-hu-notes.png) | ![Flash Lite Hungarian focus notes](../assets/gauntlet100-v1/flash-hu-notes.png) |
 
-The Notes make the divergence even sharper. Pro explicitly names the Hungarian focus tradition and connects the derivation to V-to-Foc movement and stranded particles. Flash Lite instead narrates a more generic Minimalist fronting account. The difference is exactly the kind of difference Babel was built to expose.
+The Notes make the split clearer. Pro names the Hungarian focus tradition and connects the derivation to V-to-Foc movement and stranded particles. Flash Lite gives a more generic Minimalist fronting account.
 
 ### 5.4 Bengali and Hindi in native script
 
@@ -314,9 +317,9 @@ The Hindi pair makes the same point in a second way: the route difference surviv
 
 ### 5.5 Full benchmark atlas
 
-The benchmark is not only summarized here; it is embedded here. The full sentence-by-sentence atlas follows as part of the paper itself, with all 100 final derivation figures included on the research site. A standalone atlas route remains available for direct browsing, but the complete inventory is part of the paper rather than an auxiliary download.
+The full sentence-by-sentence atlas follows, with all 100 final derivation figures included on the research site. A standalone atlas route is also available for direct browsing.
 
-This atlas makes the strongest claim of the paper concrete. The benchmark does not merely report that a model "handled" a sentence. It shows what the model was willing to make public: a tree. The Pro route and the Flash Lite route are therefore inspected here as paired public syntactic theories, not just as outputs from two different inference budgets.
+The atlas shows what each model returned for every sentence instead of reducing the run to completion counts. I compare Pro and Flash Lite as paired syntactic analyses, not only as outputs from different inference budgets.
 
 Each entry contains:
 
@@ -366,7 +369,7 @@ Sentence: `কোন বইটা রিমা কিনেছে ?`
 
 Metrics: Pro 4 movement / 27 steps; Flash Lite 0 movement / 16 steps.
 
-**Syntactic reading.** This is one of the most revealing Minimalist pairs. Pro chooses a movement-rich analysis of the Bengali wh-clause, making the operator dependency structurally overt. Flash Lite, by contrast, gives a serviceable clause skeleton without committing to overt wh-movement at all. The resulting contrast is not between success and failure, but between a strong public theory and a strategically quiet one.
+**Syntactic reading.** Pro chooses a movement-rich analysis of the Bengali wh-clause and makes the operator dependency overt. Flash Lite gives a serviceable clause skeleton without committing to overt wh-movement.
 
 **Interpretability check.** Bengali is typologically interesting precisely because wh-interpretation does not force the same overt derivation in every analysis tradition. Pro appears to be pulled toward an explicit operator-chain reading by the sentence's initial wh constituent, while Flash Lite seems to avoid committing beyond the minimal interrogative frame.
 
@@ -424,7 +427,7 @@ Metrics: Pro 3 movement / 24 steps; Flash Lite 2 movement / 19 steps.
 
 **Syntactic reading.** Greek produces another partial convergence pair. Both routes treat the sentence as an overt wh-question, but Pro adds one more layer of derivational commitment around the fronted object and the clause edge. Flash Lite remains recognizably movement-based, though more compact.
 
-**Interpretability check.** This is exactly the kind of sentence where a strong model can afford to be explicit: the wh-object is overtly fronted and the verbal complex sits in a finite interrogative environment. Pro appears to spend that opportunity on a denser public derivation; Flash Lite keeps the same general story but strips it down.
+**Interpretability check.** The wh-object is overtly fronted and the verbal complex sits in a finite interrogative environment, so both routes have strong cues to work from. Pro turns them into a denser derivation; Flash Lite keeps the same general story but strips it down.
 
 ### English long-distance wh
 
@@ -648,7 +651,7 @@ Metrics: Pro 2 movement / 22 steps; Flash Lite 2 movement / 17 steps.
 
 **Syntactic reading.** Russian is one of the rare exact movement-count matches in the Minimalist half. Both routes treat the fronted object question as genuinely movement-bearing. Pro still carries more total derivational structure, but this is a real convergence case rather than a dramatic divergence pair.
 
-**Interpretability check.** The convergence suggests that some combinations of overt wh-fronting and case-rich morphology strongly anchor both routes to the same public theory. Russian appears to be one of the languages where Flash Lite can already behave like a smaller version of Pro rather than like a qualitatively different theorist.
+**Interpretability check.** Overt wh-fronting and case-rich morphology may be enough to anchor both routes to a similar analysis here. In this Russian example, Flash Lite behaves more like a smaller Pro than a different kind of parser.
 
 ### Serbian wh-question
 
@@ -704,7 +707,7 @@ Sentence: `শিক্ষক বললেন যে ছাত্রী বই�
 
 Metrics: Pro 3 movement / 39 steps; Flash Lite 0 movement / 23 steps.
 
-**Syntactic reading.** Pro turns Bengali embedding into a visibly multi-layered clause architecture, whereas Flash Lite gives a much lighter declarative-plus-complement structure. The pair matters because it shows that native-script Bengali supports not only Minimalist wh analysis but also X-bar embedding analysis at full resolution.
+**Syntactic reading.** Pro gives Bengali embedding a visibly multi-layered clause architecture, while Flash Lite uses a lighter declarative-plus-complement structure. The native-script Bengali input works for both the Minimalist wh cases and this X-bar embedding case.
 
 **Interpretability check.** The overt complementizer strongly marks subordination, but the routes disagree about how much syntactic machinery that fact should trigger. Pro treats subordination as a cue for articulated structure; Flash Lite treats it as a sufficient label for a clause shell.
 
@@ -718,7 +721,7 @@ Sentence: `Der Lehrer sagte, dass die Schülerin das Buch gelesen hat.`
 
 Metrics: Pro 5 movement / 51 steps; Flash Lite 0 movement / 27 steps.
 
-**Syntactic reading.** This is one of the strongest X-bar contrasts in the benchmark. Pro does not merely draw a complement clause; it treats the German embedded perfect as a multi-head, clause-internal derivation worth exposing. Flash Lite instead gives a serviceable embedded declarative with very little public movement.
+**Syntactic reading.** Pro treats the German embedded perfect as a multi-head, clause-internal derivation. Flash Lite gives a serviceable embedded declarative with very little visible movement.
 
 **Interpretability check.** German subordinate perfect clauses offer several signals at once: complementizer, clause-final verb complex, and embedded argument structure. Pro appears to read these cumulative signals as evidence for a genuinely articulated derivation. Flash Lite recognizes the clause type but declines to externalize the internal mechanics.
 
@@ -886,7 +889,7 @@ Sentence: `शिक्षक ने कहा कि छात्रा जल�
 
 Metrics: Pro 5 movement / 41 steps; Flash Lite 0 movement / 22 steps.
 
-**Syntactic reading.** Hindi embedded clauses in native script are a major showcase item for the benchmark. Pro not only survives the script; it turns the sentence into a movement-bearing X-bar derivation with overt clause interaction. Flash Lite produces a good embedded shell but does not reveal the same internal machinery.
+**Syntactic reading.** Pro gives the native-script Hindi sentence a movement-bearing X-bar derivation with overt clause interaction. Flash Lite produces a good embedded shell without the same internal machinery.
 
 **Interpretability check.** The key interpretability point is that the route difference cannot be blamed on script failure. Both models handle the Devanagari sentence. The difference is what they are willing to make public once they have understood it.
 
@@ -970,7 +973,7 @@ Sentence: `Profesorul a întrebat dacă studenții au venit.`
 
 Metrics: Pro 4 movement / 41 steps; Flash Lite 0 movement / 22 steps.
 
-**Syntactic reading.** Pro treats the embedded question as a real interrogative clause architecture nested under a matrix predicate of asking, whereas Flash Lite produces a lighter shell. This is exactly the kind of sentence where Babel's forced-commitment setup is powerful: the model cannot merely detect an embedded question; it has to say what the structure is.
+**Syntactic reading.** Pro treats the embedded question as an interrogative clause nested under a matrix predicate of asking, while Flash Lite produces a lighter shell. Both models have to state an analysis instead of only detecting that the sentence contains an embedded question.
 
 **Interpretability check.** Embedded interrogatives strongly cue a complex left edge, but only if the model decides that the cue is worth publicizing. Pro does. Flash Lite mostly labels the embedded question and moves on.
 
@@ -1033,9 +1036,7 @@ Metrics: Pro 2 movement / 36 steps; Flash Lite 0 movement / 24 steps.
 <a id="interpretability"></a>
 ## 6. Why This Matters for AI Interpretability
 
-The main interpretability result is simple.
-
-Babel does not ask whether the model silently contains syntactic knowledge. It asks whether the model will externalize a syntactic theory under pressure.
+Babel does not test whether a model silently contains syntactic knowledge. It tests what analysis the model will externalize under the contract.
 
 That pressure reveals several things at once:
 
@@ -1044,7 +1045,7 @@ That pressure reveals several things at once:
 - whether it treats different frameworks as genuinely different analyses;
 - whether multilingual and native-script inputs remain compatible with explicit structure.
 
-This is why the benchmark feels different from standard acceptability evaluation. In a string-first benchmark, a model can succeed while remaining theoretically silent. In Babel, theoretical silence becomes visible.
+In a string-first benchmark, a model can succeed without stating an analysis. In Babel, that silence is visible.
 
 The result is a public object that can be inspected like a linguistics figure:
 
@@ -1053,11 +1054,9 @@ The result is a public object that can be inspected like a linguistics figure:
 - a derivation movie
 - a prose interpretation
 
-That combination is what makes Babel interesting as an interpretability instrument. It also makes a stricter question possible: not only what tree the model outputs, but what local evidence appears to have led it there. The appendix atlas therefore treats every paired case twice: first as a syntactic object, and then as an interpretability object.
+Together, these artifacts allow a second question beyond what tree the model outputs: what local evidence may have led it there. The atlas therefore reads every pair first as syntax and then as model behavior.
 
 ## 7. Why This Matters for Syntax Research
-
-The more ambitious implication is methodological.
 
 If a system can reliably generate:
 
@@ -1068,24 +1067,24 @@ If a system can reliably generate:
 - surface order
 - explanatory Notes
 
-then it is no longer only a syntax visualizer. It is the beginning of a derivational syntax corpus generator.
+then it can also become a source of derivational syntax data, not only a visualizer.
 
-That possibility is unusual because most public resources store only the endpoint of the analysis. They do not store a replayable derivation with overt movement chains and framework-specific prose explanations for each sentence. Babel does not solve that research problem completely yet, but this 100-case run shows that the object itself is now stable enough to treat seriously.
+Most public resources store only the endpoint of an analysis, not a replayable derivation with overt movement chains and framework-specific explanations. Babel does not solve that research problem yet, but this run shows that the data format is worth testing further.
 
 ## 8. Limitations
 
 Two limitations matter.
 
-First, this benchmark measures explicit commitment, not gold theoretical truth. A model can produce a coherent tree that many syntacticians would still reject. That is a feature of the benchmark rather than a bug: the point is to expose the theory the model chooses.
+First, this benchmark measures explicit commitment, not gold theoretical truth. A model can produce a coherent tree that many syntacticians would still reject. The benchmark records the chosen analysis; it does not certify that analysis as correct.
 
 Second, Babel still unfolds the replay from the committed analysis rather than requiring the model to author every fine-grained replay step itself. The benchmark therefore measures the model’s tree and movement theory more directly than it measures raw step-by-step derivation authorship.
 
 <a id="conclusion"></a>
 ## 9. Conclusion
 
-This 100-case run establishes Sylvan Architect Babel as the first serious environment for benchmarking public syntactic theory in language models.
+This 100-case run shows that Babel can be used to compare public syntactic analyses from language models.
 
-The important result is not only that Gemini 3.1 Pro and Gemini 3.1 Flash Lite can return trees across 22 languages. It is that Babel forces those models to make their syntactic commitments public. Once that happens, the benchmark changes:
+Gemini 3.1 Pro and Gemini 3.1 Flash Lite returned trees across 22 languages, and Babel made their differences inspectable:
 
 - from hidden preference to visible theory,
 - from “does the model know syntax?” to “what syntax does it actually choose?”,
@@ -1093,4 +1092,4 @@ The important result is not only that Gemini 3.1 Pro and Gemini 3.1 Flash Lite c
 
 On this batch, Pro behaves like the stronger explicit syntax model. It is slower, but far more willing to expose derivational structure, especially in long-distance wh, embedding, and focus-sensitive clause architecture. Flash Lite is faster and generally more conservative, often returning a shallower public theory of the same sentence.
 
-That is a meaningful scientific result in its own right. It also points in two directions at once. For researchers, Babel becomes a way of observing what syntactic theory a model is actually willing to make public. For students, the same forced public theory becomes something they can inspect, replay, and learn from sentence by sentence. And it suggests a larger future direction: Babel is not only a benchmark of syntactic behavior. It is the beginning of a framework for collecting structured derivational theory data at scale. If language models are going to be taken seriously as public generators of linguistic theory, then they should be benchmarked at the level where linguistic theory actually lives: overt phrase structure, movement, derivation, explanation, and multilingual coverage under forced commitment. On that standard, this 100-tree batch is not a curiosity. It is a serious pre-launch demonstration of a new benchmark object. The next obvious step is comparative expansion across other frontier families as well, including GPT and Claude, so that forced-commitment syntax can become a model-comparison regime rather than a single-provider showcase. Babel does not ask models whether they know syntax. Babel makes them show it.
+For researchers, Babel offers a way to inspect which analysis a model chooses. For students, the same tree and Replay sequence can be studied sentence by sentence. The next step is to compare more model families, including GPT and Claude, and to test whether these route-level patterns survive outside Gemini. The larger goal is a dataset of explicit phrase structure, movement, derivation, explanation, and multilingual coverage rather than another score over strings.

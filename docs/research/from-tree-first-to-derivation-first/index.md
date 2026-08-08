@@ -1,8 +1,11 @@
 ---
 title: From Tree-First to Derivation-First
-description: Research Journal v1: why Babel was refactored, what the new architecture changed, and why smaller models now fall short of full Babel.
+description: "Research Journal v1: why Babel was refactored, what the new architecture changed, and why smaller models now fall short of full Babel."
 permalink: /research/from-tree-first-to-derivation-first/
+archived: true
 ---
+
+> **Archived Codex-generated research note.** Codex generated this page during an earlier phase of Babel. It preserves old project history and helps show how Babel progressed and evolved over time, but it does not represent Babel today or my current work and standards as its developer. [Browse the research archive](/sylvan-architect-babel/research/archive/).
 
 <div class="paper-hero">
   <p class="paper-kicker">Research Journal v1</p>
@@ -30,11 +33,11 @@ permalink: /research/from-tree-first-to-derivation-first/
 
 ## Abstract
 
-This note is about why Babel had to be refactored at all. The old architecture was tree-first, and over time that became harder to justify. Babel could still produce impressive trees, but the derivation was not carrying enough of the real syntactic burden. Growth could end up feeling decorative. Replay could look like a derivation while actually tracing over a structure that had already been decided somewhere else. In practice, Babel could show a finished canopy and animate pieces inside it, but it could not cleanly show a tree being base-generated and then reaching surface order through a derivation that genuinely meant something. For a system meant to externalize syntax, that was a serious limitation.
+I refactored Babel because the old tree-first architecture had become hard to justify. It could still produce impressive trees, but the derivation was not carrying enough of the syntactic burden. Growth could feel decorative, and Replay could trace over a structure that had already been decided elsewhere. Babel could animate a finished canopy, but it could not cleanly show a tree being base-generated and reaching surface order through a meaningful derivation. For a system built to externalize syntax, that was a serious limitation.
 
-The refactor pushed Babel toward a derivation-first architecture. Growth frames became the structural source of truth, and replay, canopy, and notes now have to stay anchored to that same committed sequence. The result is a stronger Babel, but also a heavier one. Smaller routes that could survive a simpler tree-first harness now compress, distort, or fail under the stronger standard. Flash Lite no longer feels like full Babel at a smaller scale. Local and free models have struggled even more directly. One large open model, Qwen 3.5 397B A17B, completed the full Pro route and satisfied strict JSON parsing, but still failed the syntax benchmark itself: its final tree violated binary branching, placed a bare trace directly under `InflP`, and leaked chain ids into human-facing notes. That is useful evidence. It suggests that full Babel has become a research-grade instrument before it has become a cheap public product.
+The refactor made Growth frames the structural source of truth, with Replay, Canopy, and Notes anchored to the same committed sequence. Babel became stronger and heavier at the same time. Smaller routes that survived the old tree-first harness now compress, distort, or fail under the new standard. Flash Lite no longer feels like full Babel at a smaller scale, and local or free models have struggled even more. Qwen 3.5 397B A17B completed the full Pro route and returned valid JSON, but its final tree violated binary branching, placed a bare trace directly under `InflP`, and leaked chain ids into human-facing notes. Full Babel was becoming a research instrument before it became a cheap public product.
 
-The refactor is not finished. I still want to make Babel faster and cheaper without weakening the real system. I also have not yet stress-tested the refactored architecture on Gemini 3.1 Pro in full suites, because those runs started to cost serious money. Provider reasoning trace and the growing ledger layer are likely part of why Babel became heavier, alongside the usual cost of longer prompts and richer structured output. I will keep testing. At this point, the clearest product direction may be a split: a lighter Babel for students, and a stronger Babel for researchers.
+The refactor is not finished. I still want to make Babel faster and cheaper without weakening it. I have not yet run full Gemini 3.1 Pro stress suites on the new architecture because those runs started to cost serious money. Provider reasoning trace, the growing ledger layer, longer prompts, and richer structured output are all likely contributing to that weight. I will keep testing. A split between a lighter student version and a stronger research version may be the most practical direction.
 
 ## 1. Why the Refactor Was Necessary
 
@@ -46,7 +49,7 @@ The old problem was simple enough once it became visible.
 - That made the derivation look more meaningful than it really was.
 - It also meant Babel did not have a clean way to show base generation first and surface order later, because Growth was being inferred from the finished canopy tree instead of being the source of truth itself.
 
-This was not only a UI problem. It was an architectural one. Once the tree becomes primary, the derivation starts to read like commentary on the tree rather than the syntax itself. Babel is supposed to do the opposite. It is supposed to force the model to commit not only to what the structure is, but to how that structure comes into existence.
+This was an architectural problem, not only a UI problem. Once the tree becomes primary, the derivation starts to read like commentary on the tree rather than the syntax itself. Babel is supposed to force the model to commit both to the structure and to how it comes into existence.
 
 The refactor changed that order of commitment.
 
@@ -55,7 +58,7 @@ The refactor changed that order of commitment.
 - Replay is now driven by committed growth snapshots instead of inferred final-tree state.
 - Notes are expected to describe the same committed derivation rather than floating free as prose.
 
-That is the real reason for the refactor. It was not a visual cleanup. It was a correction of what Babel is trying to measure.
+That was the reason for the refactor. It was a correction of what Babel measures, not a visual cleanup.
 
 ## 2. What Changed in Practice
 
@@ -65,14 +68,14 @@ The easiest way to see the difference is a single clean Portuguese case.
 
 ![Refactored Portuguese growth replay](../assets/derivation-first-refactor-v1/pro-pt-growth.gif)
 
-What matters here is not only that the replay looks better. The deeper change is that replay now has to respect the derivation as a real structural sequence.
+The improved replay is secondary. The real change is that Replay now has to respect the derivation as a structural sequence.
 
 - lexical selection happens before projection
 - movement is tracked as movement
 - replay steps are tied to committed growth states
 - the final tree is no longer allowed to silently override the derivation
 
-That is the difference the old tree-first architecture could not show clearly enough. The replay is no longer acting out a structure that already existed somewhere else. It is following the committed derivation itself.
+The old tree-first architecture could not show this honestly enough. Replay is now following the committed derivation instead of acting out a structure decided elsewhere.
 
 **Figure 2. Final replay state after a real bottom-up derivation**
 
@@ -86,7 +89,7 @@ The same case now also yields a clean canopy and a notes view that belong to the
 | --- | --- |
 | ![Refactored Portuguese canopy](../assets/derivation-first-refactor-v1/pro-pt-canopy.png) | ![Refactored Portuguese notes](../assets/derivation-first-refactor-v1/pro-pt-notes.png) |
 
-This is the version of Babel the refactor was trying to create: one committed syntax object expressed across multiple views, rather than a tree followed by an after-the-fact explanation.
+Canopy, Replay, and Notes now express one committed syntax object instead of orbiting a tree decided in advance.
 
 ## 3. What the Refactor Exposed
 
@@ -101,8 +104,6 @@ A smaller route or weaker model now has to do all of the following at once:
 - keep notes human-readable
 - keep the final tree structurally disciplined
 
-That is a demanding ask.
-
 ### 3.1 Flash Lite no longer feels like full Babel
 
 Flash Lite still matters. It remains useful as a comparison route. But under the stronger derivation-first architecture, it no longer feels like the same system at a smaller scale. It feels more like a compressed route with a different ceiling.
@@ -113,7 +114,7 @@ Flash Lite still matters. It remains useful as a comparison route. But under the
 | --- | --- |
 | ![Refactored Portuguese growth replay](../assets/derivation-first-refactor-v1/pro-pt-growth.gif) | ![Flash Lite Portuguese growth](../assets/derivation-first-refactor-v1/flash-pt-growth.png) |
 
-The point is not that Flash Lite always crashes. The point is that it now falls short in a more revealing way. It tends to compress overt derivation. Under the old tree-first harness that could be easier to miss. Under the new derivation-first harness it becomes visible immediately.
+Flash Lite does not always crash; it tends to compress overt derivation. The old tree-first harness could hide that weakness, while the derivation-first harness makes it visible immediately.
 
 ### 3.2 Local and free models failed more directly
 
@@ -124,7 +125,7 @@ The local and free-model testing so far has been harsher.
 - `moonshotai/kimi-k2.5` on free NVIDIA completed probes, but true Babel Pro either burned the budget in reasoning or timed out at the provider layer.
 - `qwen/qwen3.5-397b-a17b` was the first non-Gemini provider to complete true Babel Pro cleanly enough for strict parsing, but it still failed the syntax benchmark.
 
-That last case is the most informative one, because it draws the new line very clearly: transport success is not the same thing as syntactic adequacy.
+Qwen is the most informative case because it draws a clear line between transport success and syntactic adequacy.
 
 ## 4. Qwen as a Stress Test
 
@@ -169,27 +170,25 @@ The notes were weaker too.
 
 The notes leaked internal chain names such as `chain_wh` and `chain_subj` into human-facing prose. That is not the kind of prose Babel should present as finished notes. It shows the model still struggling to keep internal bookkeeping separate from the final explanatory layer.
 
-The Qwen result is therefore mixed in a very specific way.
+So the Qwen result is mixed:
 
 - It is a real success for Babel as a strict, provider-agnostic parser contract.
 - It is a real failure for Qwen as a benchmark-quality Babel syntax model.
 
-That distinction matters.
-
 ## 5. What This Means
 
-The refactor improved Babel. It did not finish the job.
+The refactor improved Babel, but it did not finish the job.
 
-The renderer problems were fixed. The parser was cleaned up. The architecture now makes more syntactic sense than the old tree-first design. At the same time, the refactor exposed a harder truth: full Babel has become expensive because it is doing something genuinely strong.
+The renderer problems were fixed, the parser was cleaned up, and the architecture now makes more syntactic sense than the old tree-first design. Full Babel also became expensive because it now asks much more of the model.
 
-It is not just drawing a tree. It is asking a model to:
+The model has to:
 
 - commit to one explicit syntactic theory
 - maintain a meaningful derivation
 - preserve structural discipline
 - narrate that same analysis coherently
 
-That is part of why smaller models fall behind first.
+This is part of why smaller models fall behind first.
 
 No smaller or cheaper route tested so far has matched full Babel.
 
@@ -197,39 +196,37 @@ No smaller or cheaper route tested so far has matched full Babel.
 - Local models tested so far have failed either on speed, structural validity, or syntax quality.
 - The strongest non-Gemini model tested so far completed the transport path but still failed the syntax benchmark.
 
-Taken together, this suggests that full Babel may not be the right public free product in its current form.
+Right now, full Babel may not be the right free public product.
 
-One important limit on the current evidence should be stated plainly. I have not yet re-run large Gemini 3.1 Pro stress suites on the new architecture. The reason is cost. Once Babel became derivation-first and started carrying richer structure, repeated benchmark runs became expensive enough that I stopped treating Gemini Pro sweeps as casual tests.
+There is an important limit on this evidence: I have not yet re-run large Gemini 3.1 Pro stress suites on the new architecture. Once Babel became derivation-first and started carrying richer structure, repeated benchmark runs became too expensive to treat as casual tests.
 
-The strongest explanation for the new weight is not mysterious.
+The extra weight comes from several places:
 
 - Growth-first structure makes the syntax object itself larger.
 - Provider reasoning trace adds more model-authored material.
 - The ledger layer adds more explicit commitments.
 - The notes layer still has to stay aligned with the same syntax object.
 
-That does not make those features a mistake. It just means they are part of what made full Babel stronger and more expensive at the same time.
+Those features are not necessarily mistakes. They are part of what made full Babel stronger and more expensive at the same time.
 
 ## 6. Next Direction
 
-I am not treating this as the end of the story. I will keep testing.
-
-The refactor is still open on one front: efficiency. I still want to find ways to make Babel faster and cheaper on my side without weakening the real system or slipping back into a tree-first architecture.
+I will keep testing. The remaining engineering problem is efficiency: making Babel faster and cheaper without weakening it or slipping back into a tree-first architecture.
 
 The most plausible next direction now looks like a split.
 
 - **Student Babel**: lighter, cheaper, still explicit, but less derivationally extreme.
 - **Research Babel**: the stronger full system, kept for serious syntax work and stronger models.
 
-That would preserve what the refactor achieved instead of forcing Babel backward.
+This split would preserve what the refactor achieved instead of forcing Babel backward.
 
-The goal would not be to make Babel weaker everywhere. It would be to protect the stronger version by admitting that it may now be a research instrument first.
+The goal would be to protect the stronger version by admitting that it may now be a research instrument first, not to make Babel weaker everywhere.
 
 ## Conclusion
 
-The refactor was necessary because tree-first Babel was the wrong architecture. It could produce trees, but not a derivation strong enough to fully deserve the name.
+I still think the refactor was necessary. Tree-first Babel could produce impressive trees, but its derivation did not carry enough of the syntax to deserve being called the source of truth.
 
-The new derivation-first Babel is better. It is also heavier. That is not an accident. It is the cost of asking for real explicit syntactic commitment.
+Derivation-first Babel is better and much heavier. That is the cost of asking for explicit syntactic commitment.
 
 The current evidence points in a clear direction:
 
@@ -238,4 +235,4 @@ The current evidence points in a clear direction:
 - a lighter student version may be necessary
 - the stronger version should remain the real Babel
 
-I do not see that as a defeat. I see it as a clearer understanding of what Babel has turned into.
+I do not see that as a defeat. It is a clearer picture of what Babel has turned into.
