@@ -5,6 +5,18 @@ permalink: /research/
 
 This section collects short papers and devlogs produced from Babel benchmark batches.
 
+## August 2026
+
+### [Drawing an Open-Ended Syntax: The Babel Relation Atlas](./visual-relations-atlas/)
+
+Research devlog and interactive atlas: how Babel turns open, model-authored syntactic relations into finite, inspectable renderer marks without pretending that deterministic code can enumerate every relation syntacticians may need.
+
+- Date: August 8, 2026
+- Interactive artifact: [Babel Relation Atlas](./visual-relations-atlas/atlas.html)
+- Focus: 102 live relation cards, source-backed visual conventions, Replay timing, safe fallback behavior, and an open contribution path for missing relations
+
+[![Babel Relation Atlas](./visual-relations-atlas/assets/relation-atlas-overview.png)](./visual-relations-atlas/atlas.html)
+
 ## June 2026
 
 ### [Low Reasoning Effort On A Tiny Babel Derivation](./provider-reasoning-effort-mia-laughed-2026-06-03/)
