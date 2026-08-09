@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { DerivationStage, DerivationStep, SyntaxNode } from '../types';
-import { ResolvedVisualRelation } from '../visualRelationLinks';
+import { ResolvedRelationLink } from '../relationLinks';
 import { buildDerivationReplayPlan } from '../derivationReplayPlan.js';
 import RootLogo from './RootLogo';
 import {
@@ -12,7 +12,7 @@ import {
   adaptDerivationStagesForReplay,
   applyPreFrontingSentenceInitialCasing,
   applyVizIds,
-  buildAuthoredVisualRelationRelationLinksForFrames,
+  buildAuthoredRelationLinksForFrames,
   buildFirstRevealNodeStepIndex,
   buildMovementArrowsFromLinks,
   buildMovementProtectedNodeIds,
@@ -23,6 +23,7 @@ import {
   buildRenderableDerivationCanvasData,
   buildReplayDisplayDetailBlocks,
   buildReplaySupportLines,
+  buildResolvedLinkOperatorVariableIndexMap,
   buildResolvedLinkRawTraceAliasMap,
   buildResolvedLinkTraceIndexMap,
   buildTraceDisplayLabel,
@@ -35,6 +36,8 @@ import {
   formatPlaybackOperationTitle,
   formatReplayBlockLine,
   formatReplayBlockTitle,
+  formatIndexedSurfaceForDisplayValue,
+  formatAuthoredWitnessSurface,
   formatTraceSurfaceForDisplayValue,
   getNodeId,
   hidePendingInflSpecifierWrappersInStep,
@@ -63,6 +66,20 @@ import {
   type MovementArrow,
   type VisibleLink
 } from '../replay/replayCompiler.ts';
+import {
+  compileRelationRenderPlan,
+  planItemOwnsRelationMoment,
+  planItemDependencyNodeIds,
+  type RelationRenderPlan
+} from '../replay/relations/renderPlanCompiler.ts';
+import {
+  bindRelationPlanFrame,
+  boundOverlayBounds,
+  resolveUniqueDisplayTerminal,
+  ghostLensPresentation,
+  type OverlayBounds,
+  type PlanPositionProvider
+} from '../replay/relations/geometryBinding.ts';
 
 interface TreeVisualizerProps {
   data: SyntaxNode;
@@ -71,6 +88,12 @@ interface TreeVisualizerProps {
   derivationStages?: DerivationStage[];
   abstractionMode?: boolean;
   sentence?: string;
+  /**
+   * Production draws the compiled visual-relations overlay by default. A
+   * research surface that layers its own demonstration overlay (the Lab) may
+   * disable it to avoid double-drawing; nothing else should.
+   */
+  disableRelationOverlay?: boolean;
 }
 
 const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
@@ -79,7 +102,8 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
   derivationSteps,
   derivationStages,
   abstractionMode = false,
-  sentence = ''
+  sentence = '',
+  disableRelationOverlay = false
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -99,13 +123,25 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
       index,
       statement: stage.statement,
       stageRecord: stage.stageRecord,
-      visualRelations: stage.visualRelations || [],
+      relations: stage.relations || [],
       workspaceForest: stage.workspaceForest || []
     })).join('|');
   }, [derivationStages]);
   const derivationReplayPlan = useMemo<DerivationReplayPlan | null>(() => {
     if (!Array.isArray(derivationStages) || derivationStages.length === 0) return null;
     return buildDerivationReplayPlan({ derivationStages }) as DerivationReplayPlan;
+  }, [derivationStages, derivationStagesSignature]);
+  /*
+   * The production visual-relations render plan: semantic compilation lives in
+   * the React-free replay/relations modules; this component only lays
+   * out the tree, supplies real node positions, and draws the bound
+   * primitives. The compiled plan owns authored trajectories; the legacy
+   * movement adapter remains only as a compatibility path when the plan has
+   * no authored trajectory items.
+   */
+  const relationRenderPlan = useMemo<RelationRenderPlan | null>(() => {
+    if (!Array.isArray(derivationStages) || derivationStages.length === 0) return null;
+    return compileRelationRenderPlan(derivationStages);
   }, [derivationStages, derivationStagesSignature]);
   const derivationStepsSignature = useMemo(() => {
     const steps = derivationSteps || [];
@@ -152,7 +188,7 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
     : null;
   const committedDerivationVisualLinks = useMemo(() => {
     if (!hasDerivationFrames || !committedDerivationFrame || committedDerivationFrameIndex < 0) return [];
-    return buildAuthoredVisualRelationRelationLinksForFrames(
+    return buildAuthoredRelationLinksForFrames(
       replayDerivationFrames,
       derivationReplayPlan,
       committedDerivationFrameIndex,
@@ -416,6 +452,13 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
           traceDisplayFrameIndex
         )
       : new Map<string, string>();
+    const layoutOperatorVariableIndexByNodeId = traceDisplayFrame
+      ? buildResolvedLinkOperatorVariableIndexMap(
+          traceDisplayFrame.workspaceForest || [],
+          traceDisplayRelationLinks,
+          traceDisplayFrameIndex
+        )
+      : new Map<string, string>();
     const layoutRawTraceAliasByIndex = traceDisplayFrame
       ? buildResolvedLinkRawTraceAliasMap(
           traceDisplayFrame.workspaceForest || [],
@@ -479,13 +522,20 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
           ? layoutRawTraceAliasByIndex.get(String(rawTraceAlias).trim().toLowerCase())
           : undefined;
         const directTraceIndex = layoutDerivationTraceIndexByNodeId.get(nodeId);
+        const operatorVariableIndex = resolveTraceIndexFromNodeContext(
+          d,
+          layoutOperatorVariableIndexByNodeId
+        );
         if (!morph) {
           return isTraceLike(fallback)
             ? formatTraceSurfaceForDisplayValue(
                 fallback,
                 directTraceIndex || storedTraceIndex || aliasedTraceIndex || extractMovementIndex(fallback)
               )
-            : maybeCapitalizeLayoutSentenceInitialLeaf(d, fallback);
+            : formatIndexedSurfaceForDisplayValue(
+                maybeCapitalizeLayoutSentenceInitialLeaf(d, fallback),
+                operatorVariableIndex
+              );
         }
         if (effectiveRevealThreshold < morph.step) {
           return morph.hideBefore ? '' : maybeCapitalizeLayoutSentenceInitialLeaf(d, morph.preText);
@@ -511,7 +561,10 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
             directTraceIndex || storedTraceIndex || aliasedTraceIndex || extractMovementIndex(fallback)
           );
         }
-        return maybeCapitalizeLayoutSentenceInitialLeaf(d, morph.postText || fallback);
+        return formatIndexedSurfaceForDisplayValue(
+          maybeCapitalizeLayoutSentenceInitialLeaf(d, morph.postText || fallback),
+          operatorVariableIndex
+        );
       });
   }, [
     activeDerivationArrowLinks,
@@ -565,7 +618,19 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
 
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.05, 10])
-      .on('zoom', (event) => g.attr('transform', event.transform));
+      .on('zoom', (event) => {
+        g.attr('transform', event.transform);
+        // Overlay markers keep a stable screen size: their world position is
+        // carried on data attributes and their local scale counteracts zoom.
+        g.selectAll<SVGGElement, unknown>('.vr-overlay-marker').attr('transform', function () {
+          const el = this as SVGGElement;
+          const x = Number(el.dataset.vrX || 0);
+          const y = Number(el.dataset.vrY || 0);
+          // Screen-stable, but capped so far-out zoom never lets markers
+          // dwarf the tree they annotate.
+          return `translate(${x},${y}) scale(${Math.min(1 / (event.transform.k || 1), 3)})`;
+        });
+      });
     svg.call(zoom as any);
 
     const treeLayout = d3.tree<SyntaxNode>()
@@ -656,6 +721,16 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
           );
         })()
       : new Map<string, string>();
+    const derivationOperatorVariableIndexByNodeId = traceDisplayFrame
+      ? (() => {
+          const workspaceForest = traceDisplayFrame.workspaceForest || [];
+          return buildResolvedLinkOperatorVariableIndexMap(
+            workspaceForest,
+            traceDisplayRelationLinks,
+            traceDisplayFrameIndex
+          );
+        })()
+      : new Map<string, string>();
     const derivationRawTraceAliasByIndex = traceDisplayFrame
       ? (() => {
           const workspaceForest = traceDisplayFrame.workspaceForest || [];
@@ -695,26 +770,15 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
     ): string => {
       return formatTraceSurfaceForDisplayValue(surface, fallbackIndex);
     };
+    /*
+     * Authored witness kind is authoritative; the pure law lives in
+     * replayCompiler.formatAuthoredWitnessSurface and is shared with tests.
+     */
     const formatReplayIndexedSilentLeaf = (
       surface: string,
       inheritedTraceIndex?: string | null,
-      aliasedTraceIndex?: string | null,
-      forceTraceForSilentCopy = false
-    ): string => {
-      const resolvedIndex = normalizeTraceIndexForDisplay(
-        inheritedTraceIndex || aliasedTraceIndex || extractMovementIndex(surface)
-      );
-      if (forceTraceForSilentCopy && resolvedIndex) {
-        return buildTraceLabel(resolvedIndex);
-      }
-      if (isTraceLike(surface)) {
-        return formatTraceSurfaceForDisplay(surface, resolvedIndex || extractMovementIndex(surface));
-      }
-      if (isNullLike(surface) && resolvedIndex) {
-        return buildTraceLabel(resolvedIndex);
-      }
-      return surface;
-    };
+      aliasedTraceIndex?: string | null
+    ): string => formatAuthoredWitnessSurface(surface, inheritedTraceIndex, aliasedTraceIndex);
 
     const unrevealedStep = usesDerivationFrames ? Number.MAX_SAFE_INTEGER : 0;
     const getRevealStepForNodeId = (nodeId: string): number =>
@@ -766,9 +830,12 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
           || traceRawAlias
           || targetRawAlias
           || null;
+        // Additive indexing only: an authored `t` gains its index; any other
+        // authored witness surface (∅, silent lexical material) stays exactly
+        // as authored.
         const formattedTraceSurface = isTraceLike(traceSurface)
           ? formatTraceSurfaceForDisplay(traceSurface, relationIndex)
-          : buildTraceLabel(relationIndex);
+          : traceSurface;
         terminalMorph.set(traceId, {
           preText: formattedTraceSurface,
           postText: formattedTraceSurface,
@@ -846,6 +913,8 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
       .enter()
       .append('path')
       .attr('class', 'branch')
+      .attr('data-source-node-id', (d: any) => getNodeId(d.source))
+      .attr('data-target-node-id', (d: any) => getNodeId(d.target))
       .attr('fill', 'none')
       .attr('stroke', BRANCH_COLOR)
       .attr('stroke-width', 4)
@@ -857,7 +926,18 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
       .style('transition', 'opacity 280ms ease')
       .attr('d', d3.linkVertical().x((d: any) => d.x).y((d: any) => d.y) as any);
 
-    if (movementArrows.length > 0) {
+    /*
+     * One movement authority. When the compiled render plan carries authored
+     * trajectories and the production overlay is active, the plan draws every
+     * trajectory instance and the legacy one-source/one-target movement
+     * adapter is gated off — it stays only as a lossless compatibility path
+     * for derivations that author no trajectory relations at all, and it
+     * never independently reclassifies movement.
+     */
+    const planOwnsTrajectories = !disableRelationOverlay
+      && Boolean(relationRenderPlan?.frames.some((planFrame) =>
+        planFrame.items.some((planItem) => planItem.kind === 'trajectory')));
+    if (movementArrows.length > 0 && !planOwnsTrajectories) {
       const defs = g.append('defs');
       defs.append('marker')
         .attr('id', 'movement-arrowhead')
@@ -926,6 +1006,7 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
       .enter()
       .append('g')
       .attr('class', 'node-group')
+      .attr('data-node-group-id', (d) => getNodeId(d))
       .attr('transform', (d) => `translate(${d.x},${d.y})`)
       .attr('data-step', (d) => String(getRevealStepForNodeId(getNodeId(d))))
       .attr('opacity', (d) => {
@@ -939,6 +1020,8 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
       (Boolean(d.children) && d.children.length > 0) || shouldExpandPreterminalLeaf(d.data)
     );
     categories.append('text')
+      .attr('class', 'category-label')
+      .attr('data-category-node-id', (d) => getNodeId(d))
       .attr('y', -10)
       .attr('text-anchor', 'middle')
       .attr('font-size', '42px') // Slightly reduced to balance visuals
@@ -1040,7 +1123,7 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
       if (!usesDerivationFrames) return false;
       let current: HierNode | null = node;
       while (current) {
-        if ((current.data as SyntaxNode)?.silent === true) return false;
+        if ((current.data as SyntaxNode)?.silent === true || (current.data as any)?.ghost === true) return false;
         current = current.parent;
       }
       const word = String((node.data as SyntaxNode)?.word || '').trim();
@@ -1056,7 +1139,7 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
       if (isTraceLike(surface) || isNullLike(surface)) return true;
       let current: HierNode | null = node;
       while (current) {
-        if ((current.data as SyntaxNode)?.silent === true) return true;
+        if ((current.data as SyntaxNode)?.silent === true || (current.data as any)?.ghost === true) return true;
         current = current.parent;
       }
       return false;
@@ -1095,6 +1178,7 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
     function getReplayRenderedTerminalText(d: HierNode): string {
       const nodeId = getNodeId(d);
       const fallback = maybeCapitalizeSurfacedSentenceInitialLeaf(d, getReplayTerminalSurface(d));
+      if ((d.data as any)?.ghost === true) return fallback;
       const morph = terminalMorphRef.current.get(nodeId);
       const rawSurface = morph
         ? (
@@ -1114,17 +1198,19 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
       const formatted = formatReplayIndexedSilentLeaf(
         rawSurface,
         inheritedTraceIndex,
-        aliasedTraceIndex,
-        isReplaySilentTerminalLeaf(d) && Boolean(inheritedTraceIndex || aliasedTraceIndex)
+        aliasedTraceIndex
       );
       return (isTraceLike(formatted) || isNullLike(formatted))
         ? formatted
-        : maybeCapitalizeSurfacedSentenceInitialLeaf(d, formatted);
+        : formatIndexedSurfaceForDisplayValue(
+            maybeCapitalizeSurfacedSentenceInitialLeaf(d, formatted),
+            resolveTraceIndexFromNodeContext(d, derivationOperatorVariableIndexByNodeId)
+          );
     }
 
     function isRenderedReplaySilentTerminalLeaf(d: HierNode): boolean {
       const rendered = getReplayRenderedTerminalText(d);
-      return isTraceLike(rendered) || isNullLike(rendered);
+      return isReplaySilentTerminalLeaf(d) || isTraceLike(rendered) || isNullLike(rendered);
     }
 
     const appendTerminalText = (
@@ -1209,16 +1295,778 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
       .attr('style', `fill: ${TARGET_EMERALD} !important; font-family: 'Quicksand', sans-serif; font-style: italic; paint-order: stroke; stroke: #020806; stroke-width: 8px;`)
       .text((d: any) => (d as any).triangulatedWords);
 
+    /*
+     * Production visual-relations overlay.
+     *
+     * Semantics were compiled in replay/relations; here the laid-out
+     * node positions bind the current frame's plan to primitives and draw
+     * them in the shared zoom group. Authored trajectories are drawn from the
+     * compiled plan and gate the legacy adapter so nothing draws twice.
+     * Ghost-sets only restyle material the model explicitly authored silent. Marker sizes
+     * stay screen-stable via per-marker counter-scaling; line strokes use
+     * non-scaling strokes.
+     */
+    // Complete frame-stable overlay bounds, fed into viewport fitting so no
+    // generated geometry on any side of the tree is clipped.
+    let overlayFitBounds: OverlayBounds | null = null;
+    if (
+      !disableRelationOverlay
+      && relationRenderPlan
+      && usesDerivationFrames
+      && Number.isInteger(activeDerivationFrameIndex)
+      && activeDerivationFrameIndex >= 0
+      && activeDerivationFrameIndex < relationRenderPlan.frames.length
+    ) {
+      const overlayNodeById = new Map<string, d3.HierarchyPointNode<SyntaxNode>>(
+        visibleNodes.map((overlayNode) => [getNodeId(overlayNode as unknown as HierNode), overlayNode])
+      );
+      const visibleOverlayIds = new Set(overlayNodeById.keys());
+      /*
+       * Replay may keep an authored node (a pending Infl/T wrapper, an
+       * expanded preterminal) out of the directly rendered set while its
+       * display material stays visible. The anchored node's laid-out position
+       * is still real geometry, so an anchor resolves whenever its own
+       * subtree has visible material; an anchor with nothing visible fails
+       * closed.
+       */
+      const laidOutNodeById = new Map<string, d3.HierarchyPointNode<SyntaxNode>>(
+        treeData.descendants().map((laidOutNode) => [getNodeId(laidOutNode as unknown as HierNode), laidOutNode])
+      );
+      const resolveOverlayAnchor = (nodeId: string) => {
+        const direct = overlayNodeById.get(nodeId);
+        if (direct) return direct;
+        const laidOut = laidOutNodeById.get(nodeId);
+        if (!laidOut) return undefined;
+        const hasVisibleMaterial = laidOut.descendants()
+          .some((descendant) => visibleOverlayIds.has(getNodeId(descendant as unknown as HierNode)));
+        return hasVisibleMaterial ? laidOut : undefined;
+      };
+      const isDisplayTerminalNode = (candidate: d3.HierarchyPointNode<SyntaxNode>) => {
+        if ((candidate.children || []).length > 0) return false;
+        const surface = resolveLeafSurface(candidate as unknown as HierNode);
+        return Boolean(surface) && !isStructuralCategorySurface(surface);
+      };
+      /*
+       * ONE terminal law for both providers (see
+       * resolveUniqueDisplayTerminal): the anchor itself, else exactly one
+       * display terminal in the exact subtree; zero or several fail closed —
+       * an ambiguous anchor is recorded as a structured diagnostic, never
+       * resolved by traversal order or current visibility.
+       */
+      const terminalAmbiguities = new Map<string, number>();
+      const resolveMaterializedTerminal = (
+        anchor: d3.HierarchyPointNode<SyntaxNode> | undefined,
+        anchorNodeId: string
+      ) => {
+        if (!anchor) return undefined;
+        const resolution = resolveUniqueDisplayTerminal(
+          anchor,
+          (candidate) => candidate.children || [],
+          isDisplayTerminalNode
+        );
+        if (resolution.terminal) return resolution.terminal;
+        if (resolution.reason === 'ambiguous') {
+          terminalAmbiguities.set(anchorNodeId, resolution.count);
+        }
+        return undefined;
+      };
+      const positionFor: PlanPositionProvider = (nodeId, attachment = 'position') => {
+        const anchor = resolveOverlayAnchor(String(nodeId || '').trim());
+        if (!anchor) return null;
+        if (attachment === 'terminal') {
+          const terminal = resolveMaterializedTerminal(anchor, String(nodeId || '').trim());
+          return terminal ? { x: terminal.x, y: terminal.y + 24 } : null;
+        }
+        if (attachment === 'parent') {
+          const parent = anchor.parent;
+          return parent ? { x: parent.x, y: parent.y } : null;
+        }
+        return { x: anchor.x, y: anchor.y };
+      };
+      /*
+       * Replay-step timing: a same-stage relation's marks appear only once
+       * its own Replay relation moment has played. Structural microsteps
+       * before that moment show persisted earlier-stage marks only. The
+       * committed (non-animated) view shows the complete frame.
+       */
+      /*
+       * Reveal and focus by EXACT played identity, never by count: playback
+       * may place relation moments around structural construction in a
+       * different order than the authored relation array, so each relation
+       * step carries its authored {stageIndex, relationIndex} and the plan
+       * items are matched against exactly those.
+       */
+      const playedRelationIndices = animated
+        ? playbackSteps.reduce((played, step, stepIdx) => {
+            if (stepIdx > currentStepIndex) return played;
+            if ((step as any).replayKind !== 'relation') return played;
+            const identity = (step as any).replayRelationIdentity;
+            if (identity && Number(identity.stageIndex) === activeDerivationFrameIndex) {
+              played.add(Number(identity.relationIndex));
+            }
+            return played;
+          }, new Set<number>())
+        : null;
+      const currentStepIdentity =
+        animated && playbackSteps[currentStepIndex]?.replayKind === 'relation'
+          ? (playbackSteps[currentStepIndex] as any).replayRelationIdentity
+          : null;
+      const activeRelationMoment = currentStepIdentity
+        ? {
+            stageIndex: Number(currentStepIdentity.stageIndex),
+            relationIndex: Number(currentStepIdentity.relationIndex)
+          }
+        : null;
+      /*
+       * ONE STABLE ALLOCATION PER FRAME. Geometry is bound once from the
+       * COMPLETE derivation frame layout — every item, every lane, every
+       * stack, every rail — so nothing about an already-visible mark ever
+       * jumps as later structural nodes or relation moments appear.
+       * Reveal/focus below then draws only the marks whose exact relation
+       * moments have played and whose syntax witnesses are visible; hidden
+       * future marks RESERVE geometry but are never drawn.
+       */
+      const frameLayoutById = new Map<string, d3.HierarchyPointNode<SyntaxNode>>(
+        (derivationFrameFitNodes ?? treeData.descendants()).map((frameNode) =>
+          [getNodeId(frameNode as unknown as HierNode), frameNode as d3.HierarchyPointNode<SyntaxNode>])
+      );
+      const framePositionFor: PlanPositionProvider = (nodeId, attachment = 'position') => {
+        const anchor = frameLayoutById.get(String(nodeId || '').trim());
+        if (!anchor) return null;
+        if (attachment === 'terminal') {
+          // The exact same pure law as the step-visible provider, so the
+          // two can never disagree about an endpoint.
+          const terminal = resolveMaterializedTerminal(anchor, String(nodeId || '').trim());
+          return terminal ? { x: terminal.x, y: terminal.y + 24 } : null;
+        }
+        if (attachment === 'parent') {
+          const parent = anchor.parent;
+          return parent ? { x: parent.x, y: parent.y } : null;
+        }
+        return { x: anchor.x, y: anchor.y };
+      };
+      const zoomK = svgRef.current ? (d3.zoomTransform(svgRef.current).k || 1) : 1;
+      // Screen-stable marker sizing, capped so far-out zoom never lets the
+      // markers dwarf the tree they annotate.
+      const markerScale = Math.min(1 / zoomK, 3);
+      const frameMaxNodeY = d3.max([...frameLayoutById.values()], (frameNode) => frameNode.y) ?? 0;
+      const boundFrame = bindRelationPlanFrame(
+        relationRenderPlan,
+        activeDerivationFrameIndex,
+        framePositionFor,
+        {
+          labelWidth: 150,
+          labelHeight: 70,
+          badgeGap: 46,
+          laneGap: 60,
+          markerScale,
+          // Frame-stable measured baselines: connector lanes just below the
+          // complete frame's terminal row; rails placed by the binder's one
+          // vertical allocation law beneath the deepest allocated lane.
+          connectorBaselineY: frameMaxNodeY + 130,
+          railBaseY: frameMaxNodeY + 240
+        }
+      );
+      const frameItems = relationRenderPlan.frames[activeDerivationFrameIndex]?.items ?? [];
+      const revealedItemIndices = new Set<number>();
+      frameItems.forEach((planItem, planItemIndex) => {
+        const revealed = playedRelationIndices === null
+          || planItem.appearsAtStage < activeDerivationFrameIndex
+          || [planItem.relationRef, ...(planItem.coalescedRefs || [])].some((ref) =>
+            ref.stageIndex === activeDerivationFrameIndex
+            && playedRelationIndices.has(ref.relationIndex));
+        if (revealed) revealedItemIndices.add(planItemIndex);
+      });
+      const witnessVisibilityCache = new Map<number, boolean>();
+      const itemWitnessesVisible = (planItemIndex: number): boolean => {
+        const cached = witnessVisibilityCache.get(planItemIndex);
+        if (cached !== undefined) return cached;
+        const planItem = frameItems[planItemIndex];
+        // A mark never draws on hidden syntax: every node id it depends on
+        // must currently resolve against visible structure.
+        const visible = Boolean(planItem)
+          && planItemDependencyNodeIds(planItem).every((nodeId) => Boolean(resolveOverlayAnchor(nodeId)));
+        witnessVisibilityCache.set(planItemIndex, visible);
+        return visible;
+      };
+      const overlay = g.append('g').attr('class', 'vr-overlay-layer');
+      // Fail-closed marks are diagnosable, never silent: the layer carries
+      // which anchored nodes could not be measured.
+      overlay.attr(
+        'data-vr-failed',
+        boundFrame.failed.map((failure) => failure.nodeId).join(' ')
+      );
+      // Structured ambiguity diagnostics: anchors whose subtrees held more
+      // than one display terminal; their marks failed closed, never guessed.
+      overlay.attr(
+        'data-vr-terminal-ambiguity',
+        [...terminalAmbiguities.entries()]
+          .map(([ambiguousNodeId, terminalCount]) => `${ambiguousNodeId}:${terminalCount}`)
+          .join(' ')
+      );
+      const overlayDefs = overlay.append('defs');
+      overlayDefs.append('marker')
+        .attr('id', 'vr-overlay-arrowhead')
+        .attr('viewBox', '0 0 10 10')
+        .attr('refX', 9)
+        .attr('refY', 5)
+        .attr('markerWidth', 6)
+        .attr('markerHeight', 6)
+        .attr('orient', 'auto-start-reverse')
+        .append('path')
+        .attr('d', 'M 0 0 L 10 5 L 0 10 z')
+        .attr('fill', '#34d399');
+      /*
+       * Every primitive draws inside its own host group so the Replay
+       * relation lens can emphasize or quiet the WHOLE mark uniformly:
+       * during a relation moment the played relation's marks are prominent
+       * and every other visible mark stays present but quieter. Emphasis
+       * changes nothing about the linguistic claims or persistence.
+       */
+      let primitiveHost: d3.Selection<SVGGElement, unknown, null, undefined> = overlay;
+      const ghostLensRequests: Array<{
+        nodeIds: string[];
+        emphasis: 'active' | 'quiet' | null;
+      }> = [];
+      const appendMarker = (markX: number, markY: number) => primitiveHost.append('g')
+        .attr('class', 'vr-overlay-marker')
+        .attr('data-vr-x', String(markX))
+        .attr('data-vr-y', String(markY))
+        .attr('transform', `translate(${markX},${markY}) scale(${markerScale})`);
+      /*
+       * Complete, frame-stable overlay bounds (all four sides, glyph and
+       * label extents included) from the FULL allocation — the camera fits
+       * once per frame and never re-fits when a relation is revealed.
+       * Nominal marker scale keeps the bounds zoom-independent.
+       */
+      overlayFitBounds = boundOverlayBounds(boundFrame, { markerScale: 1 });
+
+      boundFrame.primitives.forEach((primitive) => {
+        /*
+         * The Replay relation lens, uniform across every primitive type:
+         * during a relation moment the played relation's marks (matched by
+         * exact authored identity, including coalesced contributors) are
+         * prominent and everything else visible stays present but quiet.
+         */
+        const planItem = frameItems[primitive.itemIndex];
+        if (!planItem) return;
+        // Future marks reserve geometry but are never drawn or focusable;
+        // no mark draws while any of its syntax witnesses is hidden.
+        if (!revealedItemIndices.has(primitive.itemIndex)) return;
+        if (!itemWitnessesVisible(primitive.itemIndex)) return;
+        const emphasis: 'active' | 'quiet' | null = activeRelationMoment && planItem
+          ? (planItemOwnsRelationMoment(
+              planItem,
+              activeRelationMoment.stageIndex,
+              activeRelationMoment.relationIndex
+            ) ? 'active' : 'quiet')
+          : null;
+        const host = overlay.append('g')
+          .attr('class', 'vr-item')
+          .attr('data-vr-emphasis', emphasis ?? 'none')
+          .classed('vr-relation-active', emphasis === 'active')
+          .attr('opacity', emphasis === 'quiet' ? 0.3 : null);
+        primitiveHost = host;
+        if (primitive.type === 'trajectory-path') {
+          /*
+           * The compiled plan is the one semantic authority for authored
+           * trajectories: every instance draws here, per-instance, with the
+           * production movement styling and a deterministic fan for
+           * coincident routes. The legacy movement adapter is gated off for
+           * derivations the plan covers.
+           */
+          const relationRefs = planItem
+            ? [planItem.relationRef, ...(planItem.coalescedRefs || [])]
+            : [];
+          host.append('path')
+            .attr('class', `vr-trajectory movement-arrow vr-trajectory-${primitive.trajectoryKind}`)
+            .attr('data-vr-active-relation', emphasis === 'active' ? 'true' : 'false')
+            .attr('data-vr-relation-ref-count', String(relationRefs.length))
+            .attr('fill', 'none')
+            .attr('stroke', MOVEMENT_ARROW_COLOR)
+            .attr('stroke-width', emphasis === 'active' ? MOVEMENT_ARC_STROKE * 1.45 : MOVEMENT_ARC_STROKE)
+            .attr('stroke-linecap', 'round')
+            .attr('marker-end', 'url(#vr-overlay-arrowhead)')
+            .style(
+              'filter',
+              emphasis === 'active'
+                ? 'drop-shadow(0 0 7px rgba(52,211,153,0.72))'
+                : 'drop-shadow(0 0 4px rgba(16,185,129,0.35))'
+            )
+            .attr('opacity', emphasis === 'active' ? 1 : 0.78)
+            // The binder owns the exact movement path; draw it verbatim.
+            .attr('d', primitive.d);
+          return;
+        }
+        if (primitive.type === 'ghost-set') {
+          /*
+           * Silence styling for material the model itself authored silent —
+           * never a rewrite of words or symbols, and never applied to overt
+           * material. Ghost lens states are collected here and resolved
+           * after the loop so that when several ellipsis claims share ghost
+           * material, an active moment always wins over a quiet one.
+           */
+          ghostLensRequests.push({ nodeIds: primitive.nodeIds, emphasis });
+          return;
+        }
+        if (primitive.type === 'shape-path') {
+          /*
+           * Family-specific accepted shapes: the binder already computed the
+           * exact accepted path data and decorations from the pure mark
+           * geometry; this branch draws precisely what is declared and
+           * restyles nothing from a name.
+           */
+          const blocked = primitive.blocked === true;
+          const strokeColor = blocked ? '#f87171' : '#34d399';
+          host.append('path')
+            .attr('class', `vr-shape-path vr-shape-${primitive.shapeStyle}`)
+            .attr('d', primitive.d)
+            .attr('fill', 'none')
+            .attr('stroke', strokeColor)
+            .attr('stroke-opacity', 0.85)
+            .attr('stroke-width', 1.8)
+            .attr('stroke-linecap', 'round')
+            .attr('vector-effect', 'non-scaling-stroke')
+            .attr('stroke-dasharray', primitive.stroke === 'dashed'
+              ? '7 7'
+              : primitive.stroke === 'dotted' ? '2 6' : null)
+            .attr('marker-end', primitive.arrowhead ? 'url(#vr-overlay-arrowhead)' : null)
+            .attr('marker-start', primitive.arrowheadBoth ? 'url(#vr-overlay-arrowhead)' : null);
+          (primitive.endpointDots || []).forEach((dot) => {
+            host.append('circle')
+              .attr('class', 'vr-shape-endpoint')
+              .attr('cx', dot.x)
+              .attr('cy', dot.y)
+              .attr('r', 9)
+              .attr('fill', strokeColor)
+              .attr('fill-opacity', 0.95);
+          });
+          if (primitive.originDot) {
+            host.append('circle')
+              .attr('class', 'vr-shape-origin')
+              .attr('cx', primitive.originDot.x)
+              .attr('cy', primitive.originDot.y)
+              .attr('r', 8)
+              .attr('fill', 'none')
+              .attr('stroke', strokeColor)
+              .attr('stroke-width', 1.6)
+              .attr('vector-effect', 'non-scaling-stroke');
+          }
+          if (primitive.tip) {
+            if (primitive.tip.kind === 'cross') {
+              const cross = appendMarker(primitive.tip.at.x, primitive.tip.at.y);
+              cross.append('text')
+                .attr('text-anchor', 'middle')
+                .attr('font-size', '14px')
+                .attr('fill', '#f87171')
+                .text('✗');
+            } else if (primitive.tip.d) {
+              host.append('path')
+                .attr('class', `vr-shape-tip vr-tip-${primitive.tip.kind}`)
+                .attr('d', primitive.tip.d)
+                .attr('fill', 'none')
+                .attr('stroke', primitive.tip.kind === 'bar' ? '#f87171' : '#34d399')
+                .attr('stroke-width', 2.4)
+                .attr('stroke-linecap', 'round')
+                .attr('vector-effect', 'non-scaling-stroke');
+            }
+          }
+          if (primitive.label && primitive.labelAt) {
+            const labelMarker = appendMarker(primitive.labelAt.x, primitive.labelAt.y);
+            labelMarker.append('text')
+              .attr('class', 'vr-path-label')
+              .attr('text-anchor', 'middle')
+              .attr('font-size', '11px')
+              .attr('fill', '#a7f3d0')
+              .attr('font-family', "'IBM Plex Mono', monospace")
+              .text(primitive.label);
+          }
+          if (primitive.badge) {
+            const badgeMarker = appendMarker(primitive.badge.at.x, primitive.badge.at.y);
+            badgeMarker.append('circle')
+              .attr('r', 12)
+              .attr('fill', 'rgba(2,24,15,0.94)')
+              .attr('stroke', '#34d399')
+              .attr('stroke-width', 1.2);
+            badgeMarker.append('text')
+              .attr('text-anchor', 'middle')
+              .attr('y', 4)
+              .attr('font-size', '11px')
+              .attr('fill', '#a7f3d0')
+              .attr('font-family', "'IBM Plex Mono', monospace")
+              .text(primitive.badge.text);
+          }
+          return;
+        }
+        if (primitive.type === 'path-node-ring') {
+          // Phillips path-following marks: the ellipse or square encloses the
+          // node's own label at its rendered position.
+          if (primitive.role === 'primary' && primitive.ellipse) {
+            host.append('ellipse')
+              .attr('class', 'vr-path-node vr-path-node-primary')
+              .attr('data-path-node', primitive.nodeId)
+              .attr('cx', primitive.ellipse.cx)
+              .attr('cy', primitive.ellipse.cy)
+              .attr('rx', primitive.ellipse.rx)
+              .attr('ry', primitive.ellipse.ry)
+              .attr('fill', 'none')
+              .attr('stroke', '#34d399')
+              .attr('stroke-opacity', 0.85)
+              .attr('stroke-width', 1.8)
+              .attr('vector-effect', 'non-scaling-stroke');
+          } else if (primitive.rect) {
+            host.append('rect')
+              .attr('class', 'vr-path-node vr-path-node-secondary')
+              .attr('data-path-node', primitive.nodeId)
+              .attr('x', primitive.rect.x)
+              .attr('y', primitive.rect.y)
+              .attr('width', primitive.rect.width)
+              .attr('height', primitive.rect.height)
+              .attr('rx', 2)
+              .attr('fill', 'none')
+              .attr('stroke', '#34d399')
+              .attr('stroke-opacity', 0.85)
+              .attr('stroke-width', 1.8)
+              .attr('vector-effect', 'non-scaling-stroke');
+          }
+          return;
+        }
+        if (primitive.type === 'domain-region') {
+          const fillOnly = primitive.domainStyle === 'transfer-spellout';
+          const isTransferEdge = primitive.domainStyle === 'transfer-edge';
+          host.append('rect')
+            .attr('class', `vr-domain-region vr-domain-${primitive.domainStyle}`)
+            .attr('data-vr-outcome', primitive.outcome || '')
+            .attr('x', primitive.x)
+            .attr('y', primitive.y)
+            .attr('width', primitive.width)
+            .attr('height', primitive.height)
+            .attr('rx', isTransferEdge ? 6 : 18)
+            .attr('fill', fillOnly || primitive.domainStyle === 'forbidden-region'
+              ? 'rgba(52,211,153,0.07)'
+              : 'none')
+            .attr('stroke', fillOnly ? 'none' : (primitive.outcome === 'blocked' ? '#f87171' : '#34d399'))
+            .attr('stroke-opacity', isTransferEdge ? 0.8 : 0.55)
+            .attr('stroke-width', 1.6)
+            .attr('stroke-dasharray', ['adjunct-domain', 'scope', 'forbidden-region', 'control-domain'].includes(primitive.domainStyle) ? '7 7' : null)
+            .attr('vector-effect', 'non-scaling-stroke');
+          if (primitive.outcome === 'blocked' || primitive.label) {
+            const edgeMarker = isTransferEdge
+              ? appendMarker(primitive.x - 8, primitive.y + primitive.height / 2)
+              : appendMarker(primitive.x + primitive.width, primitive.y);
+            edgeMarker.append('text')
+              .attr('text-anchor', isTransferEdge ? 'end' : 'start')
+              .attr('font-size', '12px')
+              .attr('fill', primitive.outcome === 'blocked' ? '#f87171' : '#a7f3d0')
+              .text(primitive.outcome === 'blocked' ? '✗' : primitive.label || '');
+          }
+          return;
+        }
+        if (primitive.type === 'plaque') {
+          const marker = appendMarker(primitive.x, primitive.y);
+          const rows = primitive.rows.slice(0, 8);
+          marker.append('rect')
+            .attr('class', `vr-plaque vr-plaque-${primitive.plaqueStyle}`)
+            .attr('x', 0)
+            .attr('y', 0)
+            .attr('width', primitive.width)
+            .attr('height', primitive.height)
+            .attr('rx', 5)
+            .attr('fill', 'rgba(2,24,15,0.94)')
+            .attr('stroke', '#34d399')
+            .attr('stroke-width', 1);
+          if (primitive.title) {
+            marker.append('text')
+              .attr('x', 8)
+              .attr('y', 14)
+              .attr('font-size', '11px')
+              .attr('fill', '#6ee7b7')
+              .attr('font-family', "'IBM Plex Mono', monospace")
+              .text(primitive.title);
+          }
+          rows.forEach((row, rowIndex) => {
+            marker.append('text')
+              .attr('x', 8)
+              .attr('y', 28 + rowIndex * 15)
+              .attr('font-size', '10px')
+              .attr('fill', '#a7f3d0')
+              .attr('font-family', "'IBM Plex Mono', monospace")
+              .text(row.value ? `${row.label}: ${row.value}` : row.label);
+          });
+          return;
+        }
+        if (primitive.type === 'text-badge') {
+          const marker = appendMarker(primitive.x, primitive.y);
+          if (primitive.shape === 'circle') {
+            marker.append('circle')
+              .attr('r', 9)
+              .attr('fill', 'rgba(2,24,15,0.92)')
+              .attr('stroke', primitive.outcome === 'blocked' ? '#f87171' : '#34d399')
+              .attr('stroke-width', 1.2);
+          } else if (primitive.shape === 'square') {
+            marker.append('rect')
+              .attr('x', -8).attr('y', -8)
+              .attr('width', 16).attr('height', 16)
+              .attr('fill', 'rgba(2,24,15,0.92)')
+              .attr('stroke', primitive.outcome === 'blocked' ? '#f87171' : '#34d399')
+              .attr('stroke-width', 1.2);
+          }
+          marker.append('text')
+            .attr('class', `vr-text-badge vr-badge-${primitive.badgeStyle}`)
+            .attr('text-anchor', 'middle')
+            .attr('y', 4)
+            .attr('font-size', '11px')
+            .attr('fill', '#a7f3d0')
+            .attr('font-family', "'IBM Plex Mono', monospace")
+            .text(primitive.text);
+          return;
+        }
+        if (primitive.type === 'strike') {
+          host.append('line')
+            .attr('class', 'vr-strike')
+            .attr('x1', primitive.x1)
+            .attr('x2', primitive.x2)
+            .attr('y1', primitive.y)
+            .attr('y2', primitive.y)
+            .attr('stroke', '#a7f3d0')
+            .attr('stroke-opacity', 0.85)
+            .attr('stroke-width', 2)
+            .attr('vector-effect', 'non-scaling-stroke');
+          return;
+        }
+        if (primitive.type === 'enclosure') {
+          host.append('rect')
+            .attr('class', `vr-enclosure vr-enclosure-${primitive.licence}`)
+            .attr('x', primitive.x)
+            .attr('y', primitive.y)
+            .attr('width', primitive.width)
+            .attr('height', primitive.height)
+            .attr('rx', 8)
+            .attr('fill', primitive.licence === 'carrier-chunk' ? 'rgba(52,211,153,0.08)' : 'none')
+            .attr('stroke', '#34d399')
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', 1.6)
+            .attr('vector-effect', 'non-scaling-stroke');
+          return;
+        }
+        if (primitive.type === 'branch-emphasis') {
+          primitive.strongEdges.forEach((edge) => {
+            host.append('line')
+              .attr('class', 'vr-branch-strong')
+              .attr('x1', edge.from.x).attr('y1', edge.from.y)
+              .attr('x2', edge.to.x).attr('y2', edge.to.y)
+              .attr('stroke', '#34d399')
+              .attr('stroke-opacity', 0.9)
+              .attr('stroke-width', 4)
+              .attr('vector-effect', 'non-scaling-stroke');
+          });
+          primitive.weakEdges.forEach((edge) => {
+            host.append('line')
+              .attr('class', 'vr-branch-weak')
+              .attr('x1', edge.from.x).attr('y1', edge.from.y)
+              .attr('x2', edge.to.x).attr('y2', edge.to.y)
+              .attr('stroke', '#34d399')
+              .attr('stroke-opacity', 0.35)
+              .attr('stroke-width', 1.2)
+              .attr('stroke-dasharray', '3 5')
+              .attr('vector-effect', 'non-scaling-stroke');
+          });
+          return;
+        }
+        if (primitive.type === 'shared-branch') {
+          host.append('line')
+            .attr('class', 'vr-shared-branch')
+            .attr('x1', primitive.from.x)
+            .attr('y1', primitive.from.y)
+            .attr('x2', primitive.to.x)
+            .attr('y2', primitive.to.y)
+            .attr('stroke', '#34d399')
+            .attr('stroke-opacity', 0.7)
+            .attr('stroke-width', 2)
+            .attr('stroke-dasharray', '8 5')
+            .attr('vector-effect', 'non-scaling-stroke');
+          return;
+        }
+        if (primitive.type === 'segment') {
+          // The binder emits COMPLETE connector geometry: the row-2
+          // counter-lane path (allocated lane, stems into the rendered mark
+          // centers) or the row-3 direct mark-to-mark spoke. Draw exactly
+          // that path — the routing decision is not this component's to
+          // discard. Quiet, undirected, arrowless.
+          host.append('path')
+            .attr('class', `vr-fallback-segment vr-fallback-segment-${primitive.route}`)
+            .attr('data-vr-lane', primitive.lane === null ? 'direct' : String(primitive.lane))
+            .attr('d', primitive.d)
+            .attr('fill', 'none')
+            .attr('stroke', '#34d399')
+            .attr('stroke-opacity', 0.55)
+            .attr('stroke-width', 1.6)
+            .attr('stroke-linecap', 'round')
+            .attr('vector-effect', 'non-scaling-stroke');
+          return;
+        }
+        if (primitive.type === 'domain-ellipse') {
+          host.append('ellipse')
+            .attr('class', 'vr-domain-ellipse')
+            .attr('data-vr-outcome', primitive.outcome)
+            .attr('cx', primitive.cx)
+            .attr('cy', primitive.cy)
+            .attr('rx', primitive.rx)
+            .attr('ry', primitive.ry)
+            .attr('fill', 'none')
+            .attr('stroke', '#34d399')
+            .attr('stroke-opacity', 0.7)
+            .attr('stroke-width', 1.8)
+            .attr('vector-effect', 'non-scaling-stroke');
+          return;
+        }
+        if (primitive.type === 'index-badge') {
+          const marker = appendMarker(primitive.x, primitive.y);
+          marker.append('text')
+            .attr('class', 'vr-index-badge')
+            .attr('x', 8)
+            .attr('y', 4)
+            .attr('font-size', '13px')
+            .attr('fill', '#a7f3d0')
+            .attr('font-family', "'IBM Plex Mono', monospace")
+            .text(primitive.index);
+          return;
+        }
+        if (primitive.type === 'fallback-mark') {
+          const marker = appendMarker(primitive.x, primitive.y);
+          if (primitive.frame === 'box') {
+            marker.append('rect')
+              .attr('class', 'vr-fallback-frame')
+              .attr('x', -9).attr('y', -9)
+              .attr('width', 18).attr('height', 18)
+              .attr('fill', 'rgba(2,24,15,0.92)')
+              .attr('stroke', '#34d399')
+              .attr('stroke-width', 1.2);
+          } else {
+            marker.append('circle')
+              .attr('class', 'vr-fallback-frame')
+              .attr('r', 10)
+              .attr('fill', 'rgba(2,24,15,0.92)')
+              .attr('stroke', '#34d399')
+              .attr('stroke-width', 1.2);
+          }
+          // Accepted numbering contract: the relation INSTANCE number is
+          // always centered inside every fallback frame; the authored array
+          // POSITION, when present, is a second smaller numeral outside it.
+          marker.append('text')
+            .attr('class', 'vr-fallback-instance')
+            .attr('text-anchor', 'middle')
+            .attr('y', 4)
+            .attr('font-size', '11px')
+            .attr('fill', '#a7f3d0')
+            .attr('font-family', "'IBM Plex Mono', monospace")
+            .text(String(primitive.instance));
+          if (primitive.numeral !== null) {
+            marker.append('text')
+              .attr('class', 'vr-fallback-position')
+              .attr('text-anchor', 'start')
+              .attr('x', 12)
+              .attr('y', 8)
+              .attr('font-size', '9px')
+              .attr('fill', '#6ee7b7')
+              .attr('font-family', "'IBM Plex Mono', monospace")
+              .text(String(primitive.numeral));
+          }
+          if (primitive.backward) {
+            marker.append('text')
+              .attr('class', 'vr-backward-cue')
+              .attr('x', -16)
+              .attr('y', 4)
+              .attr('font-size', '10px')
+              .attr('fill', '#6ee7b7')
+              .text('◂');
+          }
+          return;
+        }
+        if (primitive.type === 'anchor-set-badge') {
+          const compact = primitive.badgeSize === 'compact';
+          const marker = appendMarker(primitive.x, primitive.y);
+          marker.append('circle')
+            .attr('class', 'vr-anchor-set-badge')
+            .attr('r', compact ? 7 : 9)
+            .attr('fill', 'rgba(2,24,15,0.92)')
+            .attr('stroke', '#34d399')
+            .attr('stroke-width', 1.2);
+          marker.append('text')
+            .attr('text-anchor', 'middle')
+            .attr('y', compact ? 3 : 4)
+            .attr('font-size', compact ? '8px' : '10px')
+            .attr('fill', '#a7f3d0')
+            .attr('font-family', "'IBM Plex Mono', monospace")
+            .text(String(primitive.numeral));
+          return;
+        }
+        if (primitive.type === 'anchor-set-rail') {
+          host.append('line')
+            .attr('class', 'vr-anchor-set-rail')
+            .attr('x1', primitive.x1)
+            .attr('x2', primitive.x2)
+            .attr('y1', primitive.y)
+            .attr('y2', primitive.y)
+            .attr('stroke', '#34d399')
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', 1.4)
+            .attr('vector-effect', 'non-scaling-stroke');
+        }
+      });
+
+      /*
+       * Resolve ghost lens states: for material shared by several ellipsis
+       * claims, an active moment wins over neutral, which wins over quiet.
+       * The presentation itself is the pure, tested law from the binder —
+       * active silence glows without ever looking pronounced; quiet silence
+       * recedes below its neutral opacity like every other quiet mark.
+       */
+      const ghostEmphasisByNode = new Map<string, 'active' | 'quiet' | null>();
+      const ghostRank = (state: 'active' | 'quiet' | null): number =>
+        state === 'active' ? 2 : state === null ? 1 : 0;
+      ghostLensRequests.forEach((request) => {
+        request.nodeIds.forEach((ghostNodeId) => {
+          const current = ghostEmphasisByNode.get(ghostNodeId);
+          if (current === undefined || ghostRank(request.emphasis) > ghostRank(current)) {
+            ghostEmphasisByNode.set(ghostNodeId, request.emphasis);
+          }
+        });
+      });
+      ghostEmphasisByNode.forEach((ghostEmphasis, ghostNodeId) => {
+        const presentation = ghostLensPresentation(ghostEmphasis);
+        g.selectAll<SVGTextElement, unknown>(
+          `.terminal-label[data-node-id="${ghostNodeId}"], .category-label[data-category-node-id="${ghostNodeId}"]`
+        )
+          .classed('vr-ghost', true)
+          .attr('data-vr-ghost-emphasis', ghostEmphasis ?? 'none')
+          .attr('opacity', presentation.opacity)
+          .style('filter', presentation.filter);
+      });
+    }
+
     // Initial viewport fit:
     // Derivation replay should keep one camera per Derivation frame, not refit to each
     // microstep's partial tree. That prevents fake left/right "movement" for
     // newly revealed branches like Teresa -> D -> DP before the real merge step.
     const fitToRenderedBounds = () => {
       if (derivationFrameFitNodes && derivationFrameFitNodes.length > 0) {
-        const minNodeX = d3.min(derivationFrameFitNodes, (node) => node.x) ?? 0;
-        const maxNodeX = d3.max(derivationFrameFitNodes, (node) => node.x) ?? 0;
-        const minNodeY = d3.min(derivationFrameFitNodes, (node) => node.y) ?? 0;
-        const maxNodeY = d3.max(derivationFrameFitNodes, (node) => node.y + (!node.children || node.children.length === 0 ? 130 : 0)) ?? 0;
+        const minNodeX = Math.min(
+          d3.min(derivationFrameFitNodes, (node) => node.x) ?? 0,
+          overlayFitBounds?.minX ?? Infinity
+        );
+        const maxNodeX = Math.max(
+          d3.max(derivationFrameFitNodes, (node) => node.x) ?? 0,
+          overlayFitBounds?.maxX ?? -Infinity
+        );
+        const minNodeY = Math.min(
+          d3.min(derivationFrameFitNodes, (node) => node.y) ?? 0,
+          overlayFitBounds?.minY ?? Infinity
+        );
+        const maxNodeY = Math.max(
+          d3.max(derivationFrameFitNodes, (node) => node.y + (!node.children || node.children.length === 0 ? 130 : 0)) ?? 0,
+          overlayFitBounds?.maxY ?? -Infinity
+        );
         const viewportPadLeft = 40;
         const viewportPadRight = 136;
         const viewportPadTop = 34;
@@ -1301,12 +2149,14 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
     abstractionMode,
     derivationStepsSignature,
     derivationFramesSignature,
+    disableRelationOverlay,
     movementProtectedNodeIds,
     replayVisibleNodeIdSet,
     traceDisplayFrame,
     traceDisplayFrameIndex,
     traceDisplayRelationLinks,
-    usesDerivationFrames
+    usesDerivationFrames,
+    relationRenderPlan
   ]);
 
   const activeStepRaw = currentStepIndex >= 0 ? playbackSteps[currentStepIndex] : null;

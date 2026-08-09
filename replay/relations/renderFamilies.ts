@@ -1,0 +1,263 @@
+/**
+ * Registry-entry → finite render family mapping, per-family persistence,
+ * full-array ownership, and the explicit exclusion list.
+ *
+ * The registry (`replay/relationDispatch/productionRegistry.js`) stays
+ * renderer-neutral; this module owns what each resolved entry renders as and
+ * how long its marks stay visible across Replay frames. Every relation
+ * identity used by an active accepted Lab card has an entry here; the only
+ * exclusions are inactive history and quarantined contract-gap machinery,
+ * each with its reason.
+ *
+ * Persistence semantics (per Francis's rulings):
+ * - Registered relation persistence is exact per-design metadata. Movement
+ *   paths and structurally persistent results persist after introduction
+ *   (`from-stage-onward`); declared replacement families
+ *   (`replace-previous-instance`) replace their prior instance per frame.
+ * - An UNREGISTERED fallback persists from introduction onward. Disappearing
+ *   it would be a stronger semantic guess than retaining the authored claim;
+ *   stage-only behavior is reserved for an explicitly registered transient
+ *   design.
+ * - Large-anchor badges/rails inherit their parent instance's compiled
+ *   persistence; they never own an independent policy.
+ */
+
+export type RenderPersistence =
+  | 'from-stage-onward'
+  | 'stage-only'
+  | 'replace-previous-instance';
+
+/** Finite compiler branches. Grouped identities share a branch and a style. */
+export type ProductionFamilyKind =
+  | 'trajectory'
+  | 'occurrence-identity'
+  | 'coindex'
+  | 'control'
+  | 'predication'
+  | 'binding-domain'
+  | 'split-antecedence'
+  | 'parasitic-gap'
+  | 'pair-merge'
+  | 'shared-node'
+  | 'argument-sharing'
+  | 'idiom-chunks'
+  | 'feature-plaque'
+  | 'agreement-paths'
+  | 'feature-sharing'
+  | 'case-assignment'
+  | 'dependent-case'
+  | 'accord'
+  | 'boundary-cuts'
+  | 'phase-arc'
+  | 'transfer-domain'
+  | 'blocked-access'
+  | 'anti-locality'
+  | 'improper-movement'
+  | 'right-roof'
+  | 'blocked-extraction'
+  | 'intervention'
+  | 'ellipsis-site'
+  | 'ellipsis-licensing'
+  | 'copy-pronunciation'
+  | 'partial-copy-deletion'
+  | 'realization-plate'
+  | 'vocabulary-insertion'
+  | 'phrasal-spellout'
+  | 'pf-correspondence'
+  | 'fission'
+  | 'impoverishment'
+  | 'local-dislocation'
+  | 'cyclic-linearization'
+  | 'qr'
+  | 'lf-reconstruction'
+  | 'cooper-storage'
+  | 'strong-npi'
+  | 'focus-prominence'
+  | 'f-projection'
+  | 'theta-grid'
+  | 'gapping-alignment';
+
+export type ProductionRenderFamily = {
+  family: ProductionFamilyKind;
+  /** Trajectory drawing kind, for the trajectory family only. */
+  trajectoryKind?:
+    | 'phrasal'
+    | 'head'
+    | 'lowering'
+    | 'operator-variable'
+    | 'remnant'
+    | 'roll-up'
+    | 'smuggling'
+    | 'atb'
+    | 'sideward';
+  persistence: RenderPersistence;
+  /** Agreement path mode, for the agreement-paths family only. */
+  agreementMode?: 'multiple' | 'cyclic';
+  /**
+   * For replace-previous-instance families whose replacement is scoped to an
+   * authored anchor (Cooper storage per-scope ledgers): the anchor role whose
+   * first id joins the replacement group key.
+   */
+  replacementScopeRole?: string;
+};
+
+const persistent = (family: ProductionFamilyKind, extra: Partial<ProductionRenderFamily> = {}): ProductionRenderFamily => ({
+  family,
+  persistence: 'from-stage-onward',
+  ...extra
+});
+
+export const PRODUCTION_RENDER_FAMILIES: Record<string, ProductionRenderFamily> = {
+  'trajectory.phrasal': persistent('trajectory', { trajectoryKind: 'phrasal' }),
+  'trajectory.a-movement': persistent('trajectory', { trajectoryKind: 'phrasal' }),
+  'trajectory.scrambling': persistent('trajectory', { trajectoryKind: 'phrasal' }),
+  'trajectory.head': persistent('trajectory', { trajectoryKind: 'head' }),
+  'trajectory.lowering': persistent('trajectory', { trajectoryKind: 'lowering' }),
+  'trajectory.operator-variable': persistent('trajectory', { trajectoryKind: 'operator-variable' }),
+  'trajectory.remnant': persistent('trajectory', { trajectoryKind: 'remnant' }),
+  'trajectory.roll-up': persistent('trajectory', { trajectoryKind: 'roll-up' }),
+  'trajectory.smuggling': persistent('trajectory', { trajectoryKind: 'smuggling' }),
+  'trajectory.across-the-board': persistent('trajectory', { trajectoryKind: 'atb' }),
+  'trajectory.sideward': persistent('trajectory', { trajectoryKind: 'sideward' }),
+
+  'identity.occurrences': persistent('occurrence-identity'),
+  'coreference.coindex': persistent('coindex'),
+  'control.dependency': persistent('control'),
+  'predication.paths': persistent('predication'),
+  'binding.domain': persistent('binding-domain'),
+  'split-antecedence.indices': persistent('split-antecedence'),
+  'parasitic-gap.composition': persistent('parasitic-gap'),
+
+  'pair-merge.arc': persistent('pair-merge'),
+  'multidominance.shared-node': persistent('shared-node'),
+  'argument-sharing.domains': persistent('argument-sharing'),
+  'idiom-chunks.domain': persistent('idiom-chunks'),
+
+  'agree.plaque': persistent('feature-plaque'),
+  'feature-bundle.plaque': persistent('feature-plaque'),
+  'multiple-agree.fanout': persistent('agreement-paths', { agreementMode: 'multiple' }),
+  'cyclic-agree.paths': persistent('agreement-paths', { agreementMode: 'cyclic' }),
+  'feature-sharing.vines': persistent('feature-sharing'),
+  'case-assignment.path': persistent('case-assignment'),
+  'dependent-case.elbow': { family: 'dependent-case', persistence: 'replace-previous-instance' },
+  'accord.link': persistent('accord'),
+
+  'bounding-node.cuts': persistent('boundary-cuts'),
+  'phase.arc': persistent('phase-arc'),
+  'transfer.domain': persistent('transfer-domain'),
+  'transfer.blocked-access': persistent('blocked-access'),
+  'anti-locality.paths': persistent('anti-locality'),
+  'improper-movement.landing': persistent('improper-movement'),
+  'right-roof.boundary': persistent('right-roof'),
+  'blocked-extraction.diagnostic': persistent('blocked-extraction'),
+  'intervention.blocked-path': persistent('intervention'),
+
+  'ellipsis.recoverability': persistent('ellipsis-site'),
+  'ellipsis.licensing': persistent('ellipsis-licensing'),
+  'ellipsis.deletion': persistent('ellipsis-site'),
+  'copy.multiple-pronunciation': persistent('copy-pronunciation'),
+  'copy.partial-deletion': persistent('partial-copy-deletion'),
+
+  'pf.realization': persistent('realization-plate'),
+  'pf.vocabulary-insertion': persistent('vocabulary-insertion'),
+  'pf.phrasal-spellout': persistent('phrasal-spellout'),
+  'pf.correspondence': persistent('pf-correspondence'),
+  'pf.fission': persistent('fission'),
+  'pf.impoverishment': persistent('impoverishment'),
+  'pf.local-dislocation': persistent('local-dislocation'),
+  'pf.cyclic-linearization': { family: 'cyclic-linearization', persistence: 'replace-previous-instance' },
+
+  'qr.covert': persistent('qr'),
+  'lf.reconstruction': persistent('lf-reconstruction'),
+  /*
+   * Cooper storage plaques are current-state ledgers per authored scope: a
+   * later plaque for the SAME scope anchor replaces the earlier one, while
+   * distinct scopes (a VP plaque and an S plaque) coexist in one frame. The
+   * replacement group is therefore keyed by the scope anchor, not the family
+   * alone.
+   */
+  'cooper-storage.ledger': {
+    family: 'cooper-storage',
+    persistence: 'replace-previous-instance',
+    replacementScopeRole: 'scope'
+  },
+  'accord.strong-npi': persistent('strong-npi'),
+
+  'focus.prominence': persistent('focus-prominence'),
+  'focus.f-projection': persistent('f-projection'),
+  'theta.grid': persistent('theta-grid'),
+  'gapping.alignment': persistent('gapping-alignment')
+};
+
+/**
+ * Trajectory role vocabularies, shared with the replay link builder. The
+ * witness rule: phrasal-shaped kinds require an authored witness terminal;
+ * head-sized kinds relate terminals directly.
+ */
+export const TRAJECTORY_SOURCE_ROLES = [
+  'lowerCopy', 'source', 'from', 'variable', 'realGap', 'lower-occurrence'
+] as const;
+export const TRAJECTORY_TARGET_ROLES = [
+  'pronouncedCopy', 'higherCopy', 'target', 'operator', 'filler', 'landing', 'to', 'landing-site'
+] as const;
+export const TRAJECTORY_WITNESS_ROLES = ['traceWitness', 'lowerWitness'] as const;
+
+export const WITNESS_REQUIRED_TRAJECTORY_KINDS: ReadonlySet<string> = new Set([
+  'phrasal', 'remnant', 'roll-up', 'smuggling', 'atb', 'sideward'
+]);
+
+/**
+ * Full-array ownership, keyed by production registry entry id. An array role
+ * listed here is rendered element-by-element by that entry's wired family, so
+ * the large-array organizational marks must not double-mark it. Ownership is
+ * a claim about PRODUCTION rendering: an entry may appear here only when its
+ * family compiler genuinely renders every element of that role's array.
+ */
+export const FULL_ARRAY_OWNED_ROLES: Record<string, readonly string[]> = {
+  /* One trajectory per positional source/witness pair. */
+  'trajectory.across-the-board': ['sources', 'traceWitnesses'],
+  /* One coindex badge per occurrence. */
+  'identity.occurrences': ['occurrences'],
+  /* One path-node ring per path node; one coindex badge per parasitic gap. */
+  'parasitic-gap.composition': ['primaryPath', 'secondaryPath', 'parasiticGaps'],
+  /* One routed curve per goal. */
+  'multiple-agree.fanout': ['goals'],
+  /* One vine per bearer. */
+  'feature-sharing.vines': ['bearers'],
+  /* One boundary cut per boundary node. */
+  'bounding-node.cuts': ['boundary'],
+  /* One host badge / candidate path per host; region members each drawn. */
+  'improper-movement.landing': ['licensedLandingHosts', 'rejectedLandingHosts', 'forbiddenRegion'],
+  /* One shared branch per parent. */
+  'multidominance.shared-node': ['parents'],
+  /* One domain oval per domain. */
+  'argument-sharing.domains': ['domains'],
+  /* One enclosure per occurrence. */
+  'copy.multiple-pronunciation': ['occurrences'],
+  /* One badge per antecedent. */
+  'split-antecedence.indices': ['antecedents'],
+  /* One ordinal badge per correlate and remnant. */
+  'gapping.alignment': ['correlates', 'remnants'],
+  /* One propagation hop per projection. */
+  'focus.f-projection': ['projections'],
+  /* One dotted path per predicate. */
+  'predication.paths': ['predicates']
+  /*
+   * Deliberately NOT owned: Cooper storage (one scope plaque with verbatim
+   * rows is not an element-by-element rendering of its node-anchored arrays),
+   * Fission outputs, Local Dislocation sequences, and Cyclic Linearization
+   * orders — all plaque-anchored. The accepted organizational policy applies
+   * to their large arrays.
+   */
+};
+
+/**
+ * Relation identities deliberately NOT production-wired, each with its
+ * reason. Everything else that an active accepted Lab card authors must
+ * resolve through the registry — the coverage gate enforces exactly this.
+ */
+export const EXCLUDED_RELATION_IDENTITIES: Record<string, string> = {
+  NegativePolarityAnswer:
+    'retired source study: Pasquereau Sigma-to-Pol is too analysis-specific for the accepted atlas '
+    + 'and must not dispatch for general polarity or NPI licensing'
+};

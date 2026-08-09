@@ -68,12 +68,31 @@ const completeRelation = () => ({
   }
 });
 
-test('the production relation registry is versioned and born empty', () => {
+test('the production relation registry is versioned and populated with exact identities', () => {
   assert.equal(productionRelationRegistry.registryId, 'babel.semantic-visual-grammar');
-  assert.equal(productionRelationRegistry.version, '0');
-  assert.deepEqual(productionRelationRegistry.entries, []);
-  assert.deepEqual(productionRelationRegistry.matchers, []);
+  assert.equal(productionRelationRegistry.version, '2');
+  assert.ok(productionRelationRegistry.entries.length > 0);
   assert.ok(Object.isFrozen(productionRelationRegistry));
+  // Every identity is exact or declared case/whitespace folding — nothing else.
+  productionRelationRegistry.entries.forEach((entry) => {
+    entry.identities.forEach((identity) => {
+      assert.ok(['exact', 'case', 'whitespace', 'case-whitespace'].includes(identity.normalization));
+    });
+  });
+  // Accepted names dispatch; unlisted coinages do not, even when they contain
+  // movement-flavored substrings.
+  const dispatchOutcome = (name) => dispatchRelation({
+    registry: productionRelationRegistry,
+    relation: { relation: name, anchors: { role: 'node-1' } },
+    stageIndex: 0,
+    relationIndex: 0
+  }).outcome;
+  assert.notEqual(dispatchOutcome('AbarMove'), 'unregistered');
+  assert.notEqual(dispatchOutcome('abarmove'), 'unregistered');
+  assert.notEqual(dispatchOutcome('wh-movement'), 'unregistered');
+  assert.equal(dispatchOutcome('CliticCluster'), 'unregistered');
+  assert.equal(dispatchOutcome('AbarMovementParty'), 'unregistered');
+  assert.equal(dispatchOutcome('bespoke-open-agreement'), 'unregistered');
 });
 
 test('unregistered names receive literal displays and no semantic marks', () => {

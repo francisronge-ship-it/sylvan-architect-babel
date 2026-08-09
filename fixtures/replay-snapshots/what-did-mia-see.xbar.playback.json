@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sentence": "What did Mia see",
-  "stepCount": 19,
+  "stepCount": 21,
   "steps": [
     {
       "operation": "LexicalSelect",
@@ -237,7 +237,7 @@
       "sourceNodeIds": [
         "c_question::__lex_tok_1_did"
       ],
-      "replayProgressLabel": "Stage 4/4 · Step 2/7",
+      "replayProgressLabel": "Stage 4/4 · Step 2/9",
       "replayVisibleNodeIds": [
         "tp_question",
         "np_mia_question",
@@ -264,7 +264,34 @@
         "c_question",
         "tp_question"
       ],
-      "replayProgressLabel": "Stage 4/4 · Step 3/7",
+      "replayProgressLabel": "Stage 4/4 · Step 3/9",
+      "replayVisibleNodeIds": [
+        "tp_question",
+        "np_mia_question",
+        "np_mia_question::__lex_tok_2_mia",
+        "tbar_question",
+        "t_did",
+        "vp_see",
+        "t_did::__lex_tok_1_did",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "did_terminal",
+        "what_low",
+        "c_question::__lex_tok_1_did",
+        "c_question",
+        "cbar_question"
+      ]
+    },
+    {
+      "operation": "auxiliary-head-movement",
+      "replayKind": "relation",
+      "targetNodeId": "c_question",
+      "sourceNodeIds": [
+        "t_did"
+      ],
+      "replayProgressLabel": "Stage 4/4 · Step 4/9",
       "replayVisibleNodeIds": [
         "tp_question",
         "np_mia_question",
@@ -291,7 +318,7 @@
       "sourceNodeIds": [
         "dp_what_high::__lex_tok_0_what"
       ],
-      "replayProgressLabel": "Stage 4/4 · Step 5/7",
+      "replayProgressLabel": "Stage 4/4 · Step 6/9",
       "replayVisibleNodeIds": [
         "tp_question",
         "np_mia_question",
@@ -321,7 +348,38 @@
         "dp_what_high",
         "cbar_question"
       ],
-      "replayProgressLabel": "Stage 4/4 · Step 6/7",
+      "replayProgressLabel": "Stage 4/4 · Step 7/9",
+      "replayVisibleNodeIds": [
+        "tp_question",
+        "np_mia_question",
+        "np_mia_question::__lex_tok_2_mia",
+        "tbar_question",
+        "t_did",
+        "vp_see",
+        "t_did::__lex_tok_1_did",
+        "v_see",
+        "v_see::__lex_tok_3_see",
+        "dp_what_low",
+        "dp_what_low::__lex_tok_0_what",
+        "did_terminal",
+        "what_low",
+        "c_question::__lex_tok_1_did",
+        "c_question",
+        "cbar_question",
+        "dp_what_high::__lex_tok_0_what",
+        "dp_what_high",
+        "cp_question"
+      ]
+    },
+    {
+      "operation": "wh-movement",
+      "replayKind": "relation",
+      "targetNodeId": "dp_what_high",
+      "sourceNodeIds": [
+        "dp_what_low",
+        "what_low"
+      ],
+      "replayProgressLabel": "Stage 4/4 · Step 8/9",
       "replayVisibleNodeIds": [
         "tp_question",
         "np_mia_question",
@@ -349,7 +407,7 @@
       "replayKind": "macro",
       "targetNodeId": "cp_question",
       "sourceNodeIds": [],
-      "replayProgressLabel": "Stage 4/4 · Step 7/7",
+      "replayProgressLabel": "Stage 4/4 · Step 9/9",
       "replayVisibleNodeIds": [
         "tp_question",
         "np_mia_question",

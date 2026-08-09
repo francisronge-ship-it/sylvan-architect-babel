@@ -9,7 +9,7 @@ import { buildReplaySnapshotProjection } from '../replay/replaySnapshot.ts';
 import {
   __TEST_ONLY__,
   adaptDerivationStagesForReplay,
-  buildAuthoredVisualRelationRelationLinksForFrames
+  buildAuthoredRelationLinksForFrames
 } from '../replay/replayCompiler.ts';
 import { __test__ } from '../server/babelParser.js';
 import {
@@ -45,7 +45,7 @@ const buildRenderedRelationLinks = (analysis, replayPlan) => {
   const forest = activeFrameIndex >= 0
     ? frames[activeFrameIndex].workspaceForest
     : [];
-  return buildAuthoredVisualRelationRelationLinksForFrames(
+  return buildAuthoredRelationLinksForFrames(
     frames,
     replayPlan,
     activeFrameIndex,

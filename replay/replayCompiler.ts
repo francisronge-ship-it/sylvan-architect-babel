@@ -1,6 +1,19 @@
 import * as d3 from 'd3';
 import type { DerivationStage, DerivationStep, ReplayDetailBlock, SyntaxNode } from '../types.ts';
-import type { ResolvedVisualRelation, ResolvedVisualRelationAnchor } from '../visualRelationLinks.ts';
+import {
+  isFrontingMovementIdentity,
+  isMovementIdentity,
+  isRegisteredFrontingTrajectoryRelation,
+  isRegisteredTrajectoryRelation,
+  movementIdentityKind,
+  registeredTrajectoryDisplayKind
+} from './relations/movementIdentities.ts';
+import {
+  TRAJECTORY_SOURCE_ROLES,
+  TRAJECTORY_TARGET_ROLES,
+  TRAJECTORY_WITNESS_ROLES
+} from './relations/renderFamilies.ts';
+import type { ResolvedRelationLink, ResolvedRelationAnchor } from '../relationLinks.ts';
 import {
   buildDerivationReplayPlan,
   resolveRelationAnchors
@@ -13,13 +26,20 @@ export type VisibleLink = d3.HierarchyLink<SyntaxNode>;
 export interface PlaybackStep {
   operation: DerivationStep['operation'];
   sourceKind?: 'microstep' | 'derivation-effect' | 'derived';
-  trajectoryKind?: ResolvedVisualRelation['trajectoryKind'];
+  trajectoryKind?: ResolvedRelationLink['trajectoryKind'];
   movementSerializationStatus?: 'complete' | 'underspecified' | 'incoherent';
   movementDiagnostics?: string[];
   sourceFrameIndex?: number;
   visualFrameIndex?: number;
   replayFrameIndex?: number;
   replayKind?: 'micro' | 'relation' | 'macro';
+  /**
+   * Exact authored identity of the relation this Replay moment plays.
+   * Placement may reorder relation moments around structural construction,
+   * so a count of played moments is NOT a reliable identity — consumers must
+   * reveal and focus plan items from this exact identity.
+   */
+  replayRelationIdentity?: { stageIndex: number; relationIndex: number };
   replayProgressLabel?: string;
   targetNodeId: string;
   targetLabel: string;
@@ -35,7 +55,7 @@ export interface PlaybackStep {
   stageRecord?: string;
   replayCanvasData?: SyntaxNode | null;
   replayVisibleNodeIds?: string[];
-  replayRelationLinks?: ResolvedVisualRelation[];
+  replayRelationLinks?: ResolvedRelationLink[];
   preserveReplayStep?: boolean;
   replaySuppressAutoRevealNodeIds?: string[];
 }
@@ -55,7 +75,7 @@ export interface MovementArrow {
   step: number;
   index?: string | null;
   operation?: DerivationStep['operation'];
-  trajectoryKind?: ResolvedVisualRelation['trajectoryKind'];
+  trajectoryKind?: ResolvedRelationLink['trajectoryKind'];
 }
 
 interface DerivationMovementTransition {
@@ -66,7 +86,7 @@ interface DerivationMovementTransition {
   index: string;
   chainId?: string | null;
   operation?: DerivationStep['operation'];
-  trajectoryKind?: ResolvedVisualRelation['trajectoryKind'];
+  trajectoryKind?: ResolvedRelationLink['trajectoryKind'];
   note?: string;
 }
 
@@ -110,7 +130,7 @@ export interface ReplayDerivationFrame {
   stepId?: string;
   statement?: string;
   stageRecord?: string;
-  visualRelations?: DerivationStage['visualRelations'];
+  relations?: DerivationStage['relations'];
   after?: ReplayDerivationAfterState;
   change?: ReplayDerivationChange;
   workspaceForest: SyntaxNode[];
@@ -130,21 +150,25 @@ interface DerivationReplayPlanStep {
   progressLabel?: string;
   relation?: string;
   anchors?: Record<string, unknown>;
+  /** Authored previous-stage witnesses, verbatim when authored. */
+  priorAnchors?: Record<string, string | string[]>;
+  /** Authored literal payload, verbatim when authored. */
+  values?: Record<string, string | string[]>;
   authoredRelationIndex?: number;
-  resolvedAnchors?: ReplayResolvedVisualRelationAnchor[];
+  resolvedAnchors?: ReplayResolvedRelationAnchor[];
   sourceNodeIds?: string[];
   targetNodeId?: string;
   stageRecord?: string;
 }
 
-interface ReplayResolvedVisualRelationAnchor extends ResolvedVisualRelationAnchor {
+interface ReplayResolvedRelationAnchor extends ResolvedRelationAnchor {
   authoredAnchorIndex: number;
 }
 
-interface ReplayAuthoredRelationLink extends ResolvedVisualRelation {
+interface ReplayAuthoredRelationLink extends ResolvedRelationLink {
   authoredRelationIndex: number;
   authoredRelationKey: string;
-  endpointOrderProvenance?: 'authored-anchor-order';
+  endpointOrderProvenance?: 'authored-anchor-order' | 'registered-role-order';
   identityKey?: string;
   identityProvenance?: 'authored-shared-lineage';
   relationIndexProvenance: 'derived-presentation';
@@ -263,7 +287,7 @@ const stabilizeReplayOvertLeafIds = (node?: SyntaxNode | null): SyntaxNode | nul
 
 export const buildRenderableDerivationCanvasData = (
   forest: SyntaxNode[],
-  _resolvedRelationLinks?: ResolvedVisualRelation[]
+  _resolvedRelationLinks?: ResolvedRelationLink[]
 ): SyntaxNode | null => {
   const canvas = buildDerivationCanvasData(forest);
   if (!canvas) return null;
@@ -273,7 +297,7 @@ export const buildRenderableDerivationCanvasData = (
 
 export const buildRenderableCommittedCanvasData = (
   tree: SyntaxNode,
-  _resolvedRelationLinks?: ResolvedVisualRelation[]
+  _resolvedRelationLinks?: ResolvedRelationLink[]
 ): SyntaxNode => {
   return materializeCanopyPreterminals(tree);
 };
@@ -306,10 +330,10 @@ export const adaptDerivationStagesForReplay = (stages?: DerivationStage[] | null
       ? cloneSyntaxForest(explicitWorkspaceForest)
       : cloneSyntaxForest(previousWorkspaceForest);
     previousWorkspaceForest = cloneSyntaxForest(workspaceForest);
-    const visualRelations = Array.isArray(stage.visualRelations) ? stage.visualRelations : [];
+    const relations = Array.isArray(stage.relations) ? stage.relations : [];
     const details = {
       stageRecord: String(stage.stageRecord || '').trim(),
-      derivationStageVisualRelations: visualRelations
+      derivationStageRelations: relations
     };
     const change: ReplayDerivationChange = {
       statement: String(stage.statement || '').trim(),
@@ -321,7 +345,7 @@ export const adaptDerivationStagesForReplay = (stages?: DerivationStage[] | null
       stepId: `stage-${index + 1}`,
       statement: String(stage.statement || '').trim(),
       stageRecord: String(stage.stageRecord || '').trim(),
-      visualRelations,
+      relations,
       after: { workspaceForest },
       change,
       workspaceForest,
@@ -333,7 +357,7 @@ export const adaptDerivationStagesForReplay = (stages?: DerivationStage[] | null
 
 export const collectVisibleDerivationNodeIds = (
   forest: SyntaxNode[],
-  resolvedRelationLinks?: ResolvedVisualRelation[]
+  resolvedRelationLinks?: ResolvedRelationLink[]
 ): Set<string> => {
   const canvas = buildRenderableDerivationCanvasData(forest, resolvedRelationLinks);
   const cloned = cloneSyntaxTree(canvas);
@@ -531,19 +555,8 @@ const materializeReplayPreterminals = (node: SyntaxNode): SyntaxNode => {
           .filter((child): child is SyntaxNode => Boolean(child && typeof child === 'object'))
           .map(walk)
       : [];
-    const next: SyntaxNode = { label: current.label };
-    if (typeof current.id === 'string' && current.id.trim()) {
-      next.id = current.id;
-    }
-    if (current.silent === true) {
-      next.silent = true;
-    }
-    if (typeof current.lineageId === 'string' && current.lineageId.trim()) {
-      next.lineageId = current.lineageId;
-    }
-    if (Array.isArray((current as any).aliasIds) && (current as any).aliasIds.length > 0) {
-      (next as any).aliasIds = (current as any).aliasIds;
-    }
+    const next: SyntaxNode = { ...current };
+    delete next.children;
     const currentIsReplayLayoutOnly = (current as any).replayLayoutOnly === true;
     if (currentIsReplayLayoutOnly) {
       (next as any).replayLayoutOnly = true;
@@ -557,12 +570,6 @@ const materializeReplayPreterminals = (node: SyntaxNode): SyntaxNode => {
     const word = typeof current.word === 'string' ? current.word.trim() : '';
     if (!word) {
       if (Array.isArray(current.children)) next.children = [];
-      return next;
-    }
-
-    if (current.silent === true && !/^pro$/i.test(word) && !isNullLike(word)) {
-      next.label = 't';
-      next.word = 't';
       return next;
     }
 
@@ -587,7 +594,7 @@ const materializeReplayPreterminals = (node: SyntaxNode): SyntaxNode => {
 export const buildDerivationReplaySnapshot = (
   forest: SyntaxNode[],
   activeFrameIndex: number,
-  visualRelationLinks?: ResolvedVisualRelation[],
+  relationLinks?: ResolvedRelationLink[],
   visibleNodeIds?: Set<string>
   ,
   layoutNodeIds?: Set<string>,
@@ -597,10 +604,10 @@ export const buildDerivationReplaySnapshot = (
 ): {
   canvasData: SyntaxNode | null;
   visibleNodeIds: string[];
-  relationLinks: ResolvedVisualRelation[];
+  relationLinks: ResolvedRelationLink[];
 } => {
-  const transitionInputLinks = Array.isArray(visualRelationLinks)
-    ? visualRelationLinks
+  const transitionInputLinks = Array.isArray(relationLinks)
+    ? relationLinks
     : [];
   const transitionLinks = resolveDerivationMovementTransitions(
     forest,
@@ -624,11 +631,9 @@ export const buildDerivationReplaySnapshot = (
     operation: transition.operation,
     chainId: transition.chainId || undefined,
     note: transition.note
-  } satisfies ResolvedVisualRelation));
-  const frameRelationLinks = transitionLinks.length > 0
-    ? transitionLinks
-    : transitionInputLinks;
-  const effectiveRelationLinks = frameRelationLinks;
+  } satisfies ResolvedRelationLink));
+  const nonMovementLinks = transitionInputLinks.filter((link) => !isResolvedMovementLink(link));
+  const effectiveRelationLinks = [...transitionLinks, ...nonMovementLinks];
   const rawCanvas = stabilizeReplayOvertLeafIds(buildDerivationCanvasData(forest));
   const clonedRawCanvas = cloneSyntaxTree(rawCanvas);
   if (!clonedRawCanvas) {
@@ -1123,7 +1128,7 @@ export const buildPlaybackStepsFromDerivationFrames = (
     const stages = Array.isArray(replayPlan?.stages) ? replayPlan.stages : [];
     for (const stage of stages) {
       const relationSteps = Array.isArray(stage?.relationSteps) ? stage.relationSteps : [];
-      if (!relationSteps.some((relation) => isFrontingLikeOperationLabel(relation?.relation))) continue;
+      if (!relationSteps.some((relation) => isRegisteredFrontingTrajectoryRelation(relation?.relation))) continue;
       const stageIndex = Number(stage?.stageIndex);
       return Number.isFinite(stageIndex) ? stageIndex : -1;
     }
@@ -1148,6 +1153,14 @@ export const buildPlaybackStepsFromDerivationFrames = (
       if (frameStepId && stepsById.has(frameStepId)) {
         return stepsById.get(frameStepId);
       }
+      /*
+       * Positional alignment is only lawful when the frame carries no
+       * identity of its own. A stage-identified frame must never borrow an
+       * unrelated step — a synthesized SpellOut step landing on stage 1
+       * would reclassify the whole stage and silently drop its authored
+       * relation moments.
+       */
+      if (frameStepId) return undefined;
       return alignedSteps[index];
     })();
     const rawWorkspaceRoots = Array.isArray(frame.workspaceForest) ? frame.workspaceForest : [];
@@ -1213,14 +1226,19 @@ export const buildPlaybackStepsFromDerivationFrames = (
     if (alignedStepId) usedStepIds.add(alignedStepId);
 
     const priorVisibleNodeIds = new Set(previousVisibleNodeIds);
-    type IndexedVisualRelationStep = DerivationReplayPlanStep & { authoredRelationIndex: number };
-    const frameVisualRelationSteps: IndexedVisualRelationStep[] = plannedStage
-      ? getFrameVisualRelations(frame, plannedStage)
-          .map((relation, authoredRelationIndex) => ({
+    type IndexedRelationStep = DerivationReplayPlanStep & { authoredRelationIndex: number };
+    const frameRelationSteps: IndexedRelationStep[] = plannedStage
+      ? getFrameRelations(frame, plannedStage)
+          .map((relation, listIndex) => ({
             ...relation,
-            authoredRelationIndex
+            // The authored array position is the relation's exact identity;
+            // keep the plan's own index when present — a positional index
+            // is wrong as soon as any upstream step was filtered.
+            authoredRelationIndex: Number.isInteger(relation.authoredRelationIndex)
+              ? (relation.authoredRelationIndex as number)
+              : listIndex
           }))
-          .filter(isRenderableReplayVisualRelation)
+          .filter(isRenderableReplayRelation)
       : [];
     const previousFrameWorkspaceRoots = index > 0 && Array.isArray(frames[index - 1]?.workspaceForest)
       ? frames[index - 1].workspaceForest
@@ -1230,7 +1248,7 @@ export const buildPlaybackStepsFromDerivationFrames = (
       && collectReplayOvertTokenMultisetKey(previousFrameWorkspaceRoots) === collectReplayOvertTokenMultisetKey(workspaceRoots)
       && collectReplayRootStructuralKey(previousFrameWorkspaceRoots) === collectReplayRootStructuralKey(workspaceRoots);
     const authoredPreviousRelationRelationLinks = plannedStage
-      ? buildAuthoredVisualRelationRelationLinksForFrames(
+      ? buildAuthoredRelationLinksForFrames(
           frames,
           replayPlan,
           index - 1,
@@ -1238,7 +1256,7 @@ export const buildPlaybackStepsFromDerivationFrames = (
         )
       : [];
     const authoredCumulativeRelationRelationLinks = plannedStage
-      ? buildAuthoredVisualRelationRelationLinksForFrames(
+      ? buildAuthoredRelationLinksForFrames(
           frames,
           replayPlan,
           index,
@@ -1390,15 +1408,22 @@ export const buildPlaybackStepsFromDerivationFrames = (
     const finalizeStructuralReplayForFrame = (steps: PlaybackStep[]): PlaybackStep[] => {
       let structuralSteps = steps.map(stripSemanticPayloadFromMicrostep);
       if (plannedStage) {
-        const resolveRelationPlacement = (relation: IndexedVisualRelationStep, relationIndex: number) => {
+        const resolveRelationPlacement = (relation: IndexedRelationStep, relationIndex: number) => {
           const relationLabel = String(relation?.relation || '').trim() || 'Visual Relation';
-          const isTrajectoryRelation = isRenderableReplayVisualRelation(relation);
-          const rawAuthoredTargetNodeId = getVisualRelationTargetNodeId(relation);
-          const rawSourceNodeIds = getVisualRelationSourceNodeIds(relation);
+          const rawAuthoredTargetNodeId = getRelationTargetNodeId(relation);
+          const rawSourceNodeIds = getRelationSourceNodeIds(relation);
+          // Trajectory placement semantics apply only when the plan authored
+          // explicit source/target endpoints; every other renderable relation
+          // keeps its own Replay moment anchored to its resolved anchors.
+          const isTrajectoryRelation =
+            isRenderableReplayRelation(relation)
+            && isRegisteredTrajectoryRelation(relationLabel)
+            && Boolean(rawAuthoredTargetNodeId)
+            && rawSourceNodeIds.length > 0;
           const sourceNodeIds = rawSourceNodeIds
-            .map((nodeId) => resolveVisualRelationAnchorNodeId(workspaceRoots, nodeId, 'source'))
+            .map((nodeId) => resolveRelationAnchorNodeId(workspaceRoots, nodeId, 'source'))
             .filter(Boolean);
-          const authoredTargetNodeId = resolveVisualRelationAnchorNodeId(
+          const authoredTargetNodeId = resolveRelationAnchorNodeId(
             workspaceRoots,
             rawAuthoredTargetNodeId,
             'target'
@@ -1406,17 +1431,17 @@ export const buildPlaybackStepsFromDerivationFrames = (
           const sourceNodeId = isTrajectoryRelation
             ? (
                 sourceNodeIds.find((nodeId) =>
-                  visualRelationAnchorsExistInForest(workspaceRoots, authoredTargetNodeId, nodeId)
+                  relationAnchorsExistInForest(workspaceRoots, authoredTargetNodeId, nodeId)
                 ) || sourceNodeIds[0] || ''
               )
             : '';
           if (isTrajectoryRelation) {
-            if (!visualRelationAnchorsExistInForest(workspaceRoots, authoredTargetNodeId, sourceNodeId)) return null;
+            if (!relationAnchorsExistInForest(workspaceRoots, authoredTargetNodeId, sourceNodeId)) return null;
           }
           const relationAnchorNodeIds = isTrajectoryRelation
             ? Array.from(new Set([authoredTargetNodeId, ...sourceNodeIds].filter(Boolean)))
-            : getVisualRelationAllAnchorNodeIds(relation)
-                .map((nodeId) => resolveVisualRelationAnchorNodeId(workspaceRoots, nodeId, 'source'))
+            : getRelationAllAnchorNodeIds(relation)
+                .map((nodeId) => resolveRelationAnchorNodeId(workspaceRoots, nodeId, 'source'))
                 .filter(Boolean);
           if (relationAnchorNodeIds.length === 0) return null;
           const targetWitnessNodeId = isTrajectoryRelation
@@ -1452,7 +1477,7 @@ export const buildPlaybackStepsFromDerivationFrames = (
             insertAfterStepIndex
           };
         };
-        let relationPlacements = frameVisualRelationSteps
+        let relationPlacements = frameRelationSteps
           .map((relation, relationIndex) => resolveRelationPlacement(relation, relationIndex))
           .filter((placement): placement is NonNullable<ReturnType<typeof resolveRelationPlacement>> => Boolean(placement))
           .sort((left, right) =>
@@ -1522,19 +1547,19 @@ export const buildPlaybackStepsFromDerivationFrames = (
               ? left.relationIndex - right.relationIndex
               : left.insertAfterStepIndex - right.insertAfterStepIndex
           );
-        const singleRelationLinksByIndex = new Map<number, ResolvedVisualRelation[]>();
-        frameVisualRelationSteps.forEach((relation, relationIndex) => {
+        const singleRelationLinksByIndex = new Map<number, ResolvedRelationLink[]>();
+        frameRelationSteps.forEach((relation, relationIndex) => {
           const authoredRelationIndex = Number.isInteger(relation.authoredRelationIndex)
             ? relation.authoredRelationIndex
             : relationIndex;
-          const throughRelationLinks = buildAuthoredVisualRelationRelationLinksForFrames(
+          const throughRelationLinks = buildAuthoredRelationLinksForFrames(
             frames,
             replayPlan,
             index,
             workspaceRoots,
             authoredRelationIndex
           );
-          const beforeRelationLinks = buildAuthoredVisualRelationRelationLinksForFrames(
+          const beforeRelationLinks = buildAuthoredRelationLinksForFrames(
             frames,
             replayPlan,
             index,
@@ -1563,7 +1588,10 @@ export const buildPlaybackStepsFromDerivationFrames = (
         const relationVisibleNodeIdsByIndex = new Map<number, string[]>();
         relationPlacements.forEach((placement) => {
           if (!placement.renderableTrajectory) {
-            relationVisibleNodeIdsByIndex.set(placement.relationIndex, []);
+            relationVisibleNodeIdsByIndex.set(
+              placement.relationIndex,
+              []
+            );
             return;
           }
           const placementRelationLinks = singleRelationLinksByIndex.get(placement.relationIndex) || [];
@@ -1593,8 +1621,8 @@ export const buildPlaybackStepsFromDerivationFrames = (
         const relationLayoutNodeIds = Array.from(new Set(
           Array.from(relationVisibleNodeIdsByIndex.values()).flat().filter(Boolean)
         ));
-        const buildActiveRelationLinks = (activeRelationIndexes: Set<number>): ResolvedVisualRelation[] => {
-          const links: ResolvedVisualRelation[] = [...authoredPreviousRelationRelationLinks];
+        const buildActiveRelationLinks = (activeRelationIndexes: Set<number>): ResolvedRelationLink[] => {
+          const links: ResolvedRelationLink[] = [...authoredPreviousRelationRelationLinks];
           const seen = new Set(links.map((link) => resolvedRelationLinkKey(link)));
           Array.from(activeRelationIndexes)
             .sort((left, right) => left - right)
@@ -1706,6 +1734,12 @@ export const buildPlaybackStepsFromDerivationFrames = (
             ...frameSemanticStep,
             operation: placement.relationLabel as DerivationStep['operation'],
             replayKind: 'relation',
+            replayRelationIdentity: {
+              stageIndex: index,
+              relationIndex: Number.isInteger(placement.relation.authoredRelationIndex)
+                ? placement.relation.authoredRelationIndex
+                : placement.relationIndex
+            },
             targetNodeId: resolvedTargetNodeId || frameSemanticStep.targetNodeId,
             targetLabel:
               getReplayNodeOvertYieldFromCanvas(relationReplaySnapshot.canvasData, resolvedTargetNodeId)
@@ -1726,7 +1760,7 @@ export const buildPlaybackStepsFromDerivationFrames = (
             note: undefined,
             preserveReplayStep: true,
             stageRecord: getFrameStageRecordText(frame, plannedStage),
-            detailBlocks: buildVisualRelationReplayBlocks([placement.relation], relationReplaySnapshot.canvasData),
+            detailBlocks: buildRelationReplayBlocks([placement.relation], relationReplaySnapshot.canvasData),
             replayCanvasData: relationReplaySnapshot.canvasData,
             replayVisibleNodeIds: relationReplaySnapshot.visibleNodeIds,
             replayRelationLinks: relationReplaySnapshot.relationLinks
@@ -1744,7 +1778,7 @@ export const buildPlaybackStepsFromDerivationFrames = (
             if (!placement.renderableTrajectory) return false;
             const relationTargetNode = findNodeByIdInForest(workspaceRoots, placement.authoredTargetNodeId);
             const relationTargetIsPendingPhrasalMovement =
-              !isFrontingLikeOperationLabel(placement.relationLabel)
+              !isRegisteredFrontingTrajectoryRelation(placement.relationLabel)
               && isPhraseShellLabel(relationTargetNode?.label);
             if (relationTargetIsPendingPhrasalMovement) return false;
             const relationTargetSubtreeIds = new Set(collectSyntaxSubtreeNodeIds(relationTargetNode));
@@ -1777,10 +1811,13 @@ export const buildPlaybackStepsFromDerivationFrames = (
           const placement = pendingRelationPlacements.shift();
           if (!placement) break;
           activeRelationIndexes.add(placement.relationIndex);
+          // A stage with no structural steps still anchors its relation
+          // moments to the frame's committed visible state — a relation
+          // moment never changes which material is structurally visible.
           interleavedSteps.push(buildRelationPlaybackStep(
             placement,
             activeRelationIndexes,
-            structuralSteps[structuralSteps.length - 1]
+            structuralSteps[structuralSteps.length - 1] ?? frameSemanticStep
           ));
         }
         const stageStepCount = interleavedSteps.length + 1;
@@ -2013,6 +2050,26 @@ export const buildPlaybackStepsFromDerivationFrames = (
     previousWorkspaceRootIds = currentWorkspaceRootIds;
     previousVisibleNodeIds = currentFrameVisibleNodeIds;
 
+    /*
+     * A PLANNED stage with no structural microsteps still owns a reachable
+     * final Stage Record state. Two such shapes exist:
+     * - a relations-only stage, whose authored relation moments must not be
+     *   dropped with the microsteps;
+     * - a stage whose only tree delta is the REMOVAL of material (e.g. an
+     *   anchored node vanishing). A bare 'Other' step for that state would
+     *   be deleted by the overt-loss guard, making the whole stage
+     *   unreachable and leaving the previous stage's relation on screen.
+     * Both route through the finalizer with zero structural steps: relation
+     * moments (if any) place first, then the stage's authoritative macro
+     * carries the stage's own complete canvas. The overt-material guards
+     * already treat a Stage Record as authoritative, so this weakens no
+     * transient-microstep protection — it only makes every authored stage's
+     * final state reachable.
+     */
+    if (plannedStage && (frameRelationSteps.length > 0 || structuralMicrosteps.length === 0)) {
+      return finalizeStructuralReplayForFrame([]);
+    }
+
     return [frameSemanticStep];
   });
 
@@ -2162,7 +2219,7 @@ const collapseZeroDeltaReplaySteps = (steps: PlaybackStep[]): PlaybackStep[] => 
   return collapsed;
 };
 
-const insertPreMovementLandingMergeSteps = (steps: PlaybackStep[]): PlaybackStep[] => {
+export const insertPreMovementLandingMergeSteps = (steps: PlaybackStep[]): PlaybackStep[] => {
   if (steps.length < 2) return steps;
 
   const expanded: PlaybackStep[] = [];
@@ -2195,10 +2252,17 @@ const insertPreMovementLandingMergeSteps = (steps: PlaybackStep[]): PlaybackStep
       const targetLabel = String(targetNode?.label || '').trim() || String(previous.targetLabel || '').trim() || 'XP';
       const visibleNodeIds = getReplayVisibleNodeIdSet(previous);
       visibleNodeIds.add(parentNodeId);
+      /*
+       * A generated pre-movement landing merge is a STRUCTURAL state: it
+       * must never inherit relation identity from the step it was cloned
+       * from, or it would count as a second played relation moment and
+       * reveal/focus a relation twice.
+       */
       expanded.push({
         ...previous,
         operation: 'ExternalMerge' as DerivationStep['operation'],
-        replayKind: previous.replayKind || 'micro',
+        replayKind: 'micro',
+        replayRelationIdentity: undefined,
         targetNodeId: parentNodeId,
         targetLabel: parentLabel,
         sourceNodeIds: [targetNodeId].filter(Boolean),
@@ -2456,7 +2520,19 @@ const splitCollapsedNullSelectionProjectSteps = (steps: PlaybackStep[]): Playbac
   return expanded;
 };
 
-const removeInvalidReplayVisibilityTransitions = (steps: PlaybackStep[]): PlaybackStep[] => {
+/**
+ * Exactly a genuine authored relation playback moment: relation kind AND the
+ * exact authored `{stageIndex, relationIndex}` identity. A generic
+ * `preserveReplayStep` flag is NOT proof — synthetic preserved structural
+ * states (pre-movement landing merges, detached placements) carry that flag
+ * and must not bypass overt-material guards.
+ */
+export const isAuthoredRelationReplayMoment = (step: PlaybackStep): boolean =>
+  step.replayKind === 'relation'
+  && Number.isInteger(step.replayRelationIdentity?.stageIndex)
+  && Number.isInteger(step.replayRelationIdentity?.relationIndex);
+
+export const removeInvalidReplayVisibilityTransitions = (steps: PlaybackStep[]): PlaybackStep[] => {
   const kept: PlaybackStep[] = [];
   steps.forEach((step) => {
     const previous = kept[kept.length - 1];
@@ -2475,6 +2551,12 @@ const removeInvalidReplayVisibilityTransitions = (steps: PlaybackStep[]): Playba
       && operation !== 'SpellOut'
       && !isMoveLikeOperation(operation)
       && !isPlannedStructuralMicrostep
+      // An AUTHORED RELATION MOMENT draws marks, not material: its snapshot
+      // reflects the frame's own structural state, which can legitimately
+      // differ from a mid-assembly neighbor. Only the exact identity-proven
+      // moment is exempt — a generic preserved flag alone never authorizes
+      // an otherwise-invalid overt-material jump.
+      && !isAuthoredRelationReplayMoment(step)
       && !stepCanIntroduceVisibleOvertMaterial(previous, step)
     ) {
       return;
@@ -2510,7 +2592,7 @@ const collectReplayCanvasNodes = (root?: SyntaxNode | null): SyntaxNode[] => {
 
 const resolveCarriedRelationEndpointForCanvas = (
   canvas: SyntaxNode,
-  link: ResolvedVisualRelation,
+  link: ResolvedRelationLink,
   endpointId: string,
   role: 'source' | 'target' | 'witness'
 ): string => {
@@ -2572,9 +2654,9 @@ const resolveCarriedRelationEndpointForCanvas = (
 };
 
 const remapCarriedRelationLinkForCanvas = (
-  link: ResolvedVisualRelation,
+  link: ResolvedRelationLink,
   canvas: SyntaxNode
-): ResolvedVisualRelation => {
+): ResolvedRelationLink => {
   const sourceNodeId = resolveCarriedRelationEndpointForCanvas(
     canvas,
     link,
@@ -2593,7 +2675,7 @@ const remapCarriedRelationLinkForCanvas = (
     String(link.witnessNodeId || '').trim(),
     'witness'
   );
-  const rewriteAnchor = (anchor: ResolvedVisualRelationAnchor): ResolvedVisualRelationAnchor => {
+  const rewriteAnchor = (anchor: ResolvedRelationAnchor): ResolvedRelationAnchor => {
     const role = String(anchor?.role || '').trim().toLowerCase();
     if (role === 'source') return { ...anchor, nodeId: sourceNodeId || anchor.nodeId };
     if (role === 'target') return { ...anchor, nodeId: targetNodeId || anchor.nodeId };
@@ -2613,7 +2695,7 @@ const remapCarriedRelationLinkForCanvas = (
 const carryReplayRelationLinksForward = (steps: PlaybackStep[]): PlaybackStep[] => {
   if (steps.length < 2) return steps;
 
-  const activeRelationLinks: ResolvedVisualRelation[] = [];
+  const activeRelationLinks: ResolvedRelationLink[] = [];
   const activeRelationKeys = new Set<string>();
   return steps.map((step) => {
     const canvas = step.replayCanvasData;
@@ -2640,7 +2722,7 @@ const carryReplayRelationLinksForward = (steps: PlaybackStep[]): PlaybackStep[] 
     });
     if (linksForStep.length === 0) return step;
 
-    const mergedRelationLinks: ResolvedVisualRelation[] = [];
+    const mergedRelationLinks: ResolvedRelationLink[] = [];
     const mergedRelationKeys = new Set<string>();
     linksForStep.forEach((link) => {
       const key = resolvedRelationLinkKey(link);
@@ -2758,6 +2840,7 @@ const normalizeReplaySentenceInitialCasing = (
         });
       });
     }
+    if (!isFrontingLikeOperationLabel(step.operation) && frontingTargetLeafIds.length === 0) return step;
     const capitalizedLeafId = String(frontingTargetLeafIds[frontingTargetLeafIds.length - 1] || '').trim();
     let changed = false;
     visibleOvertLeaves.forEach((leaf) => {
@@ -3201,7 +3284,7 @@ const getOvertSurfaceFromSyntaxNode = (node?: SyntaxNode | null): string => {
   return String(leaf?.word || leaf?.label || '').trim();
 };
 
-const resolvedRelationLinkKey = (link?: ResolvedVisualRelation | null): string => [
+const resolvedRelationLinkKey = (link?: ResolvedRelationLink | null): string => [
   String(link?.relationIndex || '').trim(),
   String(link?.operation || '').trim(),
   String(link?.sourceNodeId || '').trim(),
@@ -3211,13 +3294,13 @@ const resolvedRelationLinkKey = (link?: ResolvedVisualRelation | null): string =
 ].join('|');
 
 const filterResolvedRelationLinks = (
-  links: ResolvedVisualRelation[] | undefined,
-  suppressedLinks: ResolvedVisualRelation[] = []
-): ResolvedVisualRelation[] => {
+  links: ResolvedRelationLink[] | undefined,
+  suppressedLinks: ResolvedRelationLink[] = []
+): ResolvedRelationLink[] => {
   const sourceLinks = Array.isArray(links) ? links : [];
   if (!Array.isArray(suppressedLinks) || suppressedLinks.length === 0) return sourceLinks;
   const suppressedKeys = new Set(suppressedLinks.map((link) => resolvedRelationLinkKey(link)));
-  const matchesSuppressedLink = (link: ResolvedVisualRelation): boolean => {
+  const matchesSuppressedLink = (link: ResolvedRelationLink): boolean => {
     if (suppressedKeys.has(resolvedRelationLinkKey(link))) return true;
     return suppressedLinks.some((suppressed) => {
       const sameOperation =
@@ -3275,44 +3358,25 @@ export const isStructuralCategorySurface = (surface?: string): boolean => {
   return isHeadShellLabel(normalized) || isPhraseShellLabel(normalized);
 };
 
-const normalizeMovementOperationLabel = (operation?: string): string =>
-  String(operation || '').trim().toLowerCase().replace(/[^a-z]/g, '');
-
-const HEAD_LIKE_OPERATION_RE = /(?:headmove|headmovement|lower|lowering|affix|clitic|incorpor)/i;
-const FRONTING_OPERATION_RE = /(?:abar|wh|front|focus|topic|displac|extract|scrambl|rollup|sideward)/i;
-export const normalizeTrajectoryKind = (kind?: ResolvedVisualRelation['trajectoryKind'] | string): ResolvedVisualRelation['trajectoryKind'] | '' => {
+export const normalizeTrajectoryKind = (kind?: ResolvedRelationLink['trajectoryKind'] | string): ResolvedRelationLink['trajectoryKind'] | '' => {
   const normalized = String(kind || '').trim().toLowerCase();
   if (normalized === 'head' || normalized === 'phrasal') return normalized;
   return '';
 };
 
-const isHeadLikeOperationLabel = (operation?: string): boolean => {
-  const normalized = normalizeMovementOperationLabel(operation);
-  if (!normalized) return false;
-  if (normalized === 'headchain') return true;
-  return HEAD_LIKE_OPERATION_RE.test(normalized);
-};
+/*
+ * Operation-label kind refinement is exact identity metadata, never a text
+ * pattern. An unlisted name has no kind and no fronting flavor; structure
+ * decides or nothing does.
+ */
+const isHeadLikeOperationLabel = (operation?: string): boolean =>
+  movementIdentityKind(operation) === 'head';
 
-export const isFrontingLikeOperationLabel = (operation?: string): boolean => {
-  const raw = String(operation || '').trim();
-  if (/a\s*(?:['\u2032]|bar|prime)\s*[-\s]?movement/i.test(raw)) return true;
-  if (/wh\s*[-\s]?chain/i.test(raw)) return true;
-  if (/^phrasal[-\s]?movement$/i.test(raw)) return true;
-  const normalized = normalizeMovementOperationLabel(operation);
-  if (!normalized) return false;
-  return FRONTING_OPERATION_RE.test(normalized);
-};
+export const isFrontingLikeOperationLabel = (operation?: string): boolean =>
+  isFrontingMovementIdentity(operation);
 
-const isPhrasalTrajectoryOperationLabel = (operation?: string): boolean => {
-  const raw = String(operation || '').trim();
-  if (/^a\s*[-\s]?movement$/i.test(raw)) return true;
-  if (/^a\s*[-\s]?chain$/i.test(raw)) return true;
-  if (/wh\s*[-\s]?chain/i.test(raw)) return true;
-  if (isFrontingLikeOperationLabel(raw)) return true;
-  const normalized = normalizeMovementOperationLabel(raw);
-  if (!normalized) return false;
-  return /(?:phrasal|raising|remnant|scrambl|rollup|sideward|extraposit|shift|atb|parasitic)/i.test(normalized);
-};
+const isPhrasalTrajectoryOperationLabel = (operation?: string): boolean =>
+  movementIdentityKind(operation) === 'phrasal';
 
 const isNodeOrImmediateParentHeadShellInForest = (
   forest: SyntaxNode[],
@@ -3341,7 +3405,7 @@ const inferHeadLikeTrajectoryKindFromForest = ({
   sourceNodeId?: string;
   targetNodeId?: string;
   traceNodeId?: string;
-}): ResolvedVisualRelation['trajectoryKind'] => {
+}): ResolvedRelationLink['trajectoryKind'] => {
   if (isHeadLikeOperationLabel(operation)) return 'head';
   if (isPhrasalTrajectoryOperationLabel(operation)) return 'phrasal';
 
@@ -3355,8 +3419,8 @@ const inferHeadLikeTrajectoryKindFromForest = ({
 
 const inferHeadLikeTrajectoryKindFromVisibleNodes = (
   nodeById: Map<string, HierNode>,
-  link?: ResolvedVisualRelation | null
-): ResolvedVisualRelation['trajectoryKind'] | '' => {
+  link?: ResolvedRelationLink | null
+): ResolvedRelationLink['trajectoryKind'] | '' => {
   if (!link) return '';
 
   const explicitKind = normalizeTrajectoryKind(link.trajectoryKind);
@@ -3381,7 +3445,7 @@ const inferHeadLikeTrajectoryKindFromVisibleNodes = (
 };
 
 export const isHeadLikeResolvedRelation = (
-  link?: ResolvedVisualRelation | null,
+  link?: ResolvedRelationLink | null,
   nodeById?: Map<string, HierNode>
 ): boolean => {
   const explicitKind = normalizeTrajectoryKind(link?.trajectoryKind);
@@ -3399,7 +3463,7 @@ const inferPlaybackStepTrajectoryKind = (step?: PlaybackStep | null): PlaybackSt
   const linkKinds = Array.isArray(step?.replayRelationLinks)
     ? step.replayRelationLinks
         .map((link) => normalizeTrajectoryKind(link?.trajectoryKind))
-        .filter((kind): kind is NonNullable<ResolvedVisualRelation['trajectoryKind']> => Boolean(kind))
+        .filter((kind): kind is NonNullable<ResolvedRelationLink['trajectoryKind']> => Boolean(kind))
     : [];
   if (linkKinds.includes('head')) return 'head';
   if (linkKinds.includes('phrasal')) return 'phrasal';
@@ -3454,7 +3518,7 @@ export const resolveDerivationMovementTransitions = (
   currentForest: SyntaxNode[],
   derivationFrames: ReplayDerivationFrame[] | undefined,
   activeStepIndex: number,
-  resolvedRelationLinks?: ResolvedVisualRelation[]
+  resolvedRelationLinks?: ResolvedRelationLink[]
 ): DerivationMovementTransition[] => {
   const frames = Array.isArray(derivationFrames) ? derivationFrames : [];
   if (frames.length === 0) return [];
@@ -3465,6 +3529,8 @@ export const resolveDerivationMovementTransitions = (
   const transitionKeys = new Set<string>();
 
   (Array.isArray(resolvedRelationLinks) ? resolvedRelationLinks : []).forEach((link) => {
+    if (!isResolvedMovementLink(link)) return;
+
     const sourceId = String(link?.sourceNodeId || '').trim();
     const targetId = String(link?.targetNodeId || '').trim();
     if (!sourceId || !targetId || sourceId === targetId) return;
@@ -3486,7 +3552,7 @@ export const resolveDerivationMovementTransitions = (
       step,
       index: String(link?.relationIndex || '').trim() || `${transitions.length + 1}`,
       chainId: String(link?.chainId || '').trim() || null,
-      operation: link?.operation || link?.relation,
+      operation: link?.relation || link?.operation,
       trajectoryKind: normalizeTrajectoryKind(link?.trajectoryKind) || undefined,
       note: link?.note
     });
@@ -3522,6 +3588,9 @@ const DIGIT_TO_SUBSCRIPT: Record<string, string> = {
   '8': '₈',
   '9': '₉'
 };
+const INDEX_TO_SUBSCRIPT: Record<string, string> = Object.fromEntries(
+  Object.entries(SUBSCRIPT_MAP).map(([subscript, plain]) => [plain, subscript])
+);
 
 export const isTraceLike = (label: string): boolean => {
   const text = label.trim();
@@ -3559,29 +3628,44 @@ export const extractMovementIndex = (label: string): string | null => {
   if (braced?.[1]) return braced[1].toLowerCase();
   const plain = text.match(/_([A-Za-z0-9]+)$/);
   if (plain?.[1]) return plain[1].toLowerCase();
-  const danglingSubscript = text.match(/([A-Za-z0-9]+)$/);
-  return danglingSubscript?.[1] && /[₀-₉ᵢⱼₐₑₒₓₕₖₗₘₙₚₛₜ]/.test(label) ? danglingSubscript[1].toLowerCase() : null;
+  const traceDigits = text.match(/^t(\d+)$/i);
+  if (traceDigits?.[1]) return traceDigits[1];
+  const danglingSubscript = label.trim().match(/([₀-₉ᵢⱼₐₑₒₓₕₖₗₘₙₚₛₜ]+)$/);
+  return danglingSubscript?.[1]
+    ? [...danglingSubscript[1]].map((ch) => SUBSCRIPT_MAP[ch] || ch).join('').toLowerCase()
+    : null;
 };
 
 const toSubscriptDigits = (value: string): string =>
   value
     .split('')
-    .map((ch) => DIGIT_TO_SUBSCRIPT[ch] || ch)
+    .map((ch) => DIGIT_TO_SUBSCRIPT[ch] || INDEX_TO_SUBSCRIPT[ch.toLowerCase()] || ch)
     .join('');
 
 export const normalizeTraceIndexForDisplay = (index?: string | null): string => {
-  const normalized = String(index || '').trim().toLowerCase();
+  const normalized = [...String(index || '').trim()]
+    .map((ch) => SUBSCRIPT_MAP[ch] || ch)
+    .join('')
+    .toLowerCase();
   if (!normalized) return '';
   const numeric = /^\d+$/.test(normalized)
     ? Number(normalized)
     : NaN;
-  if (!Number.isFinite(numeric) || numeric < 1) return '';
-  return String(numeric);
+  if (Number.isFinite(numeric)) return numeric >= 1 ? String(numeric) : '';
+  return /^[a-z]+$/.test(normalized) ? normalized : '';
 };
 
 export const buildTraceDisplayLabel = (index?: string | null): string => {
   const suffix = normalizeTraceIndexForDisplay(index);
   return suffix ? `t${toSubscriptDigits(suffix)}` : 't';
+};
+
+export const formatIndexedSurfaceForDisplayValue = (
+  surface: string,
+  index?: string | null
+): string => {
+  const suffix = normalizeTraceIndexForDisplay(index);
+  return suffix ? `${surface}${toSubscriptDigits(suffix)}` : surface;
 };
 
 export const formatTraceSurfaceForDisplayValue = (
@@ -3594,7 +3678,28 @@ export const formatTraceSurfaceForDisplayValue = (
   return buildTraceDisplayLabel(fallbackIndex || extractMovementIndex(raw));
 };
 
-const DISPLAY_TRACE_LABEL_RE = /^t(?:[₀₁₂₃₄₅₆₇₈₉]+)?$/;
+const DISPLAY_TRACE_LABEL_RE = /^t(?:[₀₁₂₃₄₅₆₇₈₉ᵢⱼₐₑₒₓₕₖₗₘₙₚₛₜ]+)?$/;
+
+/**
+ * The authored-witness display law, pure and testable. Display indexing is
+ * additive only: an authored trace surface (`t`, `t₁`, …) may gain its
+ * derived index; an authored `∅` stays `∅`, authored silent lexical material
+ * stays that lexical material, and overt material stays overt. No relation,
+ * lineage, or movement participation converts one witness kind into another.
+ */
+export const formatAuthoredWitnessSurface = (
+  surface: string,
+  inheritedTraceIndex?: string | null,
+  aliasedTraceIndex?: string | null
+): string => {
+  const resolvedIndex = normalizeTraceIndexForDisplay(
+    inheritedTraceIndex || aliasedTraceIndex || extractMovementIndex(surface)
+  );
+  if (isTraceLike(surface)) {
+    return formatTraceSurfaceForDisplayValue(surface, resolvedIndex || extractMovementIndex(surface));
+  }
+  return surface;
+};
 
 export const isDisplayTraceLabel = (value?: string): boolean =>
   DISPLAY_TRACE_LABEL_RE.test(String(value || '').trim());
@@ -3720,11 +3825,25 @@ export const resolveTraceIndexFromNodeContext = (
 
 export const buildResolvedLinkTraceIndexMap = (
   currentForest: SyntaxNode[],
-  resolvedRelationLinks: ResolvedVisualRelation[] | undefined,
+  resolvedRelationLinks: ResolvedRelationLink[] | undefined,
   activeStepIndex: number
 ): Map<string, string> => {
   const traceIndexByNodeId = new Map<string, string>();
   const links = Array.isArray(resolvedRelationLinks) ? resolvedRelationLinks : [];
+  const partialDeletionNodeIds = new Set<string>();
+  links.forEach((link) => {
+    const relationName = String(link?.relation || link?.operation || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z]/g, '');
+    if (relationName !== 'partialcopydeletion') return;
+    (Array.isArray(link?.anchors) ? link.anchors : []).forEach((anchor) => {
+      const role = String(anchor?.role || '').trim().toLowerCase();
+      if (role !== 'deletedsubconstituent' && role !== 'deleted') return;
+      const deletedNode = findNodeByIdInForest(currentForest, String(anchor?.nodeId || '').trim());
+      collectSubtreeNodeIds(deletedNode).forEach((nodeId) => partialDeletionNodeIds.add(nodeId));
+    });
+  });
   const assignIndexToNodeAndLeaves = (nodeId: string, index: string) => {
     const normalizedNodeId = String(nodeId || '').trim();
     const normalizedIndex = String(index || '').trim();
@@ -3737,16 +3856,53 @@ export const buildResolvedLinkTraceIndexMap = (
       .filter(Boolean)
       .forEach((leafId) => traceIndexByNodeId.set(leafId, normalizedIndex));
   };
+  const assignIndexToMovementSource = (nodeId: string, index: string) => {
+    const normalizedNodeId = String(nodeId || '').trim();
+    const normalizedIndex = String(index || '').trim();
+    if (!normalizedNodeId || !normalizedIndex) return;
+    const node = findNodeByIdInForest(currentForest, normalizedNodeId);
+    if (!node) return;
+    const sourceContainsPartialDeletion = collectSubtreeNodeIds(node)
+      .some((sourceNodeId) => partialDeletionNodeIds.has(sourceNodeId));
+    if (!sourceContainsPartialDeletion) {
+      assignIndexToNodeAndLeaves(normalizedNodeId, normalizedIndex);
+      return;
+    }
+    collectLeafSyntaxNodes(node)
+      .map((leaf) => String(leaf?.id || '').trim())
+      .filter((leafId) => Boolean(leafId) && !partialDeletionNodeIds.has(leafId))
+      .forEach((leafId) => traceIndexByNodeId.set(leafId, normalizedIndex));
+  };
+  const resolveAuthoredMovementIndex = (...nodeIds: string[]): string => {
+    for (const nodeId of nodeIds) {
+      const node = findNodeByIdInForest(currentForest, String(nodeId || '').trim());
+      if (!node) continue;
+      for (const candidate of [node, ...collectLeafSyntaxNodes(node)]) {
+        const surface = String(candidate?.word || candidate?.label || '').trim();
+        const authoredIndex = normalizeTraceIndexForDisplay(extractMovementIndex(surface));
+        if (authoredIndex) return authoredIndex;
+      }
+    }
+    return '';
+  };
   links.forEach((link) => {
+    /*
+     * A resolved relation is not automatically a movement chain. In
+     * particular, EllipsisLicensing relates C[E] to its silent complement;
+     * indexing that link rewrites C's authored null as an unlicensed trace.
+     */
+    if (!isResolvedMovementLink(link)) return;
+
     const traceId = String(link?.witnessNodeId || '').trim();
     const sourceId = String(link?.sourceNodeId || '').trim();
     const movedId = String(link?.targetNodeId || '').trim();
-    const index = String(link?.relationIndex || '').trim();
+    const index = resolveAuthoredMovementIndex(traceId, sourceId)
+      || String(link?.relationIndex || '').trim();
     const stepIndex = Number.isInteger(link?.stepIndex) ? Number(link.stepIndex) : 0;
     if (!index || stepIndex > activeStepIndex) return;
 
     if (traceId) assignIndexToNodeAndLeaves(traceId, index);
-    if (sourceId) assignIndexToNodeAndLeaves(sourceId, index);
+    if (sourceId) assignIndexToMovementSource(sourceId, index);
     if (movedId) {
       const movedNode = findNodeByIdInForest(currentForest, movedId);
       const movedSurface = movedNode ? String(movedNode.word || movedNode.label || '').trim() : '';
@@ -3758,9 +3914,43 @@ export const buildResolvedLinkTraceIndexMap = (
   return traceIndexByNodeId;
 };
 
+export const buildResolvedLinkOperatorVariableIndexMap = (
+  currentForest: SyntaxNode[],
+  resolvedRelationLinks: ResolvedRelationLink[] | undefined,
+  activeStepIndex: number
+): Map<string, string> => {
+  const indexByNodeId = new Map<string, string>();
+  const assignIndexToNodeAndLeaves = (nodeId: string, index: string) => {
+    const normalizedNodeId = String(nodeId || '').trim();
+    const normalizedIndex = normalizeTraceIndexForDisplay(index);
+    if (!normalizedNodeId || !normalizedIndex) return;
+    indexByNodeId.set(normalizedNodeId, normalizedIndex);
+    const node = findNodeByIdInForest(currentForest, normalizedNodeId);
+    if (!node) return;
+    collectLeafSyntaxNodes(node)
+      .map((leaf) => String(leaf?.id || '').trim())
+      .filter(Boolean)
+      .forEach((leafId) => indexByNodeId.set(leafId, normalizedIndex));
+  };
+
+  (Array.isArray(resolvedRelationLinks) ? resolvedRelationLinks : []).forEach((link) => {
+    const relation = String(link?.relation || link?.operation || '').trim();
+    const stepIndex = Number.isInteger(link?.stepIndex) ? Number(link.stepIndex) : 0;
+    if (!/operator\s*[-\s]?variable\s*[-\s]?binding/i.test(relation) || stepIndex > activeStepIndex) {
+      return;
+    }
+    assignIndexToNodeAndLeaves(
+      String(link?.targetNodeId || '').trim(),
+      String(link?.relationIndex || '').trim()
+    );
+  });
+
+  return indexByNodeId;
+};
+
 export const buildResolvedLinkRawTraceAliasMap = (
   currentForest: SyntaxNode[],
-  resolvedRelationLinks: ResolvedVisualRelation[] | undefined,
+  resolvedRelationLinks: ResolvedRelationLink[] | undefined,
   activeStepIndex: number
 ): Map<string, string> => {
   const rawAliasByIndex = new Map<string, string>();
@@ -3936,12 +4126,12 @@ export const buildStructuralDerivationPlaybackSteps = (
   forest: SyntaxNode[],
   frameIndex: number,
   previousVisibleNodeIds: Set<string>,
-  resolvedRelationLinks?: ResolvedVisualRelation[],
+  resolvedRelationLinks?: ResolvedRelationLink[],
   revealRootIds?: Set<string>,
   derivationFrames?: ReplayDerivationFrame[],
   frame?: ReplayDerivationFrame,
   sentence?: string,
-  suppressedRelationLinks?: ResolvedVisualRelation[]
+  suppressedRelationLinks?: ResolvedRelationLink[]
 ): PlaybackStep[] => {
   const sentenceInitialSurface = String(tokenizeReplaySentenceSurface(sentence)[0] || '').trim();
   const effectiveRelationLinks = resolvedRelationLinks || [];
@@ -4333,23 +4523,26 @@ export const buildStructuralDerivationPlaybackSteps = (
 };
 
 const normalizeLabelKey = (label?: string): string => (label || "").trim().toUpperCase();
-const isMoveLikeOperation = (operation?: DerivationStep['operation'] | string): boolean => {
-  const key = String(operation || '').trim().toLowerCase().replace(/[^a-z]/g, '');
-  if (!key) return false;
-  if (
-    key === 'move'
-    || key === 'internalmerge'
-    || key === 'headmove'
-    || key === 'amove'
-    || key === 'abarmove'
-    || key === 'achain'
-    || key === 'whchain'
-    || key === 'abarchain'
-    || key === 'headchain'
-  ) {
-    return true;
+/*
+ * Exact folded-identity movement classification. The substring/regex fallback
+ * that used to live here drew movement arrows for authored non-movement
+ * relations (an authored `CliticCluster` or `FocusShift` matched the
+ * pattern). Classification now consults the declared exact identity set and
+ * nothing else. Unlisted names are not movement — they dispatch through the
+ * exact registry and, when unregistered, take the neutral fallback
+ * presentation.
+ */
+const isMoveLikeOperation = (operation?: DerivationStep['operation'] | string): boolean =>
+  isMovementIdentity(String(operation || ''));
+
+const isResolvedMovementLink = (link?: ResolvedRelationLink | null): boolean => {
+  if (!link) return false;
+  if (link.renderFamily === 'trajectory') return true;
+  if (normalizeTrajectoryKind(link.trajectoryKind)) return true;
+  if (String((link as ReplayAuthoredRelationLink).authoredRelationKey || '').trim()) {
+    return isRegisteredTrajectoryRelation(link.relation);
   }
-  return /(?:move|movement|raise|lower|front|displac|extract|shift|scrambl|rollup|sideward|incorpor|clitic|affix|remnant|piedpip|topicaliz|focaliz|extraposit|atb|remerge|copy|chain|dependency|wh|abar)/i.test(key);
+  return isMoveLikeOperation(link.relation || link.operation);
 };
 
 export const stepRepresentsMovement = (step?: PlaybackStep | null): boolean => {
@@ -4639,7 +4832,7 @@ export const buildFirstRevealNodeStepIndex = (steps: PlaybackStep[]): Map<string
 };
 
 const resolveMovementStepForLink = (
-  link: ResolvedVisualRelation,
+  link: ResolvedRelationLink,
   nodeStepIndex: Map<string, number>,
   lastStep: number
 ): number | undefined => {
@@ -4666,12 +4859,12 @@ const resolveMovementStepForLink = (
 
 const resolveVisibleMovementTargetNode = (
   nodeById: Map<string, HierNode>,
-  link: ResolvedVisualRelation
+  link: ResolvedRelationLink
 ): HierNode | undefined => nodeById.get(String(link?.targetNodeId || '').trim());
 
 export const buildDisplayRelationLinks = (
-  resolvedRelationLinks: ResolvedVisualRelation[] | undefined
-): ResolvedVisualRelation[] =>
+  resolvedRelationLinks: ResolvedRelationLink[] | undefined
+): ResolvedRelationLink[] =>
   (resolvedRelationLinks || []).map((link) => ({
     ...link,
     relationIndex: String(link?.relationIndex || '').trim(),
@@ -4686,7 +4879,7 @@ export const buildDisplayRelationLinks = (
 
 export const buildMovementArrowsFromLinks = (
   visibleNodes: HierNode[],
-  resolvedRelationLinks: ResolvedVisualRelation[] | undefined,
+  resolvedRelationLinks: ResolvedRelationLink[] | undefined,
   nodeStepIndex: Map<string, number>,
   playbackSteps: PlaybackStep[]
 ): MovementArrow[] => {
@@ -4704,6 +4897,26 @@ export const buildMovementArrowsFromLinks = (
         return isTraceLike(surface) || isNullLike(surface);
       });
   };
+  /*
+   * The fail-closed endpoint law, preserving Babel's established head-versus-
+   * phrasal endpoint convention.
+   *
+   * - Phrasal movement departs from the authored lower trace TERMINAL (the
+   *   witness's display leaf) and lands on the authored landing PHRASE SHELL.
+   *   A phrasal link without a resolvable witness draws nothing — no other
+   *   leaf or shell is ever substituted.
+   * - Head movement (including reverse-direction head lowering) runs
+   *   terminal-to-terminal: from the trace terminal to the pronounced head
+   *   terminal, never a C/T/V preterminal shell.
+   *
+   * The only descent permitted is display resolution *inside the anchored
+   * node's own subtree*: an authored anchor often names a preterminal whose
+   * visible word replay materialized as a terminal child, and resolving that
+   * child is deterministic interpretation of the same authored anchor. The
+   * old ladder — any trace-like leaf anywhere, else any overt leaf, else an
+   * ancestor phrase shell — chose endpoints the analysis never pointed at,
+   * and is gone.
+   */
   const pickOvertLeafDescendant = (node?: HierNode): HierNode | undefined => {
     if (!node) return undefined;
     return node
@@ -4718,67 +4931,51 @@ export const buildMovementArrowsFromLinks = (
           && !isStructuralCategorySurface(surface);
       });
   };
-  const resolveArrowAnchorNode = (node?: HierNode): HierNode | undefined => {
+  const resolveWitnessDisplayLeaf = (node?: HierNode): HierNode | undefined => {
     if (!node) return undefined;
-    // Keep curved movement links attached to visible leaves or traces, not broad phrase shells.
-    // This avoids arrows "piercing" v'/DP shells in cumulative replay frames.
-    return pickTraceLikeLeafDescendant(node)
-      || pickOvertLeafDescendant(node)
-      || node;
+    return pickTraceLikeLeafDescendant(node) || node;
   };
-  const countRenderableLeafDescendants = (node?: HierNode): number => {
-    if (!node) return 0;
-    return node
-      .descendants()
-      .filter((candidate) => {
-        const children = candidate.children || [];
-        if (children.length > 0) return false;
-        const surface = resolveLeafSurface(candidate);
-        return Boolean(surface) && !isStructuralCategorySurface(surface);
-      })
-      .length;
-  };
-  const resolvePhrasalArrowAnchorNode = (node?: HierNode): HierNode | undefined => {
+  const resolveHeadTerminalDisplayLeaf = (
+    node?: HierNode,
+    preferTrace = false
+  ): HierNode | undefined => {
     if (!node) return undefined;
-    let phraseShell: HierNode | undefined;
-    let cursor: HierNode | undefined = node;
-    while (cursor && !phraseShell) {
-      if (isPhraseShellLabel(cursor.data?.label)) phraseShell = cursor;
-      cursor = cursor.parent || undefined;
-    }
-    if (phraseShell) {
-      const structuralChildSlots = (phraseShell.children || [])
-        .filter((child) => (child.data as any)?.replayLayoutOnly !== true)
-        .length;
-      if (structuralChildSlots > 1 || countRenderableLeafDescendants(phraseShell) > 1) {
-        return phraseShell;
-      }
-    }
-    // For phrase movement, anchor multi-leaf constituents on the phrase shell so
-    // the arrow reads as XP movement rather than as a leaf-to-leaf trace jump.
-    if (countRenderableLeafDescendants(node) > 1) return node;
-    return resolveArrowAnchorNode(node);
+    if (!(node.children || []).length) return node;
+    return preferTrace
+      ? (pickTraceLikeLeafDescendant(node) || pickOvertLeafDescendant(node))
+      : (pickOvertLeafDescendant(node) || pickTraceLikeLeafDescendant(node));
   };
   const displayLinks = buildDisplayRelationLinks(resolvedRelationLinks);
   const arrows: MovementArrow[] = [];
   const seen = new Set<string>();
   const lastStep = playbackSteps.length > 0 ? playbackSteps.length - 1 : 0;
 
-  displayLinks.forEach((link) => {
+  displayLinks.filter(isResolvedMovementLink).forEach((link) => {
     const rawSource = nodeById.get(String(link.sourceNodeId || '').trim());
     const rawTarget = resolveVisibleMovementTargetNode(nodeById, link);
-    const rawTraceNode = link.witnessNodeId
-      ? nodeById.get(String(link.witnessNodeId).trim()) || undefined
+    const authoredWitnessId = String(link.witnessNodeId || '').trim();
+    const rawTraceNode = authoredWitnessId
+      ? nodeById.get(authoredWitnessId) || undefined
       : undefined;
+    // An authored witness that does not resolve fails the arrow closed.
+    if (authoredWitnessId && !rawTraceNode) return;
     const traceLeaf = rawTraceNode ? pickTraceLikeLeafDescendant(rawTraceNode) : undefined;
     const traceNode = traceLeaf || rawTraceNode;
     const linkLooksHeadLike = isHeadLikeResolvedRelation(link, nodeById);
+    /*
+     * Head movement runs terminal-to-terminal: the trace terminal (witness
+     * first, else the source anchor's own display terminal) to the pronounced
+     * head terminal inside the authored target — never a preterminal shell.
+     * Phrasal movement departs from the witness's trace terminal and lands on
+     * the authored landing phrase shell; without a resolvable witness the
+     * phrasal drawing is refused rather than repaired from another node.
+     */
     const displaySource = linkLooksHeadLike
-      ? (traceLeaf || resolveArrowAnchorNode(rawSource))
-      : (resolvePhrasalArrowAnchorNode(rawSource) || traceLeaf || resolveArrowAnchorNode(rawSource));
+      ? (resolveWitnessDisplayLeaf(rawTraceNode) || resolveHeadTerminalDisplayLeaf(rawSource, true))
+      : resolveWitnessDisplayLeaf(rawTraceNode);
     const displayTarget = linkLooksHeadLike
-      ? resolveArrowAnchorNode(rawTarget)
-      : resolvePhrasalArrowAnchorNode(rawTarget);
+      ? resolveHeadTerminalDisplayLeaf(rawTarget)
+      : rawTarget;
     if (!displaySource || !displayTarget) return;
     const sourceId = getNodeId(displaySource);
     const targetId = getNodeId(displayTarget);
@@ -5245,7 +5442,7 @@ const getFrameStageRecordText = (
   ).trim();
 };
 
-export const getFrameVisualRelations = (
+export const getFrameRelations = (
   frame?: ReplayDerivationFrame | null,
   plannedStage?: DerivationReplayPlanStage | null
 ): DerivationReplayPlanStep[] => {
@@ -5257,8 +5454,8 @@ export const getFrameVisualRelations = (
     : Array.isArray(frame?.after?.workspaceForest)
       ? frame.after.workspaceForest
       : [];
-  const relations = Array.isArray(details.derivationStageVisualRelations)
-    ? details.derivationStageVisualRelations
+  const relations = Array.isArray(details.derivationStageRelations)
+    ? details.derivationStageRelations
     : [];
   return relations
     .map<DerivationReplayPlanStep | null>((relation, authoredRelationIndex) => {
@@ -5269,10 +5466,18 @@ export const getFrameVisualRelations = (
         ? relationRecord.anchors as Record<string, unknown>
         : {};
       if (!label) return null;
+      const priorAnchors = relationRecord.priorAnchors && typeof relationRecord.priorAnchors === 'object' && !Array.isArray(relationRecord.priorAnchors)
+        ? relationRecord.priorAnchors as Record<string, string | string[]>
+        : undefined;
+      const values = relationRecord.values && typeof relationRecord.values === 'object' && !Array.isArray(relationRecord.values)
+        ? relationRecord.values as Record<string, string | string[]>
+        : undefined;
       return {
         kind: 'relation',
         relation: label,
         anchors,
+        ...(priorAnchors ? { priorAnchors } : {}),
+        ...(values ? { values } : {}),
         authoredRelationIndex,
         resolvedAnchors: resolveRelationAnchors(
           anchors,
@@ -5283,7 +5488,7 @@ export const getFrameVisualRelations = (
     .filter((relation): relation is DerivationReplayPlanStep => relation !== null);
 };
 
-export const isRenderableReplayVisualRelation = (
+export const isRenderableReplayRelation = (
   relation?: DerivationReplayPlanStep | null
 ): boolean => (
   Boolean(String(relation?.relation || '').trim())
@@ -5293,7 +5498,7 @@ export const isRenderableReplayVisualRelation = (
 
 const getResolvedReplayRelationAnchors = (
   relation?: DerivationReplayPlanStep | null
-): ReplayResolvedVisualRelationAnchor[] => (
+): ReplayResolvedRelationAnchor[] => (
   Array.isArray(relation?.resolvedAnchors)
     ? relation.resolvedAnchors
         .filter((anchor) => Boolean(String(anchor?.nodeId || '').trim()))
@@ -5305,11 +5510,11 @@ const getResolvedReplayRelationAnchors = (
     : []
 );
 
-const getVisualRelationTargetNodeId = (
+const getRelationTargetNodeId = (
   relation?: DerivationReplayPlanStep | null
 ): string => String(relation?.targetNodeId || '').trim();
 
-const getVisualRelationSourceNodeIds = (
+const getRelationSourceNodeIds = (
   relation?: DerivationReplayPlanStep | null
 ): string[] => (
   Array.isArray(relation?.sourceNodeIds)
@@ -5319,13 +5524,21 @@ const getVisualRelationSourceNodeIds = (
     : []
 );
 
-export const getVisualRelationAllAnchorNodeIds = (
+export const getRelationAllAnchorNodeIds = (
   relation?: DerivationReplayPlanStep | null
 ): string[] => getResolvedReplayRelationAnchors(relation)
   .map((anchor) => String(anchor.nodeId || '').trim())
   .filter(Boolean);
 
-const visualRelationAnchorsExistInForest = (
+const findResolvedReplayAnchorByRoles = (
+  anchors: ReplayResolvedRelationAnchor[],
+  roles: readonly string[]
+): ReplayResolvedRelationAnchor | undefined => {
+  const wantedRoles = new Set(roles.map((role) => role.toLowerCase()));
+  return anchors.find((anchor) => wantedRoles.has(String(anchor.role || '').trim().toLowerCase()));
+};
+
+const relationAnchorsExistInForest = (
   forest: SyntaxNode[],
   targetNodeId: string,
   sourceNodeId: string
@@ -5336,7 +5549,7 @@ const visualRelationAnchorsExistInForest = (
   && Boolean(findExactNodeByIdInForest(forest, sourceNodeId))
 );
 
-export const resolveVisualRelationAnchorNodeId = (
+export const resolveRelationAnchorNodeId = (
   forest: SyntaxNode[],
   rawNodeId: string,
   _role: 'source' | 'target'
@@ -5374,25 +5587,25 @@ const getSharedAuthoredLineageIdentity = (
     : '';
 };
 
-export const buildAuthoredVisualRelationRelationLinksForFrames = (
+export const buildAuthoredRelationLinksForFrames = (
   frames: ReplayDerivationFrame[],
   replayPlan: DerivationReplayPlan | null | undefined,
   activeFrameIndex: number,
   forest: SyntaxNode[],
   currentFrameRelationLimit: number = Number.POSITIVE_INFINITY
-): ResolvedVisualRelation[] => {
+): ResolvedRelationLink[] => {
   if (!Array.isArray(frames) || activeFrameIndex < 0) return [];
-  const links: ResolvedVisualRelation[] = [];
+  const links: ResolvedRelationLink[] = [];
 
   for (let frameIndex = 0; frameIndex <= Math.min(activeFrameIndex, frames.length - 1); frameIndex += 1) {
     const plannedStage = getReplayPlanStage(replayPlan, frameIndex);
-    const relations = getFrameVisualRelations(frames[frameIndex], plannedStage);
+    const relations = getFrameRelations(frames[frameIndex], plannedStage);
     const relationLimit = frameIndex === activeFrameIndex
       ? currentFrameRelationLimit
       : Number.POSITIVE_INFINITY;
 
     relations.forEach((relation, relationIndex) => {
-      if (relationIndex > relationLimit || !isRenderableReplayVisualRelation(relation)) return;
+      if (relationIndex > relationLimit || !isRenderableReplayRelation(relation)) return;
       const relationLabel = String(relation.relation || '').trim();
       const resolvedAnchors = getResolvedReplayRelationAnchors(relation)
         .filter((anchor) => (
@@ -5400,6 +5613,17 @@ export const buildAuthoredVisualRelationRelationLinksForFrames = (
         ));
       if (resolvedAnchors.length === 0) return;
       const [firstAnchor, secondAnchor] = resolvedAnchors;
+      const trajectoryKind = registeredTrajectoryDisplayKind(relationLabel);
+      const movementRelation = Boolean(trajectoryKind);
+      const sourceAnchor = movementRelation
+        ? findResolvedReplayAnchorByRoles(resolvedAnchors, TRAJECTORY_SOURCE_ROLES) || firstAnchor
+        : firstAnchor;
+      const targetAnchor = movementRelation
+        ? findResolvedReplayAnchorByRoles(resolvedAnchors, TRAJECTORY_TARGET_ROLES) || secondAnchor
+        : secondAnchor;
+      const witnessAnchor = movementRelation
+        ? findResolvedReplayAnchorByRoles(resolvedAnchors, TRAJECTORY_WITNESS_ROLES)
+        : undefined;
       const authoredRelationIndex = Number.isInteger(relation.authoredRelationIndex)
         ? Number(relation.authoredRelationIndex)
         : relationIndex;
@@ -5415,20 +5639,31 @@ export const buildAuthoredVisualRelationRelationLinksForFrames = (
           role: anchor.role,
           nodeId: anchor.nodeId
         })),
+        // Authored optional blocks travel verbatim on the link.
+        ...(relation.priorAnchors && typeof relation.priorAnchors === 'object'
+          ? { priorAnchors: structuredClone(relation.priorAnchors) }
+          : {}),
+        ...(relation.values && typeof relation.values === 'object'
+          ? { values: structuredClone(relation.values) }
+          : {}),
         authoredRelationIndex,
         authoredRelationKey: `${frameIndex}:${authoredRelationIndex}`,
-        ...(secondAnchor
+        ...(targetAnchor
           ? {
-              sourceNodeId: firstAnchor.nodeId,
-              targetNodeId: secondAnchor.nodeId,
-              endpointOrderProvenance: 'authored-anchor-order'
+              sourceNodeId: sourceAnchor.nodeId,
+              targetNodeId: targetAnchor.nodeId,
+              ...(witnessAnchor ? { witnessNodeId: witnessAnchor.nodeId } : {}),
+              endpointOrderProvenance: movementRelation
+                ? 'registered-role-order'
+                : 'authored-anchor-order'
             }
           : {}),
-        renderFamily: secondAnchor
-          ? 'authored-anchor-link'
-          : 'authored-anchor-evidence',
+        renderFamily: movementRelation
+          ? 'trajectory'
+          : (targetAnchor ? 'authored-anchor-link' : 'authored-anchor-evidence'),
+        ...(trajectoryKind ? { trajectoryKind } : {}),
         stepIndex: frameIndex,
-        operation: 'VisualRelation',
+        operation: 'Relation',
         ...(identityKey
           ? {
               identityKey,
@@ -5443,12 +5678,12 @@ export const buildAuthoredVisualRelationRelationLinksForFrames = (
   return links;
 };
 
-const mergeResolvedVisualRelationLinks = (
-  committedLinks: ResolvedVisualRelation[] = [],
-  activeLinks: ResolvedVisualRelation[] = []
-): ResolvedVisualRelation[] => {
-  const merged = new Map<string, ResolvedVisualRelation>();
-  const buildKey = (link: ResolvedVisualRelation): string => {
+const mergeResolvedRelationLinkLinks = (
+  committedLinks: ResolvedRelationLink[] = [],
+  activeLinks: ResolvedRelationLink[] = []
+): ResolvedRelationLink[] => {
+  const merged = new Map<string, ResolvedRelationLink>();
+  const buildKey = (link: ResolvedRelationLink): string => {
     const chainId = String(link?.chainId || '').trim();
     if (chainId) return `chain:${chainId}`;
     return [
@@ -5466,7 +5701,7 @@ const mergeResolvedVisualRelationLinks = (
   return Array.from(merged.values());
 };
 
-const formatVisualRelationAnchorValue = (
+const formatRelationAnchorValue = (
   value: unknown,
   replayCanvasData?: SyntaxNode | null
 ): string => {
@@ -5486,7 +5721,7 @@ const formatVisualRelationAnchorValue = (
     .join(', ');
 };
 
-const formatVisualRelationAnchorRole = (role: string): string =>
+const formatRelationAnchorRole = (role: string): string =>
   toReplayTitleCase(
     String(role || '')
       .trim()
@@ -5494,7 +5729,7 @@ const formatVisualRelationAnchorRole = (role: string): string =>
       .replace(/[_-]+/g, ' ')
   );
 
-const buildVisualRelationReplayLine = (
+const buildRelationReplayLine = (
   relation: DerivationReplayPlanStep,
   replayCanvasData?: SyntaxNode | null
 ): string => {
@@ -5504,9 +5739,9 @@ const buildVisualRelationReplayLine = (
     : {};
   const anchorParts = Object.entries(anchors)
     .map(([role, value]) => {
-      const display = formatVisualRelationAnchorValue(value, replayCanvasData);
+      const display = formatRelationAnchorValue(value, replayCanvasData);
       if (!display) return '';
-      const roleLabel = formatVisualRelationAnchorRole(role);
+      const roleLabel = formatRelationAnchorRole(role);
       return roleLabel ? `${roleLabel}: ${display}` : display;
     })
     .filter(Boolean);
@@ -5523,16 +5758,16 @@ const buildStageRecordReplayBlocks = (
   return [{ title: 'Stage Record', lines: [stageRecord] }];
 };
 
-const buildVisualRelationReplayBlocks = (
+const buildRelationReplayBlocks = (
   relations: DerivationReplayPlanStep[] = [],
   replayCanvasData?: SyntaxNode | null
 ): ReplayDetailBlock[] | undefined => {
   const lines = relations
-    .filter(isRenderableReplayVisualRelation)
-    .map((relation) => buildVisualRelationReplayLine(relation, replayCanvasData))
+    .filter(isRenderableReplayRelation)
+    .map((relation) => buildRelationReplayLine(relation, replayCanvasData))
     .filter(Boolean);
   if (lines.length === 0) return undefined;
-  return [{ title: 'Visual Relations', lines }];
+  return [{ title: 'Relations', lines }];
 };
 
 const buildFrameReplayBlocks = (
@@ -5542,7 +5777,7 @@ const buildFrameReplayBlocks = (
 ): ReplayDetailBlock[] | undefined => (
   mergeReplayDetailBlocks(
     buildStageRecordReplayBlocks(frame, plannedStage),
-    buildVisualRelationReplayBlocks(getFrameVisualRelations(frame, plannedStage), replayCanvasData)
+    buildRelationReplayBlocks(getFrameRelations(frame, plannedStage), replayCanvasData)
   )
 );
 
@@ -5865,7 +6100,7 @@ const getTerminalWords = (node: SyntaxNode): string[] => {
 };
 
 export const buildMovementProtectedNodeIds = (
-  resolvedRelationLinks?: ResolvedVisualRelation[]
+  resolvedRelationLinks?: ResolvedRelationLink[]
 ): Set<string> => {
   const protectedIds = new Set<string>();
   (resolvedRelationLinks || []).forEach((link) => {
@@ -5942,10 +6177,10 @@ export const __TEST_ONLY__ = {
   buildDerivationReplaySnapshot,
   formatPlaybackOperationTitle,
   maybeLowercaseSentenceInitialFunctionSurface,
-  getFrameVisualRelations,
-  getVisualRelationAllAnchorNodeIds,
-  isRenderableReplayVisualRelation,
-  resolveVisualRelationAnchorNodeId,
+  getFrameRelations,
+  getRelationAllAnchorNodeIds,
+  isRenderableReplayRelation,
+  resolveRelationAnchorNodeId,
   materializeReplayPreterminals,
   materializeNullBearingLeaves,
   materializeCanopyPreterminals
