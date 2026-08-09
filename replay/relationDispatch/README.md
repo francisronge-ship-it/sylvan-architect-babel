@@ -4,8 +4,8 @@ This directory is model-invisible and renderer-neutral.
 
 - `productionRegistry.js` is the versioned production registry. Version 0 was
   born empty; version 1 carries the accepted, production-wired identities and
-  role signatures of the visual grammar. Render families, persistence, and
-  geometry stay outside it, in `replay/relations/`.
+  role signatures of the relation drawing grammar. Render families,
+  persistence, and geometry stay outside it, in `replay/relations/`.
 - `relationRegistry.js` accepts exact identities plus explicitly declared
   case/whitespace folding. It rejects fuzzy matchers, undeclared licensing
   fields, and renderer-specific entry data.

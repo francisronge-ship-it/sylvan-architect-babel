@@ -1,10 +1,13 @@
-# Plan 009: Classify open visualRelations into finite render families (design-doc increment 1)
+# Plan 009: Historical relation render-family classifier
 
-> **Executor instructions**: Follow this plan step by step. Run every
-> verification command and confirm the expected result before moving to the
-> next step. If anything in the "STOP conditions" section occurs, stop and
-> report — do not improvise. When done, update the status row for this plan
-> in `plans/README.md`.
+> **Do not execute this plan.** It is retained as the July 2026 audit record.
+> The proposed name-cue classifier and invisible `unknown` result were
+> superseded by Babel's completed production relation pipeline.
+
+> **Historical executor instructions (retained, inactive):** The remaining
+> sections describe the rejected July proposal. They are evidence for why the
+> current exact-registry plus neutral-fallback architecture replaced it, not
+> instructions for future work.
 >
 > **Drift check (run first)**: `git diff --stat 8997d92..HEAD -- server/babelParser/parseNormalization.js types.ts visualRelationLinks.ts docs/design/babel-visual-relations-research.md`
 > Written against a **dirty working tree** at commit `8997d92`
@@ -13,7 +16,10 @@
 
 ## Status
 
-- **Status**: DEFERRED — the open-ontology renderer direction remains valid, but it is outside the legacy parser cleanup.
+- **Status**: SUPERSEDED — production now dispatches exact registered relation
+  identities to source-backed render families and sends every unregistered
+  identity to the accepted neutral topology-only fallback. Unknown relations
+  are therefore visible without Babel guessing their linguistic meaning.
 - **Priority**: P2
 - **Effort**: M (server classifier + tests; renderer families are follow-ups)
 - **Risk**: MED (benchmark-neutrality constraints — read "Hard constraints")
@@ -22,6 +28,36 @@
   churn); renderer follow-ups depend on plans/008.
 - **Category**: direction
 - **Planned at**: commit `8997d92` (dirty tree), 2026-07-05
+
+## Closure (2026-08-08)
+
+The architectural objective is complete, but not by the implementation this
+historical plan proposed:
+
+- The authored stage field is `relations`; there is no authored
+  `visualRelations` field and no top-level `resolvedVisualRelations` audit
+  ledger.
+- `replay/relationDispatch/productionRegistry.js` performs exact registered
+  identity dispatch. It does not classify by substring or name cue.
+- `replay/relations/renderFamilies.ts` maps registered identities to finite,
+  source-backed production drawing families and explicit persistence rules.
+- `replay/relations/fallbackTopology.ts` gives every unregistered relation a
+  neutral topology-only drawing. It never invents direction, labels, values,
+  or movement.
+- `replay/relations/renderPlanCompiler.ts` compiles all authored relation
+  instances, including multiple instances and multiple ordered steps.
+- `replay/relations/geometryBinding.ts` binds the plan to measured D3/SVG tree
+  coordinates and fails closed when required geometry is unavailable.
+- `components/TreeVisualizer.tsx` renders the bound marks in the shared
+  zoom/pan group and reveals them by exact Replay `{stageIndex,
+  relationIndex}` identity.
+- `tests/relationProductionCoverage.test.mjs` verifies that every accepted
+  relation identity is production-wired or explicitly excluded with a reason.
+
+Current completion gates are the focused relation suites plus
+`npm run verify:all` and `npm run build`. The original checklist below remains
+unchecked because it describes the rejected classifier implementation, not
+the system that shipped.
 
 ## Why this matters
 

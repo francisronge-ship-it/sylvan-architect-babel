@@ -29,9 +29,9 @@ Use Node 24.x and ESM. Replay tests import `.ts` modules through Node's built-in
 
 ## Invariants
 
-- `derivationStages` is the sole model-authored derivation source. Every stage has exactly `statement`, `stageRecord`, `visualRelations`, and `workspaceForest`.
-- Final trees, surface order, resolved visual relations, replay steps, and Notes are derived from those stages. Do not reintroduce parallel authored ledgers, growth frames, commitment graphs, or compatibility aliases.
-- `visualRelations` uses an open ontology. Keep model-facing relation and anchor names open; finite classifications belong in derived renderer logic.
+- `derivationStages` is the sole model-authored derivation source. Every stage has exactly `statement`, `stageRecord`, `relations`, and `workspaceForest`.
+- Final trees, surface order, relation render plans, replay steps, and Notes are derived from those stages. Do not reintroduce parallel authored ledgers, growth frames, commitment graphs, or compatibility aliases.
+- `relations` uses an open ontology. Keep model-facing relation and anchor names open; finite classifications belong in derived renderer logic.
 - Notes are the ordered non-empty `derivationStages[].stageRecord` values.
 - Tree Bank is browser-local and stores only current parse artifacts and approved bundle metadata. Do not add server parse persistence or logging as a side effect.
 - Keep provider request shapes and routes stable unless a scoped behavior change is explicitly intended and verified.

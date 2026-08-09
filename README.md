@@ -175,7 +175,7 @@ It includes:
 - Timeline scrubber with sprout slider
 - Operation labels per step
 - Workspace-forest state updates
-- Open `visualRelations` rendered when Babel has a supported visual treatment
+- Open `relations` rendered when Babel has a supported visual treatment
 - Trace visibility for derivation inspection
 
 This view is designed to expose process, not just endpoint.
@@ -197,10 +197,10 @@ The authored model output is exactly `derivationStages`. Every stage has exactly
 
 - `statement`
 - `stageRecord`
-- `visualRelations`
+- `relations`
 - `workspaceForest`
 
-Babel validates those stages, replays them, and derives the committed tree, surface order, resolved visual-relation records, and replay steps. Relation names and anchor-role names remain open rather than being projected into a fixed ontology.
+Babel validates those stages, replays them, and derives the committed tree, surface order, relation render plans, and replay steps. Relation names and anchor-role names remain open rather than being projected into a fixed ontology.
 
 These outputs are intended for both human reading and downstream inspection workflows.
 

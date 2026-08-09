@@ -53,8 +53,8 @@ backlog, all twelve planned findings got plan files rather than only the top
 | 005 | Vercel parse-API abuse controls + token-gate doc fix | P1 | M | — | REJECTED — stale Vercel production surface withdrawn |
 | 006 | Benchmark-grade provenance (timing, effort, gen config, contract hash, validation outcomes) | P1 | M | 003 | TODO |
 | 007 | Cancel orphaned OpenAI background jobs on abort | P2 | S | 003 | TODO |
-| 008 | Extract replay compiler from TreeVisualizer.tsx into `replay/` | P2 | L | 002, 003 | TODO |
-| 009 | Relation render-family classifier (open ontology → finite renderer families) | P2 | M | 003; 006 recommended first | DEFERRED — valid renderer direction, outside this cleanup |
+| 008 | Extract replay compiler from TreeVisualizer.tsx into `replay/` | P2 | L | 002, 003 | DONE — compiler and snapshots are extracted; TreeVisualizer now owns rendering only |
+| 009 | Relation renderer compiler (open ontology → exact drawings or neutral fallback) | P2 | M | 003; 008 | SUPERSEDED — completed by the production relation pipeline; do not execute the old name-cue classifier |
 | 010 | Parse-corpus logging deliverable on Vercel (drop `new Function` import) | P3 | S | 003 (soft) | SUPERSEDED — old parse logging removed |
 | 011 | Table-driven ledger registry (28-kind lockstep removal) | P3 | L | 003 (hard), 006 first | SUPERSEDED — fixed ledger architecture removed |
 | 012 | AGENTS.md agent-onboarding file | P3 | S | — (write last, reflect landed plans) | TODO |
@@ -121,12 +121,15 @@ BLOCKED (one-line reason) | REJECTED (one-line rationale).
 - **Client-side parse cancellation** (`App.tsx:1474-1502` has no
   AbortController; parses can run minutes with no way to cancel). Pairs with
   plan 007's server-side cancel.
-- **Rewrite `scripts/verifyReplayRegression.mjs`** to test the extracted
-  replay compiler directly against fixtures (unlocked by plan 008), retiring
-  the machine-local Playwright-capture dependency.
-- **Renderer increments for classified families** (after 008+009): `domain`
-  regions → `identity` lineage links → `feature` bundles, gated by the design
-  doc's Relation Lens Rule.
+- **Historical replay verifier cleanup:** `scripts/verifyReplayRegression.mjs`
+  still reads old captured render artifacts, but it is no longer a product or
+  completion gate. The extracted compiler is covered directly by committed
+  replay snapshots and the provider-free test suite.
+- **Relation renderer increments are complete:** active accepted relation
+  identities are production-wired, unregistered identities use the accepted
+  neutral fallback, and Replay timing/lens behavior is covered by focused
+  tests. See Plan 009's closure note and the committed `replay/relations/`
+  modules.
 - **Committed benchmark runner** (direction): a `bench/` harness with
   versioned sentence suites, provider matrix, and structural-coherence
   scoring, promoting the `.artifacts/` gauntlets from local scripts to the
