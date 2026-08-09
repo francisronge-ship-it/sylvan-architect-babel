@@ -18,7 +18,7 @@ const volatileProvenanceFields = Object.freeze([
 const authoredStageFields = Object.freeze([
   'statement',
   'stageRecord',
-  'visualRelations',
+  'relations',
   'workspaceForest'
 ]);
 const packetArtifacts = Object.freeze([
@@ -204,7 +204,7 @@ const describeFailure = (run) => {
 const makeMinimalStage = () => ({
   statement: 'The input is represented as one terminal.',
   stageRecord: 'The single overt terminal is represented as a complete minimal derivation tree.',
-  visualRelations: [],
+  relations: [],
   workspaceForest: [
     {
       children: [],
@@ -342,7 +342,7 @@ async function buildSemanticBaseline(packetDir) {
       ),
       unresolvedRelationAnchor: describeFailure(() => {
         const payload = clone(malformedSource.payload);
-        payload.derivationStages.at(-1).visualRelations.push({
+        payload.derivationStages.at(-1).relations.push({
           anchors: { witness: 'missing-node-id' },
           relation: 'baseline-unresolved-anchor'
         });

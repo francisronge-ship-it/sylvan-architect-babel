@@ -18,7 +18,6 @@ const CURRENT_PROVENANCE_FIELDS = [
   'payloadTranscriberOutputTokenCount',
   'payloadTranscriberTotalTokenCount',
   'hasDerivationStages',
-  'hasResolvedVisualRelations',
   'parsePromptTokenCount',
   'parseOutputTokenCount',
   'parseTotalTokenCount',
@@ -31,7 +30,6 @@ const CURRENT_ANALYSIS_FIELDS = [
   'tree',
   'surfaceOrder',
   'derivationStages',
-  'resolvedVisualRelations',
   'derivationSteps',
   'provenance'
 ];

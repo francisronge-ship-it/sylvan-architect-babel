@@ -34,7 +34,7 @@ const buildSingleStagePayload = (workspaceForest, statement = 'The authored stru
   derivationStages: [{
     statement,
     stageRecord: 'The authored workspace is the complete provider-free syntactic evidence for this convergent stage.',
-    visualRelations: [],
+    relations: [],
     workspaceForest
   }]
 });
@@ -216,7 +216,7 @@ test('compiler rejects anchor-value aliases instead of silently rewriting them',
     tokenIndex: 0,
     children: []
   }]);
-  payload.derivationStages[0].visualRelations = [{
+  payload.derivationStages[0].relations = [{
     relation: 'authored-relation',
     anchors: {
       witness: { nodeId: 'mia' }
@@ -266,24 +266,17 @@ test('render plan keeps bare relation endpoints authored without null or trace s
       }
     ]
   }], 'The authored head relation converges.');
-  payload.derivationStages[0].visualRelations = [{
+  payload.derivationStages[0].relations = [{
     relation: 'head-movement',
     anchors: { source: 't', landing: 'c' }
   }];
 
   const bundle = normalize(payload, 'Mia');
   const analysis = bundle.analyses[0];
-  const [resolvedRelation] = analysis.resolvedVisualRelations;
-  assert.equal(resolvedRelation.renderFamily, 'unknown');
-  assert.equal(resolvedRelation.renderable, false);
-  assert.equal(Object.hasOwn(resolvedRelation, 'sourceNodeId'), false);
-  assert.equal(Object.hasOwn(resolvedRelation, 'targetNodeId'), false);
+  const [authoredRelation] = analysis.derivationStages[0].relations;
   assert.deepEqual(
-    resolvedRelation.anchors.map(({ role, nodeId }) => ({ role, nodeId })),
-    [
-      { role: 'source', nodeId: 't' },
-      { role: 'landing', nodeId: 'c' }
-    ]
+    authoredRelation,
+    { relation: 'head-movement', anchors: { source: 't', landing: 'c' } }
   );
   const replayPlan = buildDerivationReplayPlan({
     derivationStages: analysis.derivationStages

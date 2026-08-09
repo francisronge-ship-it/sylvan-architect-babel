@@ -57,16 +57,25 @@ export const resolveRelationAnchors = (anchors = {}, workspaceForest = []) => {
   });
 };
 
-const normalizeVisualRelations = (value) => asArray(value)
+const isPlainRecord = (value) => (
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+);
+
+const normalizeRelations = (value) => asArray(value)
   .map((relation) => {
     const label = asText(relation?.relation);
-    const anchors = relation?.anchors && typeof relation.anchors === 'object' && !Array.isArray(relation.anchors)
-      ? relation.anchors
-      : {};
+    const anchors = isPlainRecord(relation?.anchors) ? relation.anchors : {};
     if (!label) return null;
     return {
       relation: label,
-      anchors: cloneJson(anchors)
+      anchors: cloneJson(anchors),
+      // Authored optional blocks travel verbatim through the plan.
+      ...(isPlainRecord(relation?.priorAnchors)
+        ? { priorAnchors: cloneJson(relation.priorAnchors) }
+        : {}),
+      ...(isPlainRecord(relation?.values)
+        ? { values: cloneJson(relation.values) }
+        : {})
     };
   })
   .filter(Boolean);
@@ -78,7 +87,7 @@ const normalizeStage = (stage, index) => {
     stepId: `stage-${index + 1}`,
     statement: asText(stage?.statement),
     stageRecord: asText(stage?.stageRecord),
-    visualRelations: normalizeVisualRelations(stage?.visualRelations),
+    relations: normalizeRelations(stage?.relations),
     workspaceForest: asArray(stage?.workspaceForest)
   };
 };
@@ -148,12 +157,14 @@ const buildNodeMicrosteps = (node, stage, path = []) => {
 const buildStageMicrosteps = (stage) =>
   stage.workspaceForest.flatMap((root, rootIndex) => buildNodeMicrosteps(root, stage, [String(rootIndex)]));
 
-const buildRelationSteps = (stage) => stage.visualRelations.map((relation, authoredRelationIndex) => (
+const buildRelationSteps = (stage) => stage.relations.map((relation, authoredRelationIndex) => (
   makeStep('relation', stage, {
-    operation: 'VisualRelation',
+    operation: 'Relation',
     label: relation.relation,
     relation: relation.relation,
     anchors: cloneJson(relation.anchors),
+    ...(relation.priorAnchors ? { priorAnchors: cloneJson(relation.priorAnchors) } : {}),
+    ...(relation.values ? { values: cloneJson(relation.values) } : {}),
     authoredRelationIndex,
     resolvedAnchors: resolveRelationAnchors(
       relation.anchors,
@@ -168,7 +179,7 @@ const buildMacroStep = (stage) => makeStep('macro', stage, {
   label: stage.statement || `Stage ${stage.stageNumber}`,
   stageRecord: stage.stageRecord,
   workspaceForest: cloneJson(stage.workspaceForest),
-  visualRelations: cloneJson(stage.visualRelations)
+  relations: cloneJson(stage.relations)
 });
 
 const addStageProgress = (stages) => {

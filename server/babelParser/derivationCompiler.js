@@ -14,7 +14,7 @@ export const createDerivationCompilerHelpers = ({
   const REQUIRED_STAGE_FIELDS = Object.freeze([
     'statement',
     'stageRecord',
-    'visualRelations',
+    'relations',
     'workspaceForest'
   ]);
 
@@ -40,7 +40,7 @@ export const createDerivationCompilerHelpers = ({
     return text.split(/\s+/).filter(Boolean).length >= 4;
   };
 
-  const normalizeVisualRelations = (
+  const normalizeRelations = (
     value,
     stageIndex,
     validationIssues
@@ -48,9 +48,9 @@ export const createDerivationCompilerHelpers = ({
     if (!Array.isArray(value)) {
       recordValidationIssue(validationIssues, {
         failureClass: 'contract_misunderstanding',
-        ruleId: 'DERIVATION_STAGE_VISUAL_RELATIONS_ARRAY',
+        ruleId: 'DERIVATION_STAGE_RELATIONS_ARRAY',
         stageIndex,
-        fieldPath: `$.derivationStages[${stageIndex}].visualRelations`,
+        fieldPath: `$.derivationStages[${stageIndex}].relations`,
         offendingValue: value
       });
       return null;
@@ -64,29 +64,54 @@ export const createDerivationCompilerHelpers = ({
           && anchorValue.length > 0
           && anchorValue.every((item) => typeof item === 'string' && item.trim())
     );
+    /*
+     * `values` entries are verbatim authored literals: strings or non-empty
+     * string arrays. Unlike anchors, an empty string is a legal literal.
+     */
+    const isValuesValue = (literal) => (
+      typeof literal === 'string'
+        ? true
+        : Array.isArray(literal)
+          && literal.length > 0
+          && literal.every((item) => typeof item === 'string')
+    );
+    const isAnchorBlock = (block) => (
+      Boolean(block)
+      && typeof block === 'object'
+      && !Array.isArray(block)
+      && Object.entries(block).length > 0
+      && Object.entries(block).every(([role, anchorValue]) => (
+        role.trim() && isAnchorValue(anchorValue)
+      ))
+    );
+    const RELATION_FIELDS = ['relation', 'anchors', 'priorAnchors', 'values'];
     for (let relationIndex = 0; relationIndex < value.length; relationIndex += 1) {
       const relation = value[relationIndex];
-      const fieldPath = `$.derivationStages[${stageIndex}].visualRelations[${relationIndex}]`;
+      const fieldPath = `$.derivationStages[${stageIndex}].relations[${relationIndex}]`;
       if (
         !relation
         || typeof relation !== 'object'
         || Array.isArray(relation)
-        || Object.keys(relation).length !== 2
+        || Object.keys(relation).some((key) => !RELATION_FIELDS.includes(key))
         || !Object.hasOwn(relation, 'relation')
         || !Object.hasOwn(relation, 'anchors')
         || typeof relation.relation !== 'string'
         || !relation.relation.trim()
-        || !relation.anchors
-        || typeof relation.anchors !== 'object'
-        || Array.isArray(relation.anchors)
-        || Object.entries(relation.anchors).length === 0
-        || Object.entries(relation.anchors).some(([role, anchorValue]) => (
-          !role.trim() || !isAnchorValue(anchorValue)
+        || !isAnchorBlock(relation.anchors)
+        || (Object.hasOwn(relation, 'priorAnchors') && !isAnchorBlock(relation.priorAnchors))
+        || (Object.hasOwn(relation, 'values') && (
+          !relation.values
+          || typeof relation.values !== 'object'
+          || Array.isArray(relation.values)
+          || Object.entries(relation.values).length === 0
+          || Object.entries(relation.values).some(([key, literal]) => (
+            !key.trim() || !isValuesValue(literal)
+          ))
         ))
       ) {
         recordValidationIssue(validationIssues, {
           failureClass: 'contract_misunderstanding',
-          ruleId: 'DERIVATION_STAGE_VISUAL_RELATION_EXACT',
+          ruleId: 'DERIVATION_STAGE_RELATION_EXACT',
           stageIndex,
           fieldPath,
           offendingValue: relation
@@ -171,12 +196,12 @@ export const createDerivationCompilerHelpers = ({
           return null;
         }
 
-        const visualRelations = normalizeVisualRelations(
-          stage.visualRelations,
+        const relations = normalizeRelations(
+          stage.relations,
           stageIndex,
           validationIssues
         );
-        if (!visualRelations) return null;
+        if (!relations) return null;
 
         if (typeof stage.workspaceForest === 'undefined') {
           integrityFlags.push(`workspace_forest_missing_on_derivation_stage:${stageId}`);
@@ -202,8 +227,8 @@ export const createDerivationCompilerHelpers = ({
             statement: stage.statement,
             details: {
               stageRecord: stage.stageRecord,
-              derivationStageVisualRelations: visualRelations,
-              derivationStageVisualRelationsContract: true
+              derivationStageRelations: relations,
+              derivationStageRelationsContract: true
             }
           }
         };
@@ -440,8 +465,7 @@ export const createDerivationCompilerHelpers = ({
     return {
       tree: committedFrame.root,
       surfaceOrder,
-      derivationSteps: [],
-      visualRelationEvents: []
+      derivationSteps: []
     };
   };
 

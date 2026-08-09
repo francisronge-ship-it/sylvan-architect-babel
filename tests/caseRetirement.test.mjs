@@ -128,7 +128,7 @@ test('historical Tree Bank records load without legacy Case metadata or archive 
       derivationStages: [{
         statement: 'The DP is present in the authored workspace.',
         stageRecord: 'The historical record explicitly states its Case commitment in prose.',
-        visualRelations: [{
+        relations: [{
           relation: 'CaseAssignment',
           anchors: {
             assignee: 'dp_mia',
@@ -150,7 +150,6 @@ test('historical Tree Bank records load without legacy Case metadata or archive 
           }]
         }]
       }],
-      resolvedVisualRelations: [],
       derivationSteps: [],
       provenance: {
         treeSource: 'derivationStages'
@@ -176,8 +175,8 @@ test('historical Tree Bank records load without legacy Case metadata or archive 
     'The historical record explicitly states its Case commitment in prose.'
   );
   assert.deepEqual(
-    loaded.analyses[0].derivationStages[0].visualRelations,
-    legacyBundle.analyses[0].derivationStages[0].visualRelations
+    loaded.analyses[0].derivationStages[0].relations,
+    legacyBundle.analyses[0].derivationStages[0].relations
   );
   assertNoLegacyCaseMetadata(loaded);
   assert.equal(buildReplaySnapshotProjection(loaded).sentence, 'Mia');

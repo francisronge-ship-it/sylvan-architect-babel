@@ -125,7 +125,7 @@ test('emoji survives the complete final-stage alignment path', () => {
       {
         statement: 'The emoji enters the derivation.',
         stageRecord: 'The authored emoji is represented as the complete overt derivation surface.',
-        visualRelations: [],
+        relations: [],
         workspaceForest: [
           {
             children: [],
@@ -159,7 +159,7 @@ test('symbol alignment still rejects a different authored surface', () => {
       {
         statement: 'A different emoji enters the derivation.',
         stageRecord: 'The authored rocket is represented as the complete overt derivation surface.',
-        visualRelations: [],
+        relations: [],
         workspaceForest: [
           {
             children: [],

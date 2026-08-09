@@ -29,7 +29,7 @@ const buildMinimalPayload = () => ({
     {
       statement: 'The authored token enters the derivation.',
       stageRecord: 'The authored token Mia forms the complete convergent surface of this minimal provider-free derivation.',
-      visualRelations: [],
+      relations: [],
       workspaceForest: [
         {
           id: 'mia_root',
@@ -141,7 +141,7 @@ expectTypedFailure({
   fieldPath: '$.derivationStages[0]',
   checkOffending: (value) => {
     assert.equal(Object.hasOwn(value, 'stageRecord'), false);
-    assert.deepEqual(Object.keys(value), ['statement', 'visualRelations', 'workspaceForest']);
+    assert.deepEqual(Object.keys(value), ['statement', 'relations', 'workspaceForest']);
   }
 });
 
@@ -167,6 +167,23 @@ expectTypedFailure({
   ruleId: 'DERIVATION_STAGE_RECORD_SUBSTANTIVE',
   stageIndex: 0,
   fieldPath: '$.derivationStages[0].stageRecord'
+});
+
+expectTypedFailure({
+  name: 'typed probe: malformed relation reaches the current exact-relation rule',
+  mutate: (payload) => {
+    payload.derivationStages[0].relations = [{
+      relation: 'UnknownRelation',
+      anchors: { witness: 'mia_root' },
+      rendererHint: 'forbidden'
+    }];
+    return payload;
+  },
+  expectedClass: FAILURE_CLASSES.CONTRACT_MISUNDERSTANDING,
+  ruleId: 'DERIVATION_STAGE_RELATION_EXACT',
+  stageIndex: 0,
+  fieldPath: '$.derivationStages[0].relations[0]',
+  checkOffending: (value) => assert.equal(value.rendererHint, 'forbidden')
 });
 
 expectTypedFailure({

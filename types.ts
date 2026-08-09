@@ -37,42 +37,24 @@ export interface DerivationStep {
 export interface DerivationStage {
   statement: string;
   stageRecord: string;
-  visualRelations: DerivationStageVisualRelation[];
+  relations: DerivationStageRelation[];
   workspaceForest: SyntaxNode[];
 }
 
-export interface DerivationStageVisualRelation {
+export interface DerivationStageRelation {
   relation: OpenOntologyLabel;
   anchors: Record<string, string | string[]>;
-}
-
-export type VisualRelationRenderFamily =
-  | 'trajectory'
-  | 'unknown'
-  | OpenOntologyLabel;
-
-export interface ResolvedVisualRelationAnchor {
-  role: string;
-  nodeId?: string;
-  value?: string;
-  label?: string;
-  resolved: boolean;
-  visibleInStage: boolean;
-}
-
-export interface ResolvedVisualRelationRecord {
-  relationId: string;
-  stageId?: string;
-  stageIndex: number;
-  relation: OpenOntologyLabel;
-  anchors: ResolvedVisualRelationAnchor[];
-  sourceNodeId?: string;
-  targetNodeId?: string;
-  witnessNodeId?: string;
-  renderFamily: VisualRelationRenderFamily;
-  renderable: boolean;
-  renderStatus: OpenOntologyLabel;
-  evidence?: string;
+  /**
+   * Optional witnesses that resolve in the immediately preceding authored
+   * stage's workspace, verbatim. Carried untouched through normalization and
+   * replay; renderers use them only for backward comparison cues.
+   */
+  priorAnchors?: Record<string, string | string[]>;
+  /**
+   * Optional authored literal payload, verbatim. Values are display literals,
+   * never node ids, and never affect neutral-fallback geometry.
+   */
+  values?: Record<string, string | string[]>;
 }
 
 export interface GenerationPromptContract {
@@ -160,7 +142,6 @@ export interface Provenance {
   payloadTranscriberOutputTokenCount?: number;
   payloadTranscriberTotalTokenCount?: number;
   hasDerivationStages?: boolean;
-  hasResolvedVisualRelations?: boolean;
   parsePromptTokenCount?: number;
   parseOutputTokenCount?: number;
   parseTotalTokenCount?: number;
@@ -173,7 +154,6 @@ export interface ParseResult {
   tree: SyntaxNode;
   surfaceOrder?: string[];
   derivationStages?: DerivationStage[];
-  resolvedVisualRelations?: ResolvedVisualRelationRecord[];
   derivationSteps?: DerivationStep[];
   provenance?: Provenance;
 }

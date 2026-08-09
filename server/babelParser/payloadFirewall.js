@@ -51,7 +51,7 @@ export const canonicalizeTransportValueForGate = (value) => {
 export const buildPayloadFingerprint = (payload) =>
   stableStringify(canonicalizeTransportValueForGate(payload));
 
-const DERIVATION_STAGE_RELOCATABLE_FIELDS = ['statement', 'stageRecord', 'visualRelations'];
+const DERIVATION_STAGE_RELOCATABLE_FIELDS = ['statement', 'stageRecord', 'relations'];
 
 const cloneTransportValue = (value) => (
   value && typeof value === 'object'
@@ -74,7 +74,7 @@ const relocateLeakedDerivationStageFieldsForGate = (payload) => {
       .filter((field) => hasOwn(analysis, field));
     if (leakedFields.length === 0) return;
 
-    const targetFields = leakedFields.filter((field) => field !== 'visualRelations');
+    const targetFields = leakedFields.filter((field) => field !== 'relations');
     const fieldsThatIdentifyTarget = targetFields.length > 0 ? targetFields : leakedFields;
     const targetIndexes = new Set();
     fieldsThatIdentifyTarget.forEach((field) => {

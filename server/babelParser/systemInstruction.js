@@ -68,10 +68,10 @@ General rules for this route:
 - Build the derivation forward. Do not inspect a completed final tree and backfill earlier stages afterward.
 - Do not add stages to satisfy a numerical floor. If workspaceForest is unchanged from the previous derivationStage, stageRecord must explain the exact syntactic checkpoint being recorded. Do not include unchanged stages with generic stageRecord text.
 - A compact sentence may have a compact derivation, but it must still be forward: each stage must expose a public syntactic state that licenses a later state or the final convergence. The last derivationStage must be the converged structure for the exact input tokens.
-- Each derivation stage has exactly four authored fields, written inside the stage object in this order: "statement", "stageRecord", "visualRelations", "workspaceForest".
-- Never put statement, stageRecord, or visualRelations on the top-level object.
-- Each derivationStage is a proof object: statement, stageRecord, visualRelations, and workspaceForest must agree.
-- stageRecord says what has been derived; workspaceForest shows the complete workspace after that stage; visualRelations marks non-branching relations already stated in stageRecord and witnessed in workspaceForest.
+- Each derivation stage has exactly four authored fields, written inside the stage object in this order: "statement", "stageRecord", "relations", "workspaceForest".
+- Never put statement, stageRecord, or relations on the top-level object.
+- Each derivationStage is a proof object: statement, stageRecord, relations, and workspaceForest must agree.
+- stageRecord says what has been derived; workspaceForest shows the complete workspace after that stage; relations marks non-branching relations already stated in stageRecord and witnessed in workspaceForest.
 - A derivationStage may be rich. Do not make it artificially atomic. But every new structure in workspaceForest must be licensed by the stageRecord for that stage.
 - "workspaceForest" stores the visible derivational workspace after the stage.
 - Model the derivation itself. Do not include scratch roots, future landing sites, or placeholder nodes that the current derivational state has not licensed.
@@ -96,20 +96,22 @@ General rules for this route:
 - The workspaceForest value must be a JSON array of syntax node objects or refId objects. Do not encode workspaceForest as a string, markdown, prose, bracket notation, tree notation, or any other serialized format.
 - "statement" is a concise reader-facing headline for the stage. It names what became derivationally public without carrying the full analysis.
 - "stageRecord" is a required prose string. It is the written syntactic record of that stage, not metadata and not key-value bookkeeping, and not a restatement of statement.
-- "visualRelations" is a required array for non-branching relations from this stageRecord that are not fully expressed by ordinary mother-daughter or sisterhood geometry; use [] only when the stage introduces no such relation.
-- Each visualRelations item has a short open "relation" string and an "anchors" object whose open role names point to node ids in this stage's expanded workspace. Anchor values may be node ids or arrays of node ids.
-- Every visualRelations anchor value must be the exact id of a node present in that same stage's expanded workspaceForest. Expanded means after resolving any refId used by that stage.
-- Do not create anchor ids by naming an intended copy, future landing, old occurrence, or role-derived placeholder. A visualRelation may point only to endpoints that are already real syntactic objects in this stage's workspaceForest because the stageRecord independently licenses them.
-- Do not anchor a visualRelation to an id that appears only in an earlier stage or only in a later stage.
-- If a visualRelation concerns an object continued across stages, anchor it to the current-stage witness of that object.
-- A visualRelations role name may describe the relation semantically, but each anchor value must be the actual current-stage node id that witnesses that role in workspaceForest. The witness node may have a different label or id shape from the role name. If the relevant object has landed, changed category, copied, or become non-pronounced in this stage, anchor the current witness node, not the intended name, old id, future id, or role-derived id.
-- Before returning JSON, check every visualRelations anchor against its own stage workspaceForest. If any anchor does not resolve there, repair the stage before answering.
-- Do not introduce a visualRelation whose relation is absent from stageRecord.
-- visualRelations is not prose and not a second analysis.
-- An empty visualRelations array is complete and correct only when the stage introduces no non-branching relation beyond ordinary mother-daughter or sisterhood geometry.
-- The tree is the machine witness. statement is the orientation line. stageRecord is the public syntactic record. visualRelations is visual intent grounded in that record.
-- visualRelations is only for relations that need an additional visual mark beyond ordinary workspaceForest branching. If ordinary mother-daughter or sisterhood geometry fully expresses the relation, keep it in stageRecord and workspaceForest and do not repeat it in visualRelations.
-- Do not use visualRelations for ordinary mother-daughter or sisterhood relations already encoded by workspaceForest branching. A relation that is visible solely by reading the branches belongs in stageRecord and workspaceForest, not visualRelations.
+- "relations" is a required array for non-branching relations from this stageRecord that are not fully expressed by ordinary mother-daughter or sisterhood geometry; use [] only when the stage introduces no such relation.
+- Each relations item has a short open "relation" string and an "anchors" object whose open role names point to node ids in this stage's expanded workspace. Anchor values may be node ids or arrays of node ids.
+- A relations item may also have "values" and "priorAnchors". Use "values" only for literal notation the relation itself states (for example a feature, index, outcome, exponent, or ordered display value); each value must be a string or a non-empty array of strings, never a node id standing in for an anchor.
+- Use "priorAnchors" only when this relation explicitly compares with or continues witnesses from the immediately preceding derivationStage. Its open role names point to exact node ids in that preceding stage's expanded workspace, using the same node-id-or-array shape as anchors. Do not use priorAnchors merely because an object existed earlier.
+- Every relations anchor value must be the exact id of a node present in that same stage's expanded workspaceForest. Expanded means after resolving any refId used by that stage.
+- Do not create anchor ids by naming an intended copy, future landing, old occurrence, or role-derived placeholder. A relation may point only to endpoints that are already real syntactic objects in this stage's workspaceForest because the stageRecord independently licenses them.
+- Do not anchor a relation to an id that appears only in an earlier stage or only in a later stage.
+- If a relation concerns an object continued across stages, anchor it to the current-stage witness of that object.
+- A relations role name may describe the relation semantically, but each anchor value must be the actual current-stage node id that witnesses that role in workspaceForest. The witness node may have a different label or id shape from the role name. If the relevant object has landed, changed category, copied, or become non-pronounced in this stage, anchor the current witness node, not the intended name, old id, future id, or role-derived id.
+- Before returning JSON, check every relations anchor against its own stage workspaceForest. If any anchor does not resolve there, repair the stage before answering.
+- Do not introduce a relation whose relation is absent from stageRecord.
+- relations is not prose and not a second analysis.
+- An empty relations array is complete and correct only when the stage introduces no non-branching relation beyond ordinary mother-daughter or sisterhood geometry.
+- The tree is the machine witness. statement is the orientation line. stageRecord is the public syntactic record. relations is visual intent grounded in that record.
+- relations is only for relations that need an additional visual mark beyond ordinary workspaceForest branching. If ordinary mother-daughter or sisterhood geometry fully expresses the relation, keep it in stageRecord and workspaceForest and do not repeat it in relations.
+- Do not use relations for ordinary mother-daughter or sisterhood relations already encoded by workspaceForest branching. A relation that is visible solely by reading the branches belongs in stageRecord and workspaceForest, not relations.
 - derivationStages are the analysis. The ordered stage record must be sufficient on its own.
 - Each stageRecord must explain why this workspace is a legitimate next derivational state.
 - Preserve the argument a serious syntactician would need when the tree alone is not enough.
@@ -137,8 +139,8 @@ General rules for this route:
 - Occurrence status is stage-local. When an occurrence is first introduced, represent it as the syntactic object active in that stage. Do not mark it silent, null, copied, or non-surfacing only because a later stage will derive a different pronounced occurrence.
 - If an occurrence becomes non-pronounced in a later stage, preserve the syntactic structure required by the analysis and link it to the continuing object with lineageId. Do not replace structured material with an untyped placeholder.
 - A non-pronounced occurrence is licensed only by the current derivationStage that creates or reanalyzes that occurrence. Do not introduce such an occurrence as preparation for a later stage. If the current stage has not stated the dependency that makes the lower occurrence non-pronounced, the lower occurrence remains the active syntactic object for that stage.
-- Before returning JSON, verify that every object with "statement", "stageRecord", "visualRelations", and "workspaceForest" appears inside the "derivationStages" array of exactly one analysis.
-- Before returning JSON, check every derivationStage: statement, stageRecord, visualRelations, and workspaceForest agree; every visualRelation anchor exists in that same stage's expanded workspaceForest; every terminal with "word" or tokenIndex is non-silent and pronounced in that stage; no same occurrence appears both as an independent root and as a child in the same stage unless a same-stage relation licenses multiple lineage-linked occurrences; every silent or non-surfacing item is licensed by the current stage and has the syntactic category or projection required by the analysis; no null or empty exponent stands in for a phrase, carried subtree, future landing site, or dependency endpoint; no visualRelation repeats a relation already fully visible through ordinary branching; no stage contains structure not licensed by its own stageRecord; the final workspace preserves the analysis while spelling the intended surface order.
+- Before returning JSON, verify that every object with "statement", "stageRecord", "relations", and "workspaceForest" appears inside the "derivationStages" array of exactly one analysis.
+- Before returning JSON, check every derivationStage: statement, stageRecord, relations, and workspaceForest agree; every relation anchor exists in that same stage's expanded workspaceForest; every terminal with "word" or tokenIndex is non-silent and pronounced in that stage; no same occurrence appears both as an independent root and as a child in the same stage unless a same-stage relation licenses multiple lineage-linked occurrences; every silent or non-surfacing item is licensed by the current stage and has the syntactic category or projection required by the analysis; no null or empty exponent stands in for a phrase, carried subtree, future landing site, or dependency endpoint; no relation repeats a claim already fully visible through ordinary branching; no stage contains structure not licensed by its own stageRecord; the final workspace preserves the analysis while spelling the intended surface order.
 - Do not author fields outside the ambiguity envelope and four-field derivationStages contract.
 `;
 

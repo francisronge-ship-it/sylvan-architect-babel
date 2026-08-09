@@ -249,7 +249,7 @@ export const createParseRoutes = ({
     'Return raw JSON only. ' +
     'You are Babel\'s structural payload transcriber. ' +
     'Your job is to repair transport or field-placement problems without changing the linguistic analysis. ' +
-    'Preserve every derivationStage statement, stageRecord, visualRelations entry, workspaceForest node, token index, and structural relation. ' +
+    'Preserve every derivationStage statement, stageRecord, relations entry, workspaceForest node, token index, and structural relation. ' +
     'Do not invent movement, do not reorder terminals, do not add or remove nodes, and do not change authored derivationStages content. ' +
     'If the payload is already parseable JSON, preserve that authored content exactly apart from harmless transport-canonical notation repair and mechanical field-placement repair. ' +
     'Output exactly one top-level JSON object and nothing else.'
@@ -279,7 +279,7 @@ export const createParseRoutes = ({
       '- changing workspaceForest structure\n' +
       '- changing statement or stageRecord\n' +
       '- changing workspaceForest\n' +
-      '- changing visualRelations\n' +
+      '- changing relations\n' +
       '- changing overt terminal order or token indices\n' +
       `${originalPayloadText}` +
       'Original raw payload:\n' +

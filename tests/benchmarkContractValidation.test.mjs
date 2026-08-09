@@ -21,7 +21,7 @@ const planInput = () => ({
     sourceSha256: digest('external-engine-rule-catalog-bytes'),
     ruleIds: [
       'DERIVATION_STAGE_FIELDS_EXACT',
-      'DERIVATION_STAGE_VISUAL_RELATION_EXACT',
+      'DERIVATION_STAGE_RELATION_EXACT',
       'SURFACE_ORDER_EXACT'
     ]
   },

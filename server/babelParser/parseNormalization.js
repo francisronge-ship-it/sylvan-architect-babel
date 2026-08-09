@@ -7,90 +7,10 @@ export const createParseNormalizationHelpers = ({
   normalizeDerivationStagesToDerivationFrames,
   normalizeDerivationFrames,
   buildCanonicalDerivationFromDerivationFrames,
-  collectNodeReferencesById,
   sameTokenSequence,
   collectOvertTerminalNodes,
   resolveNodeSurface
 }) => {
-  const buildFrameNodeById = (frame) => {
-    const after = frame?.after && typeof frame.after === 'object' && !Array.isArray(frame.after)
-      ? frame.after
-      : {};
-    const frameNodeById = new Map();
-    (Array.isArray(after.workspaceForest) ? after.workspaceForest : []).forEach((root) => {
-      collectNodeReferencesById(root).forEach((node, nodeId) => {
-        if (typeof nodeId === 'string' && nodeId.trim()) {
-          frameNodeById.set(nodeId, node);
-        }
-      });
-    });
-    return frameNodeById;
-  };
-
-  const getFrameChange = (frame) => (
-    frame?.change && typeof frame.change === 'object' && !Array.isArray(frame.change)
-      ? frame.change
-      : null
-  );
-
-  const resolveVisualRelationAnchors = (anchors, frameNodeById) => (
-    Object.entries(anchors).flatMap(([role, rawValue]) => {
-      const nodeIds = Array.isArray(rawValue) ? rawValue : [rawValue];
-      return nodeIds.map((nodeId) => {
-        const node = frameNodeById.get(nodeId);
-        return {
-          role,
-          nodeId,
-          value: nodeId,
-          ...(node?.label ? { label: String(node.label) } : {}),
-          resolved: Boolean(node),
-          visibleInStage: Boolean(node)
-        };
-      });
-    })
-  );
-
-  const buildResolvedVisualRelationsFromDerivationFrames = (frames) => {
-    const resolvedRelations = [];
-    (Array.isArray(frames) ? frames : []).forEach((frame, frameIndex) => {
-      const change = getFrameChange(frame);
-      const details = change?.details && typeof change.details === 'object' && !Array.isArray(change.details)
-        ? change.details
-        : {};
-      const visualRelations = Array.isArray(details.derivationStageVisualRelations)
-        ? details.derivationStageVisualRelations
-        : [];
-      if (visualRelations.length === 0) return;
-
-      const frameNodeById = buildFrameNodeById(frame);
-      const stageId = String(frame?.stepId || frame?.frameId || `d${frameIndex + 1}`);
-      const evidence = details.stageRecord || change?.statement;
-
-      visualRelations.forEach((visualRelation, relationIndex) => {
-        const relation = visualRelation.relation;
-        const anchors = resolveVisualRelationAnchors(
-          visualRelation.anchors,
-          frameNodeById
-        );
-        const hasUnresolvedAnchors = anchors.some((anchor) => !anchor.resolved);
-        resolvedRelations.push({
-          relationId: `${stageId}:visualRelation:${relationIndex + 1}`,
-          stageId,
-          stageIndex: frameIndex,
-          relation,
-          anchors,
-          renderFamily: 'unknown',
-          renderable: false,
-          renderStatus: hasUnresolvedAnchors
-            ? 'anchors-unresolved'
-            : 'anchors-resolved-not-rendered',
-          ...(evidence ? { evidence } : {})
-        });
-      });
-    });
-    return resolvedRelations;
-  };
-
   const normalizeParseResult = (
     value,
     framework = 'xbar',
@@ -204,19 +124,18 @@ export const createParseNormalizationHelpers = ({
     const committedTree = derivationPrimaryBundle.tree;
     const committedSurfaceOrder = derivationPrimaryBundle.surfaceOrder;
     const identifiedDerivationSteps = [];
-    const resolvedVisualRelations = buildResolvedVisualRelationsFromDerivationFrames(derivationFrames);
     const derivationStages = derivationFrames.map((frame) => {
       const details = frame?.change?.details && typeof frame.change.details === 'object' && !Array.isArray(frame.change.details)
         ? frame.change.details
         : {};
       const stageRecord = details.stageRecord;
-      const visualRelations = Array.isArray(details.derivationStageVisualRelations)
-        ? details.derivationStageVisualRelations.map((relation) => structuredClone(relation))
+      const relations = Array.isArray(details.derivationStageRelations)
+        ? details.derivationStageRelations.map((relation) => structuredClone(relation))
         : [];
       return {
         statement: frame?.change?.statement,
         stageRecord,
-        visualRelations,
+        relations,
         workspaceForest: frame?.after?.workspaceForest || []
       };
     });
@@ -231,15 +150,13 @@ export const createParseNormalizationHelpers = ({
       payloadIntegrityFlags: payloadIntegrityFlags.length > 0
         ? Array.from(new Set(payloadIntegrityFlags))
         : undefined,
-      hasDerivationStages: derivationStages.length > 0,
-      hasResolvedVisualRelations: resolvedVisualRelations.length > 0
+      hasDerivationStages: derivationStages.length > 0
     };
 
     return {
       tree: committedTree,
       surfaceOrder: committedSurfaceOrder,
       derivationStages,
-      resolvedVisualRelations,
       derivationSteps: identifiedDerivationSteps,
       provenance
     };

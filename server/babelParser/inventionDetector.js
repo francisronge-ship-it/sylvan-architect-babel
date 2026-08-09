@@ -4,7 +4,7 @@ const DECLARED_REPLAY_OPERATIONS = new Set([
   'Preserve',
   'Project',
   'StageRecord',
-  'VisualRelation'
+  'Relation'
 ]);
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
@@ -38,7 +38,7 @@ const collectAuthoredEvidence = (stages) => {
       if (typeof node.word === 'string') evidence.words.add(node.word);
       nodesById.set(nodeId, evidence);
     });
-    asArray(stage?.visualRelations).forEach((relation) => {
+    asArray(stage?.relations).forEach((relation) => {
       const label = asText(relation?.relation);
       if (label) relationLabels.add(label);
       const anchors = relation?.anchors && typeof relation.anchors === 'object'
@@ -127,17 +127,6 @@ export const detectDeterministicLinguisticInvention = ({
         kind: 'compiled-operation-label-not-authored',
         observed: operation,
         surface: `analysis.derivationSteps[${stepIndex}]`
-      });
-    }
-  });
-
-  asArray(analysis?.resolvedVisualRelations).forEach((relation, relationIndex) => {
-    const label = asText(relation?.relation);
-    if (label && !relationLabels.has(label)) {
-      issues.push({
-        kind: 'compiled-relation-label-not-authored',
-        observed: label,
-        surface: `analysis.resolvedVisualRelations[${relationIndex}]`
       });
     }
   });
@@ -259,13 +248,27 @@ export const detectDeterministicLinguisticInvention = ({
         surface: `renderedRelationLinks[${linkIndex}]`
       });
     }
+    const expectedAnchorNodeIds = new Set(
+      expected.anchors.map((anchor) => anchor.nodeId)
+    );
+    const sourceNodeId = asText(link?.sourceNodeId);
+    const targetNodeId = asText(link?.targetNodeId);
+    const endpointOrderProvenance = asText(link?.endpointOrderProvenance);
+    const endpointOrderMatches = endpointOrderProvenance === 'authored-anchor-order'
+      ? (
+          sourceNodeId === expected.anchors[0].nodeId
+          && targetNodeId === expected.anchors[1].nodeId
+        )
+      : endpointOrderProvenance === 'registered-role-order'
+        ? (
+            sourceNodeId !== targetNodeId
+            && expectedAnchorNodeIds.has(sourceNodeId)
+            && expectedAnchorNodeIds.has(targetNodeId)
+          )
+        : false;
     if (
       expected.anchors.length >= 2
-      && (
-        asText(link?.sourceNodeId) !== expected.anchors[0].nodeId
-        || asText(link?.targetNodeId) !== expected.anchors[1].nodeId
-        || link?.endpointOrderProvenance !== 'authored-anchor-order'
-      )
+      && !endpointOrderMatches
     ) {
       issues.push({
         kind: 'displayed-relation-endpoint-order-mismatch',

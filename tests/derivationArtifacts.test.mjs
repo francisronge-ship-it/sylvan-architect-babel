@@ -6,9 +6,9 @@ import { createTreeBankBundleSnapshot } from '../treeBankSnapshot.js';
 
 test('Notes are exactly the ordered non-empty derivation stage records', () => {
   const stages = [
-    { statement: 'Ignored statement one', stageRecord: 'First record', visualRelations: [], workspaceForest: [] },
-    { statement: 'Ignored statement two', stageRecord: '  Second record?  ', visualRelations: [], workspaceForest: [] },
-    { statement: 'Ignored statement three', stageRecord: '', visualRelations: [], workspaceForest: [] }
+    { statement: 'Ignored statement one', stageRecord: 'First record', relations: [], workspaceForest: [] },
+    { statement: 'Ignored statement two', stageRecord: '  Second record?  ', relations: [], workspaceForest: [] },
+    { statement: 'Ignored statement three', stageRecord: '', relations: [], workspaceForest: [] }
   ];
 
   assert.deepEqual(collectDerivationStageRecords(stages), ['First record', 'Second record?']);
@@ -23,7 +23,6 @@ test('Tree Bank snapshots keep only current parse artifacts without mutating the
         tree: { id: 'root', label: 'TP', children: [] },
         surfaceOrder: [],
         derivationStages: [],
-        resolvedVisualRelations: [],
         derivationSteps: [{ operation: 'Other' }],
         transientAnalysisField: 'not persisted',
         provenance: {

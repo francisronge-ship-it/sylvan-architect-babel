@@ -838,7 +838,7 @@ const assertDerivationContract = (errors, dirName, bundleWrapper) => {
   analyses.forEach((analysis, analysisIndex) => {
     const stages = Array.isArray(analysis?.derivationStages) ? analysis.derivationStages : [];
     stages.forEach((stage, stageIndex) => {
-      const requiredFields = ['statement', 'stageRecord', 'visualRelations', 'workspaceForest'];
+      const requiredFields = ['statement', 'stageRecord', 'relations', 'workspaceForest'];
       requiredFields.forEach((field) => {
         if (!(field in (stage || {}))) {
           fail(errors, dirName, `stage ${stageIndex + 1} missing ${field}`);
@@ -853,8 +853,8 @@ const assertDerivationContract = (errors, dirName, bundleWrapper) => {
       if (!String(stage?.stageRecord || '').trim()) {
         fail(errors, dirName, `stage ${stageIndex + 1} has empty stageRecord`);
       }
-      if (!Array.isArray(stage?.visualRelations)) {
-        fail(errors, dirName, `stage ${stageIndex + 1} visualRelations is not an array`);
+      if (!Array.isArray(stage?.relations)) {
+        fail(errors, dirName, `stage ${stageIndex + 1} relations is not an array`);
       }
       if (!Array.isArray(stage?.workspaceForest) || stage.workspaceForest.length === 0) {
         fail(errors, dirName, `stage ${stageIndex + 1} workspaceForest is empty`);
