@@ -308,7 +308,9 @@
         "what_low",
         "c_question::__lex_tok_1_did",
         "c_question",
-        "cbar_question"
+        "cbar_question",
+        "t_did::__leaf",
+        "c_question::__leaf"
       ]
     },
     {
@@ -337,7 +339,9 @@
         "c_question",
         "cbar_question",
         "dp_what_high::__lex_tok_0_what",
-        "dp_what_high"
+        "dp_what_high",
+        "t_did::__leaf",
+        "c_question::__leaf"
       ]
     },
     {
@@ -368,7 +372,9 @@
         "cbar_question",
         "dp_what_high::__lex_tok_0_what",
         "dp_what_high",
-        "cp_question"
+        "cp_question",
+        "t_did::__leaf",
+        "c_question::__leaf"
       ]
     },
     {
@@ -399,7 +405,9 @@
         "cbar_question",
         "dp_what_high::__lex_tok_0_what",
         "dp_what_high",
-        "cp_question"
+        "cp_question",
+        "t_did::__leaf",
+        "c_question::__leaf"
       ]
     },
     {
@@ -427,7 +435,9 @@
         "cbar_question",
         "dp_what_high::__lex_tok_0_what",
         "dp_what_high",
-        "cp_question"
+        "cp_question",
+        "t_did::__leaf",
+        "c_question::__leaf"
       ]
     }
   ]
