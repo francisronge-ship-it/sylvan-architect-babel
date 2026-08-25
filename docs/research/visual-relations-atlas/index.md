@@ -1,26 +1,26 @@
 ---
-title: "Drawing an Open-Ended Syntax: The Babel Relation Atlas"
+title: "Drawing an Open-Ended Syntax: The Babel Relation Orchard"
 permalink: /research/visual-relations-atlas/
 ---
 
 <nav class="research-nav" aria-label="Research navigation">
   <a class="btn" href="/sylvan-architect-babel/">Research home</a>
   <a class="btn" href="/sylvan-architect-babel/research/">Current work</a>
-  <a class="btn" href="./atlas.html">Interactive Atlas</a>
+  <a class="btn" href="./atlas.html">Interactive Orchard</a>
   <a class="btn" href="/sylvan-architect-babel/research/archive/">Archive</a>
 </nav>
 
 <div class="paper-hero">
   <p class="paper-kicker">Research Devlog</p>
-  <h1 class="paper-title">Drawing an Open-Ended Syntax: The Babel Relation Atlas</h1>
+  <h1 class="paper-title">Drawing an Open-Ended Syntax: The Babel Relation Orchard</h1>
   <div class="paper-meta-grid">
     <div class="paper-meta-item">
       <span class="paper-meta-label">Date</span>
       <p>August 8, 2026</p>
     </div>
     <div class="paper-meta-item">
-      <span class="paper-meta-label">Interactive Atlas</span>
-      <a href="./atlas.html">Open the Babel Relation Atlas</a>
+      <span class="paper-meta-label">Interactive Orchard</span>
+      <a href="./atlas.html">Open the Babel Relation Orchard</a>
     </div>
   </div>
 </div>

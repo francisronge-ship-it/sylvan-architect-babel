@@ -6,7 +6,7 @@ permalink: /research/archive/
 <nav class="research-nav" aria-label="Research navigation">
   <a class="btn" href="/sylvan-architect-babel/">Research home</a>
   <a class="btn" href="/sylvan-architect-babel/research/">Current work</a>
-  <a class="btn" href="/sylvan-architect-babel/research/visual-relations-atlas/atlas.html">Relation Atlas</a>
+  <a class="btn" href="/sylvan-architect-babel/research/visual-relations-atlas/atlas.html">Relation Orchard</a>
 </nav>
 
 Codex generated these pages during earlier phases of Babel. They preserve old experiments, benchmarks, renderer work, and architectural history, and they are useful for seeing how the project progressed and evolved over time. They do not represent Babel today or my current work and standards as its developer.

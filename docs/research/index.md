@@ -5,7 +5,7 @@ permalink: /research/
 
 <nav class="research-nav" aria-label="Research navigation">
   <a class="btn" href="/sylvan-architect-babel/">Research home</a>
-  <a class="btn" href="./visual-relations-atlas/atlas.html">Relation Atlas</a>
+  <a class="btn" href="./visual-relations-atlas/atlas.html">Relation Orchard</a>
   <a class="btn" href="./archive/">Archive</a>
 </nav>
 
@@ -13,15 +13,15 @@ This page contains the current public work from Babel. Earlier Codex-generated e
 
 ## Current Work
 
-### [Drawing an Open-Ended Syntax: The Babel Relation Atlas](./visual-relations-atlas/)
+### [Drawing an Open-Ended Syntax: The Babel Relation Orchard](./visual-relations-atlas/)
 
 My report on how Babel learned to draw open-ended syntactic relations using finite, inspectable renderer marks.
 
 - Published: August 8, 2026
-- Interactive artifact: [Babel Relation Atlas](./visual-relations-atlas/atlas.html)
+- Interactive artifact: [Babel Relation Orchard](./visual-relations-atlas/atlas.html)
 - Focus: source-backed relation drawings, the renderer pipeline, Replay, deterministic fallback behavior, and an open path for future contributions
 
-[![Babel Relation Atlas](./visual-relations-atlas/assets/relation-atlas-overview.png)](./visual-relations-atlas/atlas.html)
+[![Babel Relation Orchard](./visual-relations-atlas/assets/relation-atlas-overview.png)](./visual-relations-atlas/atlas.html)
 
 ## Archive
 
