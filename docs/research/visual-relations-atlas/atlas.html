@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="The interactive Babel Relation Atlas: 102 source-backed syntactic relation cards rendered by Babel itself.">
-  <title>Babel Relation Atlas</title>
+  <meta name="description" content="The Babel Relation Orchard: an interactive, source-backed visual archive of syntactic relations rendered by Babel.">
+  <title>Babel Relation Orchard</title>
   <style>
     @font-face {
       font-family: "Crimson Pro";
@@ -64,6 +64,7 @@
       --violet: #c4b5fd;
       --rose: #fecaca;
       --code-bg: rgba(0, 0, 0, 0.52);
+      --babel-relation-ink: #34d399;
     }
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
@@ -547,6 +548,97 @@
       cursor: pointer;
       pointer-events: auto;
     }
+    .vr-item {
+      cursor: pointer;
+      pointer-events: visiblePainted;
+    }
+    .vr-relation-active {
+      --babel-relation-ink: #6ee7b7;
+      opacity: 1 !important;
+      filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.5)) !important;
+    }
+    .vr-relation-quiet {
+      opacity: 0.3 !important;
+    }
+    .vr-relation-quiet.babel-partial-copy-deletion-mark {
+      opacity: 0.58 !important;
+    }
+    .vr-relation-active.babel-ellipsis-ghost-label {
+      opacity: 0.82 !important;
+      filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.5)) !important;
+    }
+    .vr-relation-active .babel-trajectory-path {
+      filter: none;
+    }
+    .vr-relation-active .babel-trajectory-arrowhead {
+      stroke: var(--babel-relation-ink);
+    }
+    .vr-relation-active .babel-carrier-arrowhead {
+      fill: var(--babel-relation-ink);
+    }
+    .babel-split-antecedence-path-shadow,
+    .babel-split-antecedence-path {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-split-antecedence-path-shadow {
+      stroke: rgba(2, 12, 8, 0.85);
+      stroke-width: 5.4px;
+      pointer-events: none;
+    }
+    .babel-split-antecedence-path {
+      stroke: #34d399;
+      stroke-width: 2.4px;
+    }
+    .babel-split-antecedence-arrowhead {
+      fill: #34d399;
+      stroke: none;
+    }
+    .babel-split-antecedence-origin {
+      fill: rgba(1, 12, 8, 0.96);
+      stroke: #34d399;
+      stroke-width: 2px;
+      vector-effect: non-scaling-stroke;
+    }
+    .vr-relation-active .babel-split-antecedence-path {
+      stroke: var(--babel-relation-ink);
+    }
+    .vr-relation-active .babel-split-antecedence-origin {
+      stroke: var(--babel-relation-ink);
+    }
+    .vr-relation-hit-target {
+      fill: none;
+      stroke: transparent;
+      stroke-width: 16px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+      pointer-events: stroke;
+    }
+    .vr-relation-area-hit-target {
+      fill: transparent;
+      pointer-events: all !important;
+    }
+    .babel-render-card[data-lens-active="true"] svg g:has(> .vr-item),
+    .babel-render-card:has(.babel-lens-node:hover) svg g:has(> .vr-item),
+    .babel-render-card:has(.babel-lens-toggle:hover) svg g:has(> .vr-item),
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) svg g:has(> .vr-item) {
+      pointer-events: auto;
+    }
+    .babel-render-card[data-lens-active="true"] svg .vr-item,
+    .babel-render-card:has(.babel-lens-node:hover) svg .vr-item,
+    .babel-render-card:has(.babel-lens-toggle:hover) svg .vr-item,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) svg .vr-item {
+      pointer-events: visiblePainted;
+    }
+    .babel-render-card[data-lens-active="true"] svg .vr-relation-hit-target,
+    .babel-render-card:has(.babel-lens-node:hover) svg .vr-relation-hit-target,
+    .babel-render-card:has(.babel-lens-toggle:hover) svg .vr-relation-hit-target,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) svg .vr-relation-hit-target {
+      pointer-events: stroke;
+    }
     .babel-forest-light-canvas {
       position: absolute;
       inset: 0;
@@ -682,57 +774,6 @@
       pointer-events: none;
       transition: opacity 160ms ease;
     }
-    .babel-ellipsis-licensing-link {
-      fill: none;
-      stroke: rgba(167, 243, 208, 0.82);
-      stroke-width: 2.2px;
-      stroke-dasharray: 7 7;
-      stroke-linecap: butt;
-      stroke-linejoin: miter;
-      vector-effect: non-scaling-stroke;
-    }
-    .babel-ellipsis-licensing-endpoint {
-      fill: rgba(167, 243, 208, 0.96);
-      stroke: rgba(1, 8, 5, 0.82);
-      stroke-width: 2px;
-      vector-effect: non-scaling-stroke;
-    }
-    .babel-ellipsis-feature-label,
-    .babel-vpe-ellipsis-label {
-      fill: rgba(209, 250, 229, 0.9);
-      stroke: rgba(1, 8, 5, 0.78);
-      stroke-width: 3px;
-      paint-order: stroke fill;
-      font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 30px;
-      font-weight: 600;
-      letter-spacing: 0;
-    }
-    .babel-vpe-ellipsis-slash,
-    .babel-vpe-ellipsis-arrow {
-      fill: none;
-      stroke: rgba(167, 243, 208, 0.82);
-      stroke-width: 2.3px;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      vector-effect: non-scaling-stroke;
-    }
-    .babel-vpe-ellipsis-arrow {
-      stroke-width: 1.2px;
-    }
-    .babel-vpe-ellipsis-arrowhead {
-      fill: rgba(167, 243, 208, 0.9);
-      stroke: none;
-    }
-    .babel-ellipsis-valued-feature {
-      text-decoration: line-through;
-      text-decoration-thickness: 2px;
-    }
-    .babel-ellipsis-valued-feature-strike {
-      stroke: rgba(209, 250, 229, 0.9);
-      stroke-width: 2px;
-      vector-effect: non-scaling-stroke;
-    }
     .babel-island-relation-layer {
       opacity: 0;
       pointer-events: none;
@@ -747,6 +788,37 @@
     }
     .babel-pg-path-node-secondary {
       stroke: rgba(94, 234, 157, 0.76);
+    }
+    .babel-pg-copy-branch-shadow,
+    .babel-pg-copy-branch {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-pg-copy-branch-shadow {
+      stroke: rgba(1, 8, 5, 0.92);
+      stroke-width: 5px;
+    }
+    .babel-pg-copy-branch {
+      stroke: rgba(167, 243, 208, 0.92);
+      stroke-width: 1.7px;
+      filter: drop-shadow(0 0 3px rgba(52, 211, 153, 0.3));
+    }
+    .babel-pg-copy-ring-shadow,
+    .babel-pg-copy-ring {
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-pg-copy-ring-shadow {
+      fill: #010805;
+      stroke: rgba(1, 8, 5, 0.96);
+      stroke-width: 5px;
+    }
+    .babel-pg-copy-ring {
+      fill: #010805;
+      stroke: rgba(167, 243, 208, 0.96);
+      stroke-width: 2.1px;
+      filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.38));
     }
     .babel-pg-blocked-edge {
       stroke: rgba(167, 243, 208, 0.96);
@@ -815,34 +887,20 @@
       stroke-linejoin: round;
       filter: drop-shadow(0 0 3px rgba(52, 211, 153, 0.32));
     }
-    .babel-pair-merge-arc-shadow,
-    .babel-pair-merge-arc {
+    .babel-native-branch-overlay {
       fill: none;
-      stroke-linecap: round;
+      stroke: rgba(167, 243, 208, 0.72);
+      stroke-width: 3.8px;
+      stroke-dasharray: 12 11;
+      stroke-linecap: butt;
       stroke-linejoin: round;
-      stroke-dasharray: 20 15;
-    }
-    .babel-pair-merge-arc-shadow {
-      stroke: rgba(1, 8, 5, 0.95);
-      stroke-width: 10px;
-    }
-    .babel-pair-merge-arc {
-      stroke: rgba(94, 234, 157, 0.88);
-      stroke-width: 4.2px;
-      filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.34));
+      filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.3));
     }
     .babel-blocked-extraction-branch-mask {
       fill: none;
       stroke: #01110c;
       stroke-width: 10px;
       stroke-linecap: round;
-    }
-    .babel-blocked-extraction-adjunct-branch {
-      fill: none;
-      stroke: rgba(167, 243, 208, 0.72);
-      stroke-width: 3.8px;
-      stroke-dasharray: 12 11;
-      stroke-linecap: butt;
     }
     .babel-blocked-extraction-path {
       fill: none;
@@ -855,8 +913,9 @@
       fill: rgba(110, 231, 183, 0.96);
       stroke: none;
     }
-    .babel-blocked-extraction-label {
-      fill: #d1fae5;
+    .babel-analysis-verdict-label,
+    .babel-analysis-judgment {
+      fill: var(--babel-relation-ink);
       stroke: rgba(1, 8, 5, 0.96);
       stroke-width: 6px;
       paint-order: stroke;
@@ -864,7 +923,16 @@
       font-size: 44px;
       font-style: italic;
       font-weight: 650;
+    }
+    .babel-analysis-verdict-label {
       text-decoration: underline;
+    }
+    .babel-analysis-verdict-label {
+      font-size: 80px;
+    }
+    .babel-analysis-judgment {
+      font-size: 160px;
+      text-decoration: none;
     }
     .babel-idiom-chunk-underline,
     .babel-idiom-domain-bracket {
@@ -902,6 +970,13 @@
       font-style: italic;
       font-weight: 700;
     }
+    .babel-relation-index {
+      fill: var(--emerald) !important;
+    }
+    .babel-renderer-authored-index,
+    .babel-renderer-authored-terminal {
+      fill: #34d399 !important;
+    }
     .babel-feature-plaque-shell {
       fill: rgba(2, 18, 13, 0.74);
       stroke: rgba(94, 234, 157, 0.58);
@@ -929,15 +1004,6 @@
       fill: rgba(110, 231, 183, 0.92);
       filter: drop-shadow(0 0 5px rgba(52, 211, 153, 0.58));
     }
-    .babel-feature-plaque-compact .babel-feature-plaque-shell {
-      fill: rgba(2, 18, 13, 0.82);
-      stroke-width: 2px;
-    }
-    .babel-feature-compact-token {
-      fill: #a7f3d0;
-      font-size: 34px;
-      letter-spacing: 0;
-    }
     .babel-agreement-case-relation-layer {
       pointer-events: none;
     }
@@ -960,13 +1026,16 @@
       fill: rgba(110, 231, 183, 0.94);
     }
     .babel-agree-cycle-badge circle {
-      fill: rgba(2, 18, 13, 0.96);
+      fill: rgba(6, 78, 55, 0.86);
       stroke: rgba(110, 231, 183, 0.86);
       stroke-width: 1.4px;
     }
     .babel-agree-cycle-badge text {
       fill: #ecfdf5;
       font: 800 34px/1 "JetBrains Mono", monospace;
+    }
+    .babel-agree-cycle-badge text.babel-relation-index {
+      fill: #ecfdf5 !important;
     }
     .babel-feature-sharing-vine {
       fill: none;
@@ -1499,7 +1568,6 @@
       fill: none;
       stroke-linecap: round;
       stroke-linejoin: round;
-      stroke-dasharray: 20 15;
     }
     .babel-phase-arc-shadow {
       stroke: rgba(1, 8, 5, 0.95);
@@ -1522,8 +1590,7 @@
       pointer-events: none;
       transition: opacity 160ms ease;
     }
-    .babel-transfer-edge-outline,
-    .babel-right-roof-outline {
+    .babel-transfer-edge-outline {
       fill: rgba(4, 24, 17, 0.42);
       stroke: rgba(167, 243, 208, 0.82);
       stroke-width: 1.7;
@@ -1665,9 +1732,6 @@
     .babel-improper-candidate-path-blocked {
       stroke: rgba(167, 243, 208, 0.62);
     }
-    .babel-improper-source-trajectory-hidden {
-      opacity: 0 !important;
-    }
     .babel-intervention-search-shadow,
     .babel-intervention-search-path {
       fill: none;
@@ -1781,6 +1845,79 @@
       stroke-dasharray: 9 12;
       stroke-linecap: round;
       stroke-linejoin: round;
+    }
+    /*
+     * Neutral geometric relations share one ink and acquire their glow only
+     * from the common relation-active host. Semantic state marks and plaque
+     * surfaces intentionally stay outside this policy.
+     */
+    svg :is(
+      .babel-gapping-correspondence,
+      .babel-gapping-arrowhead,
+      .babel-control-domain,
+      .babel-control-dependency,
+      .babel-control-dependency-marker path,
+      .babel-predication-path,
+      .babel-binding-domain,
+      .babel-trajectory-path:not(.babel-trajectory-path-shadow),
+      .babel-pg-path-node,
+      .babel-pg-copy-branch,
+      .babel-pg-copy-ring,
+      .babel-pg-blocked-edge,
+      .babel-native-branch-overlay,
+      .babel-blocked-extraction-path,
+      .babel-idiom-chunk-underline,
+      .babel-idiom-domain-bracket,
+      .babel-lf-domain,
+      .babel-lf-path,
+      .babel-lf-arrowhead,
+      .babel-enclosure-carrier-chunk,
+      .babel-island-barrier-cut,
+      .babel-phase-arc,
+      .babel-improper-candidate-rail,
+      .babel-improper-candidate-path,
+      .babel-intervention-search-path,
+      .babel-intervention-x-mark,
+      .babel-intervention-arrowhead,
+      .babel-multidominance-branch,
+      .babel-argument-sharing-domain,
+      .babel-argument-sharing-object-box,
+      .babel-strong-npi-path,
+      .babel-anti-locality-cap,
+      .babel-domain-locality-x
+    ) {
+      stroke: var(--babel-relation-ink, #34d399) !important;
+      filter: none;
+    }
+    svg :is(
+      .babel-carrier-arrowhead,
+      .babel-blocked-extraction-marker path,
+      .babel-lf-operator-mark,
+      .babel-transfer-access-origin,
+      .babel-accord-arrowhead,
+      .babel-f-projection-arrowhead
+    ) {
+      fill: var(--babel-relation-ink, #34d399) !important;
+      filter: none;
+    }
+    svg .babel-trajectory-path-shadow {
+      stroke: rgba(2, 12, 8, 0.85) !important;
+      filter: none;
+    }
+    svg .babel-ellipsis-antecedent-label {
+      filter: none;
+    }
+    svg .babel-improper-forbidden-region {
+      fill: rgba(52, 211, 153, 0.075) !important;
+    }
+    svg .babel-argument-sharing-domain {
+      opacity: 0.72;
+    }
+    svg .vr-relation-active .babel-argument-sharing-domain {
+      opacity: 1;
+    }
+    svg .babel-strong-npi-path {
+      stroke-width: 1.55px;
     }
     .babel-render-card[data-lens-active="true"] .terminal-label:not(.babel-lens-node),
     .babel-render-card:has(.babel-lens-node:hover) .terminal-label:not(.babel-lens-node),
@@ -1943,14 +2080,21 @@
     .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-ellipsis-antecedent-label {
       filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.18));
     }
-    .babel-render-card[data-lens-active="true"] .babel-lens-node,
-    .babel-render-card:has(.babel-lens-node:hover) .babel-lens-node,
-    .babel-render-card:has(.babel-lens-toggle:hover) .babel-lens-node,
-    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-lens-node {
+    .babel-render-card[data-lens-active="true"] .babel-lens-node:not(.vr-relation-active),
+    .babel-render-card:has(.babel-lens-node:hover) .babel-lens-node:not(.vr-relation-active),
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-lens-node:not(.vr-relation-active),
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-lens-node:not(.vr-relation-active) {
       opacity: 1;
       stroke: transparent !important;
       stroke-width: 0 !important;
       filter: none !important;
+    }
+    .babel-render-card[data-lens-active="true"] .vr-relation-active.babel-ellipsis-ghost-label,
+    .babel-render-card:has(.babel-lens-node:hover) .vr-relation-active.babel-ellipsis-ghost-label,
+    .babel-render-card:has(.babel-lens-toggle:hover) .vr-relation-active.babel-ellipsis-ghost-label,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .vr-relation-active.babel-ellipsis-ghost-label {
+      opacity: 0.82 !important;
+      filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.5)) !important;
     }
     /*
      * A card may opt out of the two-column layout when its tree is genuinely
@@ -1976,11 +2120,10 @@
       overflow: hidden;
       position: relative;
     }
-    .babel-render-mount[data-archetype^="I7."] {
-      min-height: 0;
-      height: auto;
-      max-height: none;
-      aspect-ratio: 1 / 1;
+    .babel-render-mount[data-archetype^="H5."] {
+      min-height: 840px;
+      height: 92vh;
+      max-height: 960px;
     }
     .babel-render-mount > div {
       width: 100%;
@@ -2024,8 +2167,12 @@
       right: 14px;
       bottom: 14px;
       z-index: 8;
+      height: 142px;
       max-height: 142px;
-      overflow: auto;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       border: 1px solid rgba(16, 185, 129, 0.2);
       border-radius: 16px;
       background: rgba(2, 8, 6, 0.94);
@@ -2033,6 +2180,14 @@
       color: rgba(236, 253, 245, 0.86);
       font: 11px/1.45 "JetBrains Mono", monospace;
       box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+    }
+    .babel-render-mount [data-babel-replay-timeline="true"] {
+      display: none;
+    }
+    .babel-render-mount [data-babel-replay-details="true"] {
+      min-height: 0;
+      flex: 1 1 auto;
+      overflow-y: auto;
     }
     .babel-render-mount [data-babel-replay-panel="true"] button {
       margin: 0 6px 8px 0;
@@ -2078,6 +2233,8 @@
       .babel-render-card,
       .babel-render-card-header { grid-template-columns: 1fr; }
       .babel-render-mount { min-height: 430px; height: 64vh; }
+      .babel-render-mount[data-archetype^="H5."] { min-height: 860px; height: 96vh; }
+      .babel-render-mount[data-archetype^="H6."] { min-height: 720px; height: 82vh; }
       .compiler-route div { grid-template-columns: 48px 1fr; }
       .compiler-route em { grid-column: 2; }
     }
@@ -2302,27 +2459,10 @@
       row-gap: 20px;
     }
     .babel-render-card-header {
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr);
       align-items: start;
       gap: 20px;
       padding: 0;
-    }
-    .babel-card-notes {
-      width: min(300px, 34vw);
-      color: rgba(236, 253, 245, 0.58);
-      font-size: 13px;
-      line-height: 1.45;
-    }
-    .babel-card-notes summary {
-      cursor: pointer;
-      color: #6ee7b7;
-      font: 600 11px/1.2 "JetBrains Mono", monospace;
-      list-style-position: outside;
-    }
-    .babel-card-notes p {
-      margin: 10px 0 0;
-      font-size: 13px;
-      line-height: 1.5;
     }
     .babel-render-code {
       display: none !important;
@@ -2347,6 +2487,39 @@
     .relation-sidebar-link strong {
       color: inherit;
       font: 600 11px/1.3 "Quicksand", ui-sans-serif, system-ui;
+    }
+    .visual-vocabulary {
+      margin-top: 64px;
+      padding-top: 38px;
+      border-top: 1px solid rgba(110, 231, 183, 0.18);
+      scroll-margin-top: 24px;
+    }
+    .babel-vocabulary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .babel-vocabulary-specimen {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid rgba(110, 231, 183, 0.15);
+      border-radius: 6px;
+      background:
+        radial-gradient(circle at 1px 1px, rgba(110, 231, 183, 0.08) 1px, transparent 1.2px) 0 0 / 20px 20px,
+        rgba(0, 18, 12, 0.72);
+    }
+    .babel-vocabulary-specimen h3 {
+      margin: 0;
+      padding: 14px 16px 0;
+      color: rgba(236, 253, 245, 0.7);
+      font: 650 10px/1.25 "JetBrains Mono", monospace;
+      text-transform: uppercase;
+    }
+    .babel-vocabulary-specimen svg {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      overflow: visible;
     }
     .source-archive {
       margin-top: 60px;
@@ -2374,6 +2547,95 @@
     .source-list a:focus-visible {
       color: #6ee7b7;
     }
+    .source-count {
+      margin-left: 10px;
+      color: rgba(110, 231, 183, 0.56);
+      font: 600 11px/1.2 "JetBrains Mono", monospace;
+      white-space: nowrap;
+    }
+    .babel-source-groups {
+      display: grid;
+      gap: 52px;
+      margin-top: 24px;
+    }
+    .babel-source-group {
+      content-visibility: auto;
+      contain-intrinsic-block-size: auto 720px;
+    }
+    .babel-source-group > header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(110, 231, 183, 0.15);
+    }
+    .babel-source-group > header h3,
+    .source-records h3 {
+      margin: 0;
+      color: rgba(236, 253, 245, 0.78);
+      font: 650 12px/1.35 "JetBrains Mono", monospace;
+    }
+    .babel-source-group > header span {
+      color: rgba(110, 231, 183, 0.5);
+      font: 600 10px/1 "JetBrains Mono", monospace;
+    }
+    .babel-source-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .babel-source-figure {
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      border: 1px solid rgba(110, 231, 183, 0.14);
+      border-radius: 6px;
+      background: rgba(0, 18, 12, 0.72);
+    }
+    .babel-source-figure a {
+      display: block;
+      color: inherit;
+      text-decoration: none;
+    }
+    .babel-source-figure:has(a:hover),
+    .babel-source-figure:has(a:focus-visible) {
+      border-color: rgba(110, 231, 183, 0.5);
+    }
+    .babel-source-image {
+      display: grid;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      place-items: center;
+      overflow: hidden;
+      background: #fff;
+    }
+    .babel-source-image img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .babel-source-figure figcaption {
+      min-height: 46px;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      color: rgba(236, 253, 245, 0.66);
+      font: 500 10px/1.35 "JetBrains Mono", monospace;
+      overflow-wrap: anywhere;
+    }
+    .source-records {
+      margin-top: 54px;
+    }
+    .source-records h3 {
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(110, 231, 183, 0.15);
+    }
+    .source-records .source-list {
+      margin-top: 0;
+      border-top: 0;
+    }
     .archive-footer {
       margin-top: 42px;
       color: rgba(236, 253, 245, 0.38);
@@ -2389,8 +2651,52 @@
       .source-list {
         grid-template-columns: 1fr;
       }
-      .babel-card-notes {
+      .babel-vocabulary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .babel-source-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 620px) {
+      .babel-vocabulary-grid {
+        grid-template-columns: 1fr;
+      }
+      .babel-source-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 960px) {
+      .page {
         width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+      aside {
+        max-height: min(320px, 42vh);
+        overflow: auto;
+        margin-bottom: 22px;
+      }
+      .archive-main {
+        width: 100%;
+      }
+      .archive-nav {
+        flex-wrap: wrap;
+        gap: 10px 16px;
+      }
+      .archive-nav a {
+        white-space: nowrap;
+      }
+    }
+    @media (min-width: 961px) and (max-width: 1250px) {
+      .page {
+        display: block;
+        padding: 18px 20px 56px;
+      }
+      aside {
+        position: static;
+        max-height: 280px;
+        margin-bottom: 30px;
       }
     }
   </style>
@@ -2408,22 +2714,22 @@
     <main class="archive-main">
       <header class="archive-header">
         <div>
-          <p class="archive-kicker">Babel · relation archive</p>
-          <h1>Babel Relation Atlas</h1>
-          <p>A visual history of how Babel learned to draw syntactic relations. The finished cards remain as the record; implementation scaffolding and retired experiments do not.</p>
+          <p class="archive-kicker">Babel · relation orchard</p>
+          <h1>Babel Relation Orchard</h1>
         </div>
-        <nav class="archive-nav" aria-label="Archive navigation">
-          <a href="../">Research</a>
-          <a href="./">Report</a>
+        <nav class="archive-nav" aria-label="Orchard navigation">
+          <a href="https://francisronge.github.io/sylvan-architect-babel/">Research</a>
+          <a href="https://francisronge.github.io/sylvan-architect-babel/research/visual-relations-atlas/">Report</a>
           <a href="#relation-cards">Cards</a>
-          <a href="#sources">Contribute</a>
+          <a href="#visual-vocabulary">Vocabulary</a>
+          <a href="#sources">Sources</a>
+          <a href="#contribute">Contribute</a>
         </nav>
       </header>
 
       <section id="relation-cards" class="relation-atlas current-renderer-lab" aria-labelledby="relation-cards-title">
         <div class="archive-section-head">
           <h2 id="relation-cards-title">Relation cards</h2>
-          <p>Each card mounts Babel's actual tree renderer and Replay sequence. Open its notes only when the drawing needs context.</p>
         </div>
         <div class="atlas-cards-shell">
           <div class="atlas-loading-state" role="status" aria-live="polite">
@@ -2443,14 +2749,38 @@
         </div>
       </section>
 
+      <section id="visual-vocabulary" class="visual-vocabulary" aria-labelledby="visual-vocabulary-title">
+        <div class="archive-section-head">
+          <h2 id="visual-vocabulary-title">Visual vocabulary</h2>
+          <p>Babel's relation marks in isolation: no trees, sentences, or derivations.</p>
+        </div>
+        <div id="babel-visual-vocabulary" aria-live="polite" aria-busy="true"></div>
+      </section>
+
       <section id="sources" class="source-archive" aria-labelledby="sources-title">
         <div class="archive-section-head">
-          <h2 id="sources-title">Missing a relation?</h2>
-          <p>The atlas is deliberately extensible. Propose a sourced relation convention or contribute its implementation.</p>
+          <h2 id="sources-title">Source archive <span class="source-count">191 figures</span></h2>
+        </div>
+        <div id="babel-source-gallery" aria-live="polite" aria-busy="true"></div>
+        <div class="source-records">
+          <h3>Research records</h3>
+          <ul class="source-list">
+            <li><a href="./visual-relations-source-recovery-2026-07-26.md">Primitive and source recovery</a></li>
+            <li><a href="./visual-relations-source-recovery-2026-07-30.md">Relation-family source recovery</a></li>
+            <li><a href="./visual-relations-domains-phases-locality-research-2026-07-31.md">Domains, phases, and locality</a></li>
+            <li><a href="./visual-relations-silence-ellipsis-pronunciation-research-2026-08-01.md">Silence, ellipsis, and pronunciation</a></li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="contribute" class="source-archive" aria-labelledby="contribute-title">
+        <div class="archive-section-head">
+          <h2 id="contribute-title">Missing a relation?</h2>
+          <p>I could not cover every relation in syntax. If something is missing, open an issue with a source and an example tree, or send a pull request that adds it to Babel. I may also have made mistakes, as may the models I worked with; if you notice one, please open an issue and let me know.</p>
         </div>
         <ul class="source-list">
-          <li><a href="./">Read the research devlog</a></li>
-          <li><a href="https://github.com/francisronge/sylvan-architect-babel/issues/new?title=Relation%20proposal%3A%20">Open a relation proposal</a></li>
+          <li><a href="https://francisronge.github.io/sylvan-architect-babel/research/visual-relations-atlas/">Read how the orchard was made</a></li>
+          <li><a href="https://github.com/francisronge/sylvan-architect-babel/issues/new?title=Relation%20proposal%3A%20">Propose a relation</a></li>
           <li><a href="https://github.com/francisronge/sylvan-architect-babel/pulls">Browse pull requests</a></li>
           <li><a href="https://github.com/francisronge/sylvan-architect-babel">Babel on GitHub</a></li>
         </ul>
@@ -2461,6 +2791,6 @@
   </div>
 
   <script>window.__BABEL_LOGO_SRC__ = "./assets/babellogo.png";</script>
-  <script src="./visual-relations-atlas.bundle.js?v=2026-08-08-2"></script>
+  <script src="./visual-relations-atlas.bundle.js?v=orchard-2026-08-25-r1"></script>
 </body>
 </html>
