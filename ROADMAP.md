@@ -1,6 +1,6 @@
 # Babel Master Roadmap
 
-Status date: 2026-08-27
+Status date: 2026-08-28
 
 This is Babel's only active implementation plan. Dated plans, audits, handoffs,
 and research notebooks are evidence or history, not competing roadmaps.
@@ -117,10 +117,11 @@ another subsystem.
    release direction, preserve required notices, and reserve the official Babel
    name and logo. A separate Creative Commons or data license remains optional
    and must not be applied indiscriminately.
-8. **Open release gate:** The clean release-candidate snapshot passes `npm ci`,
-   `npm run verify:all`, `npm run build`, and the link/static-asset check without
-   ignored local files. Repeat those gates from a clone of the actual release
-   commit before publishing it.
+8. **Done:** Implementation commit `dd34c77` was cloned into an empty directory
+   and passed `npm ci`, `npm run verify:all`, `npm run build`, and the
+   link/static-asset check without ignored local files. The clean clone also
+   passed the 69/69 Tier-2 raster comparison and the 61-card Orchard browser
+   audit.
 
 Done when a new checkout contains the correctly licensed source, r96 Orchard,
 compact fixtures, required notices, and all provider-free gates without relying
