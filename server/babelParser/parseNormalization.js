@@ -76,17 +76,17 @@ export const createParseNormalizationHelpers = ({
           .filter(Boolean)
       ));
       const flattenedSurfaceOrder = observedRootSurfaceOrders.flat();
-      const hasExactRootSurface = observedRootSurfaceOrders.some((surfaceOrder) => (
-        sameTokenSequence(surfaceOrder, sentenceTokens)
+      const hasExactRootSurface = observedRootSurfaceOrders.some((observedOrder) => (
+        sameTokenSequence(observedOrder, sentenceTokens)
       ));
-      const incompleteWorkspaceCouldStillSpellOut = (
+      const incompleteWorkspaceCouldStillConverge = (
         finalForest.length > 1
         && sameTokenSequence(flattenedSurfaceOrder, sentenceTokens)
       );
       if (
         observedRootSurfaceOrders.length > 0
         && !hasExactRootSurface
-        && !incompleteWorkspaceCouldStillSpellOut
+        && !incompleteWorkspaceCouldStillConverge
       ) {
         throw new ParseApiError(
           'BAD_MODEL_RESPONSE',
@@ -122,7 +122,6 @@ export const createParseNormalizationHelpers = ({
       );
     }
     const committedTree = derivationPrimaryBundle.tree;
-    const committedSurfaceOrder = derivationPrimaryBundle.surfaceOrder;
     const identifiedDerivationSteps = [];
     const derivationStages = derivationFrames.map((frame) => {
       const details = frame?.change?.details && typeof frame.change.details === 'object' && !Array.isArray(frame.change.details)
@@ -155,7 +154,6 @@ export const createParseNormalizationHelpers = ({
 
     return {
       tree: committedTree,
-      surfaceOrder: committedSurfaceOrder,
       derivationStages,
       derivationSteps: identifiedDerivationSteps,
       provenance

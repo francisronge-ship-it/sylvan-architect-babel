@@ -755,48 +755,6 @@ export const createSyntaxTreeHelpers = ({
     return ids;
   };
 
-  const validateAndCommitSurfaceOrder = (_surfaceOrder, tree, sentence) => {
-    const sentenceTokens = tokenizeSentenceSurfaceOrder(sentence);
-    anchorOvertLeavesToSentenceTokens(tree, sentenceTokens);
-    const canonicalTree = deriveCanonicalSurfaceSpans(tree);
-    const surfaceOrder = collectOvertTerminalNodes(canonicalTree)
-      .map((node) => resolveNodeSurface(node))
-      .map((token) => String(token || '').trim())
-      .filter(Boolean);
-
-    return {
-      tree: canonicalTree,
-      surfaceOrder: surfaceOrder.length > 0 ? surfaceOrder : sentenceTokens
-    };
-  };
-
-  const validateSpelloutConsistency = (derivationSteps, sentenceTokens, surfaceOrder) => {
-    if (!Array.isArray(derivationSteps) || derivationSteps.length === 0) return false;
-
-    const spelloutSteps = derivationSteps.filter((step) => String(step?.operation || '').trim() === 'SpellOut');
-    if (spelloutSteps.length === 0) return false;
-
-    const finalSpelloutStep = spelloutSteps[spelloutSteps.length - 1];
-    const normalizedSpelloutOrder = (finalSpelloutStep.spelloutOrder || [])
-      .map((token) => normalizeSurfaceToken(token))
-      .filter(Boolean);
-    const normalizedSurfaceOrder = (surfaceOrder || [])
-      .map((token) => normalizeSurfaceToken(token))
-      .filter(Boolean);
-    const normalizedSentenceTokens = (sentenceTokens || [])
-      .map((token) => normalizeSurfaceToken(token))
-      .filter(Boolean);
-
-    if (
-      normalizedSpelloutOrder.length === 0 ||
-      JSON.stringify(normalizedSpelloutOrder) !== JSON.stringify(normalizedSurfaceOrder) ||
-      JSON.stringify(normalizedSpelloutOrder) !== JSON.stringify(normalizedSentenceTokens)
-    ) {
-      return false;
-    }
-    return true;
-  };
-
   return {
     normalizeSyntaxNode,
     normalizeSyntaxTreeWithIds,
@@ -807,8 +765,6 @@ export const createSyntaxTreeHelpers = ({
     anchorOvertLeavesToSentenceTokens,
     deriveCanonicalSurfaceSpans,
     collapseOvertHeadLandingChains,
-    collectExistingNodeIds,
-    validateAndCommitSurfaceOrder,
-    validateSpelloutConsistency
+    collectExistingNodeIds
   };
 };

@@ -28,7 +28,6 @@ const CURRENT_PROVENANCE_FIELDS = [
 
 const CURRENT_ANALYSIS_FIELDS = [
   'tree',
-  'surfaceOrder',
   'derivationStages',
   'derivationSteps',
   'provenance'
@@ -45,8 +44,24 @@ const CURRENT_BUNDLE_FIELDS = [
   'generationRecord'
 ];
 
-export const loadTreeBankBundleSnapshot = (bundle) =>
-  stripLegacyCaseMetadataFromParseBundle(JSON.parse(JSON.stringify(bundle)));
+export const loadTreeBankBundleSnapshot = (bundle) => {
+  const current = stripLegacyCaseMetadataFromParseBundle(JSON.parse(JSON.stringify(bundle)));
+  (Array.isArray(current?.analyses) ? current.analyses : []).forEach((analysis) => {
+    if (!analysis || typeof analysis !== 'object') return;
+    delete analysis.surfaceOrder;
+    if (Array.isArray(analysis.derivationSteps)) {
+      analysis.derivationSteps = analysis.derivationSteps
+        .filter((step) => String(step?.operation || '').trim() !== 'SpellOut')
+        .map((step) => {
+          if (!step || typeof step !== 'object') return step;
+          const next = { ...step };
+          delete next.spelloutOrder;
+          return next;
+        });
+    }
+  });
+  return current;
+};
 
 const projectFields = (source, fields) => {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return {};

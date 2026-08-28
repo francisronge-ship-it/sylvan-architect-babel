@@ -105,8 +105,18 @@ test('the model-facing contract teaches optional values and immediate-stage prio
   const instruction = buildSystemInstruction('xbar', 'gemini');
   assert.match(instruction, /may also have "values" and "priorAnchors"/);
   assert.match(instruction, /literal notation the relation itself states/);
+  assert.doesNotMatch(instruction, /for example a feature, index, outcome, exponent/);
   assert.match(instruction, /immediately preceding derivationStage/);
   assert.match(instruction, /Do not use priorAnchors merely because an object existed earlier/);
+});
+
+test('the model-facing contract permits illicit analyses without fabricated syntax', () => {
+  const instruction = buildSystemInstruction('xbar', 'gemini');
+  assert.match(instruction, /Analyze the exact input as written, even when the selected framework judges it illicit/);
+  assert.match(instruction, /judges a configuration or the whole analysis illicit/);
+  assert.match(instruction, /anchor the relation to the final root/);
+  assert.match(instruction, /Do not introduce syntax whose only purpose is to represent an operation the analysis rejects/);
+  assert.match(instruction, /The last derivationStage must be the converged structure for the exact input tokens/);
 });
 
 test('normalizes the current four-field derivation contract without provider calls', () => {
@@ -122,7 +132,6 @@ test('normalizes the current four-field derivation contract without provider cal
   assert.equal(bundle.analyses.length, 1);
   const analysis = bundle.analyses[0];
 
-  assert.deepEqual(analysis.surfaceOrder, ['Mia', 'laughed']);
   assert.equal(analysis.derivationStages.length, 4);
   analysis.derivationStages.forEach((stage) => {
     assert.deepEqual(Object.keys(stage), [
@@ -170,7 +179,6 @@ test('normalizes the current four-field derivation contract without provider cal
     'derivationStages',
     'derivationSteps',
     'provenance',
-    'surfaceOrder',
     'tree'
   ]);
 });

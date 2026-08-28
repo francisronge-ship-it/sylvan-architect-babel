@@ -456,15 +456,14 @@ export const createDerivationCompilerHelpers = ({
       sentenceTokens
     );
     if (!committedFrame?.root) return null;
-    const surfaceOrder = collectOvertTerminalNodes(committedFrame.root)
+    const pronouncedTerminals = collectOvertTerminalNodes(committedFrame.root)
       .map((node) => resolveNodeSurface(node))
       .map((token) => String(token || '').trim())
       .filter(Boolean);
-    if (!sameTokenSequence(surfaceOrder, sentenceTokens)) return null;
+    if (!sameTokenSequence(pronouncedTerminals, sentenceTokens)) return null;
 
     return {
       tree: committedFrame.root,
-      surfaceOrder,
       derivationSteps: []
     };
   };

@@ -81,8 +81,7 @@ const {
   collectOvertTerminalNodes,
   sameTokenSequence,
   anchorOvertLeavesToSentenceTokens,
-  deriveCanonicalSurfaceSpans,
-  validateAndCommitSurfaceOrder
+  deriveCanonicalSurfaceSpans
 } = syntaxTreeHelpersRef;
 
 const {
@@ -165,7 +164,6 @@ export const __test__ = {
   normalizeParseResult,
   normalizeDerivationStagesToDerivationFrames,
   normalizeDerivationFrames,
-  validateAndCommitSurfaceOrder,
   canonicalizeDerivationRootCandidateForSentence,
   selectCommittedDerivationRoot,
   findLatestCommittedDerivationFrame,

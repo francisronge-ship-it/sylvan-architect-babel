@@ -99,7 +99,7 @@ test('parser retirement ignores legacy Case node metadata without altering autho
   assert.equal(authoredNode.label, 'NP');
   assert.equal(authoredNode.case, 'nominative');
   assert.equal(bundle.analyses[0].derivationStages[0].workspaceForest[0].label, 'NP');
-  assert.deepEqual(bundle.analyses[0].surfaceOrder, ['Mia', 'laughed']);
+  assert.equal('surfaceOrder' in bundle.analyses[0], false);
   assertNoLegacyCaseMetadata(bundle);
 });
 
@@ -179,6 +179,7 @@ test('historical Tree Bank records load without legacy Case metadata or archive 
     legacyBundle.analyses[0].derivationStages[0].relations
   );
   assertNoLegacyCaseMetadata(loaded);
+  assert.equal('surfaceOrder' in loaded.analyses[0], false);
   assert.equal(buildReplaySnapshotProjection(loaded).sentence, 'Mia');
 
   const resaved = createTreeBankBundleSnapshot(legacyBundle);

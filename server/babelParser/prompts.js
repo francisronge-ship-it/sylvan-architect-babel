@@ -5,7 +5,6 @@ export const buildDerivationStagesFirstContentsPrompt = (
   framework = 'xbar'
 ) => {
   const tokens = tokenizeSentenceSurfaceOrder(sentence);
-  const tokenText = tokens.join(' | ');
   const tokenIndexText = tokens.map((token, index) => `${index}:${token}`).join(' | ');
   const frameworkName = framework === 'xbar'
     ? 'X-Bar Theory (Government and Binding)'
@@ -16,9 +15,8 @@ export const buildDerivationStagesFirstContentsPrompt = (
     `Return every genuinely distinct structural analysis without an arbitrary two-parse limit; do not duplicate equivalent trees.`,
     `derivationStages is the structural source of truth inside every analysis.`,
     `Build the derivation forward; do not start from a completed final tree and backfill stages.`,
-    `Input tokens, in required surface order: ${tokenIndexText}.`,
-    `Use exactly these overt input tokens as pronounced terminals: ${tokenText}.`,
-    `The last derivationStage must be the final converged structure for exactly this token sequence: ${tokenText}.`,
+    `Input tokens, in required final surface order: ${tokenIndexText}.`,
+    `The final derivationStage must spell out exactly this token sequence; any stage that uses word/tokenIndex must match these token strings at those indexes.`,
     `Every tokenIndex may appear on at most one non-silent terminal in each derivationStage.`,
     `Follow the system derivationStages contract. Do not add fields outside that contract.`
   ].filter(Boolean);

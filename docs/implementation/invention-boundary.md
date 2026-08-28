@@ -5,7 +5,7 @@
 - expand an exact prior-stage `refId`;
 - clone authored nodes without changing their linguistic scalar fields;
 - validate surface order and derive `tokenIndex` / `surfaceSpan` alignment;
-- resolve authored `visualRelations` anchors without inventing relation labels.
+- resolve authored `relations` anchors without inventing relation labels.
 
 It must reject malformed or incomplete authored evidence instead of:
 
@@ -23,11 +23,13 @@ generic presentation operations listed by
 `server/babelParser/inventionDetector.js`. It may not create linguistic nulls,
 traces, shells, dependency labels, or movement operations.
 
-Open `visualRelations` role names and relation labels remain literal authored
-data. Without an approved exact renderer dispatch, the parser may validate
-anchor existence and expose literal provenance, but it must not infer
-source/target geometry, movement kind, chain identity, or display indices from
-role-name synonyms, prose, labels, lineage, or node-id stems.
+Open `relations` role names and relation labels remain literal authored
+data. After exact registry dispatch fails, the renderer may recognize only
+declared generic visual facets from the curated Tier-2 synonym catalog over
+authored role names and values, resolved anchors, stage structure, lineage, and
+authored silence. It must not infer missing anchors, syntax, relation identity,
+or theoretical claims from prose, labels, node-id stems, or an unknown
+construction name.
 
 `tests/inventionDetector.test.mjs` is the permanent provider-free enforcement
 surface. It checks compiled trees, expanded stages, resolved relations, replay

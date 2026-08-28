@@ -49,7 +49,7 @@ the capture and prevents the durable receipt from being updated.
 ## Semantic rules
 
 The semantic receipt declares the sole authored stage fields:
-`statement`, `stageRecord`, `visualRelations`, and `workspaceForest`.
+`statement`, `stageRecord`, `relations`, and `workspaceForest`.
 It declares the four model-provenance fields excluded from semantic fixture
 comparison: `timestamp`, `promptVersion`, `parserVersion`, and `uiVersion`.
 No authored data is rewritten.

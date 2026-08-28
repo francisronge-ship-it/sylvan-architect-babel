@@ -350,14 +350,16 @@ const unwrapDevBundlePayload = (value: unknown): ParseBundle | null => {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Record<string, unknown>;
   const response = candidate.response;
-  if (response && typeof response === 'object' && Array.isArray((response as ParseBundle).analyses)) {
-    return response as ParseBundle;
+  if (response && typeof response === 'object' && Array.isArray((response as unknown as ParseBundle).analyses)) {
+    return response as unknown as ParseBundle;
   }
   const result = candidate.result;
-  if (result && typeof result === 'object' && Array.isArray((result as ParseBundle).analyses)) {
-    return result as ParseBundle;
+  if (result && typeof result === 'object' && Array.isArray((result as unknown as ParseBundle).analyses)) {
+    return result as unknown as ParseBundle;
   }
-  return Array.isArray((candidate as ParseBundle).analyses) ? candidate as ParseBundle : null;
+  return Array.isArray((candidate as unknown as ParseBundle).analyses)
+    ? candidate as unknown as ParseBundle
+    : null;
 };
 
 const openTreeBankDb = (): Promise<IDBDatabase> =>
