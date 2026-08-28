@@ -1,0 +1,85 @@
+# Babel Context
+
+Babel turns model-authored syntactic derivations into inspectable, replayable,
+durable analyses. This glossary separates the released research artifact from
+the product and evaluation work that still remains.
+
+## Language
+
+**Babel product**:
+The not-yet-shipped application comprising the public syntax generator and the
+research workbench over one shared contract, engine, renderer, Tree Bank, and
+derivational record system. Its roadmap is a minimum product boundary, not a
+frozen feature list.
+_Avoid_: Relation Orchard, research release
+
+**Relation Orchard**:
+The already-published research artifact that presents Babel's curated relation
+fixtures and visual vocabulary. It demonstrates the renderer but is not the
+Babel product or an end-to-end provider-integration proof.
+_Avoid_: Babel product, Atlas
+
+**Renderer subsystem**:
+The deterministic Tier 1, Tier 2, and Tier 3 relation renderer and Replay
+behavior verified provider-free against committed fixtures.
+_Avoid_: complete Babel renderer integration
+
+**Renderer integration**:
+The complete path from provider-authored contract output through normalization,
+compilation, Replay, and rendering inside the shipped Babel product.
+_Avoid_: renderer subsystem
+
+**Contract qualification**:
+Pre-launch empirical testing of whether selected providers reliably produce
+usable Babel analyses under the model-facing contract.
+_Avoid_: benchmark
+
+**Public generation policy**:
+The single empirically selected model and settings that power the public syntax
+generator without exposing provider controls to ordinary users.
+_Avoid_: research model picker
+
+**Research model access**:
+Explicit provider, model, and native-control access for inspecting and comparing
+runs across proprietary and open-weight candidates. Francis chooses every model
+in the configured catalog. Every route must meet the same product-quality
+standard even though model analyses may differ.
+_Avoid_: public generation policy
+
+**Babel product launch**:
+Programs 0 through 6 working together in production: qualified generation, the
+shared public and research application, complete renderer integration, durable
+Personal Tree Bank work, bounded operations, the Generation Archive, and a
+working review path into the Reviewed Derivational Corpus. A large reviewed
+corpus and the benchmark are not launch requirements.
+_Avoid_: Relation Orchard publication, benchmark release
+
+**Benchmark**:
+The deferred, claim-bearing evaluation of model syntactic performance that
+requires qualified review, methods authority, and independently reconstructable
+evidence.
+_Avoid_: contract qualification, product verification
+
+**Personal Tree Bank**:
+The user's browser-local library of explicitly saved Babel work, annotations,
+collections, and exports. Saving or deleting here does not control backend
+research retention by the official hosted service.
+_Avoid_: Generation Archive, Reviewed Derivational Corpus
+
+**Generation Archive**:
+The official hosted service's automatic backend record of generation attempts,
+including successful analyses and separately typed failed or malformed outputs.
+It is not an initial ordinary-user interface.
+_Avoid_: Personal Tree Bank, Reviewed Derivational Corpus
+
+**Reviewed Derivational Corpus**:
+The human-selected collection of research- and training-grade complete
+derivations promoted from archived generations with evidence and provenance.
+This is a technical working name; public branding remains unresolved.
+_Avoid_: Generation Archive, final-tree treebank
+
+**Failed generation**:
+A provider attempt that does not become a valid Babel analysis because of
+transport, malformed data, contract, or deterministic-engine failure. A valid
+analysis of an ungrammatical sentence is not a failed generation.
+_Avoid_: illicit analysis, corrupt sentence

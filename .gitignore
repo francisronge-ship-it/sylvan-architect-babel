@@ -7,35 +7,72 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
+node_modules/
+/bench-baseline/
+dist/
+build/
+coverage/
+.cache/
+.vite/
+.turbo/
+.local-tests/
+.local-fixtures/
+.local-tools/
+.local-docs/
+test/
+.codex-sync-workspace.json
 dist-ssr
 .artifacts/*
 !.artifacts/README.md
 !.artifacts/helpers/
 .artifacts/helpers/*
 !.artifacts/helpers/loadLocalEnv.cjs
+!.artifacts/helpers/loadCurrentParser.cjs
+!.artifacts/helpers/loadPlaywright.cjs
+!.artifacts/helpers/surfaceTokens.cjs
+!.artifacts/helpers/currentContract.cjs
+!.artifacts/provider_effort_local_test.cjs
 !.artifacts/quarantine/
 .artifacts/quarantine/*
 !.artifacts/quarantine/legacy-harnesses/
 .artifacts/quarantine/legacy-harnesses/*
 !.artifacts/quarantine/legacy-harnesses/README.md
 !.artifacts/api_consistency_multilang.cjs
-!.artifacts/audit_random30_dual.cjs
 !.artifacts/capture_flavor_mixed10.cjs
 !.artifacts/direct_consistency_gauntlet.cjs
 !.artifacts/direct_consistency_world_sweep.cjs
 !.artifacts/live_consistency_gauntlet.cjs
 !.artifacts/novel_gauntlet_20.cjs
-!.artifacts/pro_novel5_sweep.cjs
+!.artifacts/gemini_novel5_sweep.cjs
 !.artifacts/random20_dual_showcase.cjs
 test-results/
 skills/
 .vercel/
 *.local
 .env
+.env.local
 .env.*
 !.env.example
+.codex-handoff/
+test/debug_reorder.mjs
+server/babelParser/proPromptNeutralizationArchive.md
+server/babelParser/proRouteRecoveryArchive.md
+
+# Visual-relations UI lab: a scratch surface for exploring relation drawings.
+# Not a permanent part of the repo; findings graduate into app code instead.
+docs/design/visual-relations-current-lab.tsx
+docs/design/**/*.bundle.js
+docs/design/babel-visual-relations-research.html
+docs/design/visual-relations-tier2-review.production.css
+
+# Local source-recovery copies of academic figures and PDFs. Research notes
+# retain citations and source URLs; these third-party files are not released.
+docs/design/visual-relations-assets/
+
+# The verified Orchard source and its current immutable production bundle have
+# graduated from the scratch surface and must survive a fresh checkout.
+!docs/design/visual-relations-current-lab.tsx
+!docs/design/visual-relations-current-lab.production-only-audit.r96.bundle.js
 
 # Editor directories and files
 .vscode/*
@@ -47,3 +84,4 @@ skills/
 *.njsproj
 *.sln
 *.sw?
+.vercel

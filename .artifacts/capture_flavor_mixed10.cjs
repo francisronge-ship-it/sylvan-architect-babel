@@ -1,16 +1,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { loadChromium, resolveChromiumLaunchOptions } = require('./helpers/loadPlaywright.cjs');
+const { collectResolvedVisualRelations } = require('./helpers/currentContract.cjs');
 
-let chromium;
-try {
-  ({ chromium } = require('playwright'));
-} catch {
-  ({ chromium } = require('/Users/francisronge/.npm/_npx/e41f203b7505f1fb/node_modules/playwright'));
-}
+const chromium = loadChromium();
 
 const BASE_URL = process.env.BABEL_BASE_URL || 'http://127.0.0.1:5177/';
 const OUT_DIR = path.resolve('.artifacts/flavor-mixed10');
-const CHROME_BIN = '/Users/francisronge/Library/Caches/ms-playwright/chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 
 const CASES = [
   { id: 'min_it_wh', framework: 'minimalism', language: 'Italian', sentence: 'Quale articolo ha letto Giulia?' },
@@ -141,7 +137,7 @@ async function replayToEnd(page) {
 async function extractNotesText(page) {
   return sanitizeText(
     await page
-      .locator('h2:has-text("Structural Geneology")')
+      .locator('h2:has-text("Derivational Notes")')
       .first()
       .locator('xpath=ancestor::div[contains(@class,"glass-dark")]')
       .first()
@@ -185,7 +181,7 @@ async function runCase(page, item) {
 
   const analysis = parsed.payload?.analyses?.[0] || {};
 
-  await switchTab(page, 'Growth Simulation');
+  await switchTab(page, 'Derivation Replay');
   const replay = await replayToEnd(page);
   const growthShot = path.join(OUT_DIR, `${item.id}-growth-final.png`);
   await page.screenshot({ path: growthShot, fullPage: true });
@@ -202,7 +198,7 @@ async function runCase(page, item) {
     status: parsed.status,
     elapsedMs,
     analysis,
-    movementEventsCount: Array.isArray(analysis.movementEvents) ? analysis.movementEvents.length : 0,
+    visualRelationsCount: collectResolvedVisualRelations(analysis).length,
     derivationStepsCount: Array.isArray(analysis.derivationSteps) ? analysis.derivationSteps.length : 0,
     replay,
     replayTextPath,
@@ -216,10 +212,7 @@ async function runCase(page, item) {
 
 (async () => {
   ensureOut();
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: CHROME_BIN
-  });
+  const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: true }));
   const context = await browser.newContext({ viewport: { width: 1832, height: 1142 } });
   const page = await context.newPage();
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });

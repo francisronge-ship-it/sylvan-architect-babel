@@ -10,6 +10,7 @@ function parseBooleanLike(value) {
 module.exports = function loadLocalEnv() {
   const root = path.resolve(__dirname, '../..');
   const candidates = ['.env.local', '.env'].map((name) => path.join(root, name));
+  const loaded = [];
 
   for (const filePath of candidates) {
     if (!fs.existsSync(filePath)) continue;
@@ -39,6 +40,8 @@ module.exports = function loadLocalEnv() {
     if (parseBooleanLike(process.env.BABEL_DEBUG_ENV_LOAD)) {
       console.log(`[harness-env] loaded ${path.basename(filePath)}`);
     }
-    return;
+    loaded.push(filePath);
   }
+
+  return loaded;
 };

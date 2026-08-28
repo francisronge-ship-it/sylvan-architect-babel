@@ -1,0 +1,268 @@
+{
+  "schemaVersion": 1,
+  "semantic": {
+    "architecturePacket": {
+      "artifacts": [
+        {
+          "classification": "normative",
+          "name": "babel-corrected-canonical-architecture.md",
+          "sha256": "87c37c0083ff964e338643d5e904a48f3d067d11c92f485eb8653417fa73c652"
+        },
+        {
+          "classification": "normative",
+          "name": "babel-provider-grade-benchmark-architecture.md",
+          "sha256": "59f004581b759c03c724e3e29e65c29f153e1c18e99bfc7d5025408a9fc91668"
+        },
+        {
+          "classification": "normative",
+          "name": "babel-universal-visual-relations-architecture.md",
+          "sha256": "cea3b84f5da1c919717527f3999bb585c50199c88c11cafd838eebf716f6f651"
+        },
+        {
+          "classification": "normative",
+          "name": "babel-corrected-sol-implementation-program.md",
+          "sha256": "38cc54c0c5cfa02bab80a83ce02bb23f4124aa36c7d4668ba5bc21cb71d3a6e0"
+        },
+        {
+          "classification": "normative",
+          "name": "babel-relations-values-exhaustive-coverage-proof.md",
+          "sha256": "0b86068f627119d06e0a023a5e5eac9607e5d971e2c9795b64b7aeb4f3689c44"
+        },
+        {
+          "classification": "supporting",
+          "name": "babel-answered-unknowns-dossier.md",
+          "sha256": "3c69e1b42f1c77a9d09643e3cce4ee133eb12e8e3fd3d8c44e8f73d5e97029da"
+        }
+      ],
+      "normativeArtifactCount": 5,
+      "supportingArtifactCount": 1
+    },
+    "behaviorProbes": {
+      "malformedPayloads": {
+        "invalidJson": {
+          "code": "BAD_MODEL_RESPONSE",
+          "details": {
+            "failure": {
+              "class": "transport_serialization",
+              "fieldPath": "$",
+              "offendingValue": "{\"derivationStages\":",
+              "ruleId": "TRANSPORT_JSON_OBJECT",
+              "stageIndex": null
+            },
+            "rawOutputArtifact": {
+              "byteLength": 20,
+              "data": "eyJkZXJpdmF0aW9uU3RhZ2VzIjo=",
+              "encoding": "base64",
+              "mediaType": "text/plain",
+              "retainedByteLength": 20,
+              "sha256": "f9e80498aa02c8eba6755a502db0e176dcb7572fc67cac812cb0928b7477fc34",
+              "truncated": false
+            }
+          },
+          "message": "Model response was not a valid JSON object.",
+          "name": "ParseApiError",
+          "outcome": "rejected",
+          "status": 502
+        },
+        "tokenMismatch": {
+          "code": "BAD_MODEL_RESPONSE",
+          "details": {
+            "failure": {
+              "class": "contract_misunderstanding",
+              "fieldPath": "$.derivationStages[3].workspaceForest",
+              "offendingValue": {
+                "expectedSurfaceOrder": [
+                  "Different",
+                  "input"
+                ],
+                "observedRootSurfaceOrders": [
+                  [
+                    "Mia",
+                    "laughed"
+                  ]
+                ]
+              },
+              "ruleId": "SURFACE_ORDER_EXACT",
+              "stageIndex": 3
+            }
+          },
+          "message": "No authored tree overt terminals match the input sentence order.",
+          "name": "ParseApiError",
+          "outcome": "rejected",
+          "status": 502
+        },
+        "topLevelArray": {
+          "code": "BAD_MODEL_RESPONSE",
+          "details": {
+            "failure": {
+              "class": "transport_serialization",
+              "fieldPath": "$",
+              "offendingValue": "[{\"derivationStages\":[{\"statement\":\"The noun Mia enters the derivation.\",\"stageRecord\":\"Lexical selection introduces the proper noun Mia, which projects a noun phrase that will serve as the external argument of the predicate.\",\"relations\":[],\"workspaceForest\":[{\"id\":\"np_mia\",\"label\":\"NP\",\"children\":[{\"id\":\"n_mia\",\"label\":\"N\",\"children\":[{\"id\":\"leaf_mia\",\"label\":\"Mia\",\"word\":\"Mia\",\"tokenIndex\":0,\"children\":[]}]}]}]},{\"statement\":\"The intransitive verb laughed projects a verb phrase.\",\"stageRecord\":\"The unergative verb laughed is selected and projects a verb phrase; its single theta role is assigned to the external argument position, which the noun phrase Mia will occupy.\",\"relations\":[],\"workspaceForest\":[{\"refId\":\"np_mia\"},{\"id\":\"vp_laughed\",\"label\":\"VP\",\"children\":[{\"id\":\"vbar_laughed\",\"label\":\"V'\",\"children\":[{\"id\":\"v_laughed\",\"label\":\"V\",\"children\":[{\"id\":\"leaf_laughed\",\"label\":\"laughed\",\"word\":\"laughed\",\"tokenIndex\":1,\"children\":[]}]}]}]}]},{\"statement\":\"Tense combines with the verb phrase.\",\"stageRecord\":\"A finite past tense head selects the verb phrase as its complement, projecting the inflectional layer that licenses the subject position of the clause.\",\"relations\":[],\"workspaceForest\":[{\"refId\":\"np_mia\"},{\"id\":\"tbar_1\",\"label\":\"T'\",\"children\":[{\"id\":\"t_past\",\"label\":\"T\",\"children\":[{\"id\":\"leaf_t\",\"label\":\"∅\",\"children\":[]}]},{\"refId\":\"vp_laughed\"}]}]},{\"statement\":\"The subject occupies the specifier of TP and the clause converges.\",\"stageRecord\":\"The noun phrase Mia merges as the specifier of the tense projection, and the tense head bears an open agreement relation to that subject; the derivation converges with the surface order Mia laughed.\",\"relations\":[{\"relation\":\"bespoke-open-agreement\",\"anchors\":{\"unbounded-probe-role\":\"t_past\",\"bespoke-goal-role\":\"np_mia\"}}],\"workspaceForest\":[{\"id\":\"tp_root\",\"label\":\"TP\",\"children\":[{\"refId\":\"np_mia\"},{\"refId\":\"tbar_1\"}]}]}]}]",
+              "ruleId": "TRANSPORT_JSON_OBJECT",
+              "stageIndex": null
+            },
+            "rawOutputArtifact": {
+              "byteLength": 1934,
+              "data": "W3siZGVyaXZhdGlvblN0YWdlcyI6W3sic3RhdGVtZW50IjoiVGhlIG5vdW4gTWlhIGVudGVycyB0aGUgZGVyaXZhdGlvbi4iLCJzdGFnZVJlY29yZCI6IkxleGljYWwgc2VsZWN0aW9uIGludHJvZHVjZXMgdGhlIHByb3BlciBub3VuIE1pYSwgd2hpY2ggcHJvamVjdHMgYSBub3VuIHBocmFzZSB0aGF0IHdpbGwgc2VydmUgYXMgdGhlIGV4dGVybmFsIGFyZ3VtZW50IG9mIHRoZSBwcmVkaWNhdGUuIiwidmlzdWFsUmVsYXRpb25zIjpbXSwid29ya3NwYWNlRm9yZXN0IjpbeyJpZCI6Im5wX21pYSIsImxhYmVsIjoiTlAiLCJjaGlsZHJlbiI6W3siaWQiOiJuX21pYSIsImxhYmVsIjoiTiIsImNoaWxkcmVuIjpbeyJpZCI6ImxlYWZfbWlhIiwibGFiZWwiOiJNaWEiLCJ3b3JkIjoiTWlhIiwidG9rZW5JbmRleCI6MCwiY2hpbGRyZW4iOltdfV19XX1dfSx7InN0YXRlbWVudCI6IlRoZSBpbnRyYW5zaXRpdmUgdmVyYiBsYXVnaGVkIHByb2plY3RzIGEgdmVyYiBwaHJhc2UuIiwic3RhZ2VSZWNvcmQiOiJUaGUgdW5lcmdhdGl2ZSB2ZXJiIGxhdWdoZWQgaXMgc2VsZWN0ZWQgYW5kIHByb2plY3RzIGEgdmVyYiBwaHJhc2U7IGl0cyBzaW5nbGUgdGhldGEgcm9sZSBpcyBhc3NpZ25lZCB0byB0aGUgZXh0ZXJuYWwgYXJndW1lbnQgcG9zaXRpb24sIHdoaWNoIHRoZSBub3VuIHBocmFzZSBNaWEgd2lsbCBvY2N1cHkuIiwidmlzdWFsUmVsYXRpb25zIjpbXSwid29ya3NwYWNlRm9yZXN0IjpbeyJyZWZJZCI6Im5wX21pYSJ9LHsiaWQiOiJ2cF9sYXVnaGVkIiwibGFiZWwiOiJWUCIsImNoaWxkcmVuIjpbeyJpZCI6InZiYXJfbGF1Z2hlZCIsImxhYmVsIjoiViciLCJjaGlsZHJlbiI6W3siaWQiOiJ2X2xhdWdoZWQiLCJsYWJlbCI6IlYiLCJjaGlsZHJlbiI6W3siaWQiOiJsZWFmX2xhdWdoZWQiLCJsYWJlbCI6ImxhdWdoZWQiLCJ3b3JkIjoibGF1Z2hlZCIsInRva2VuSW5kZXgiOjEsImNoaWxkcmVuIjpbXX1dfV19XX1dfSx7InN0YXRlbWVudCI6IlRlbnNlIGNvbWJpbmVzIHdpdGggdGhlIHZlcmIgcGhyYXNlLiIsInN0YWdlUmVjb3JkIjoiQSBmaW5pdGUgcGFzdCB0ZW5zZSBoZWFkIHNlbGVjdHMgdGhlIHZlcmIgcGhyYXNlIGFzIGl0cyBjb21wbGVtZW50LCBwcm9qZWN0aW5nIHRoZSBpbmZsZWN0aW9uYWwgbGF5ZXIgdGhhdCBsaWNlbnNlcyB0aGUgc3ViamVjdCBwb3NpdGlvbiBvZiB0aGUgY2xhdXNlLiIsInZpc3VhbFJlbGF0aW9ucyI6W10sIndvcmtzcGFjZUZvcmVzdCI6W3sicmVmSWQiOiJucF9taWEifSx7ImlkIjoidGJhcl8xIiwibGFiZWwiOiJUJyIsImNoaWxkcmVuIjpbeyJpZCI6InRfcGFzdCIsImxhYmVsIjoiVCIsImNoaWxkcmVuIjpbeyJpZCI6ImxlYWZfdCIsImxhYmVsIjoi4oiFIiwiY2hpbGRyZW4iOltdfV19LHsicmVmSWQiOiJ2cF9sYXVnaGVkIn1dfV19LHsic3RhdGVtZW50IjoiVGhlIHN1YmplY3Qgb2NjdXBpZXMgdGhlIHNwZWNpZmllciBvZiBUUCBhbmQgdGhlIGNsYXVzZSBjb252ZXJnZXMuIiwic3RhZ2VSZWNvcmQiOiJUaGUgbm91biBwaHJhc2UgTWlhIG1lcmdlcyBhcyB0aGUgc3BlY2lmaWVyIG9mIHRoZSB0ZW5zZSBwcm9qZWN0aW9uLCBhbmQgdGhlIHRlbnNlIGhlYWQgYmVhcnMgYW4gb3BlbiBhZ3JlZW1lbnQgcmVsYXRpb24gdG8gdGhhdCBzdWJqZWN0OyB0aGUgZGVyaXZhdGlvbiBjb252ZXJnZXMgd2l0aCB0aGUgc3VyZmFjZSBvcmRlciBNaWEgbGF1Z2hlZC4iLCJ2aXN1YWxSZWxhdGlvbnMiOlt7InJlbGF0aW9uIjoiYmVzcG9rZS1vcGVuLWFncmVlbWVudCIsImFuY2hvcnMiOnsidW5ib3VuZGVkLXByb2JlLXJvbGUiOiJ0X3Bhc3QiLCJiZXNwb2tlLWdvYWwtcm9sZSI6Im5wX21pYSJ9fV0sIndvcmtzcGFjZUZvcmVzdCI6W3siaWQiOiJ0cF9yb290IiwibGFiZWwiOiJUUCIsImNoaWxkcmVuIjpbeyJyZWZJZCI6Im5wX21pYSJ9LHsicmVmSWQiOiJ0YmFyXzEifV19XX1dfV0=",
+              "encoding": "base64",
+              "mediaType": "text/plain",
+              "retainedByteLength": 1934,
+              "sha256": "7b15bd08abe1e2d2e917f0999d5aaac3e1da7144c1200ba4ff2696ee029761a9",
+              "truncated": false
+            }
+          },
+          "message": "Model response was not a valid JSON object.",
+          "name": "ParseApiError",
+          "outcome": "rejected",
+          "status": 502
+        },
+        "unresolvedRelationAnchor": {
+          "outcome": "accepted",
+          "resultSha256": "3287901859d2635c9d9e313026359f56747f712e085e4636729179ce22d3fb9d"
+        }
+      },
+      "maskingObservation": {
+        "description": "Legacy multi-stage fixture mutations are masked at the API boundary by a downstream refId error after stage 1 is discarded.",
+        "extraFieldOnFirstStage": {
+          "code": "BAD_MODEL_RESPONSE",
+          "details": null,
+          "message": "Malformed tree node from model at frame[0].after.workspaceForest[0] (unresolved subtree refId: np_mia).",
+          "name": "ParseApiError",
+          "outcome": "rejected",
+          "status": 502
+        },
+        "intendedStageRuleVisibleAtApiBoundary": false,
+        "missingStatementFieldOnFirstStage": {
+          "code": "BAD_MODEL_RESPONSE",
+          "details": null,
+          "message": "Malformed tree node from model at frame[0].after.workspaceForest[0] (unresolved subtree refId: np_mia).",
+          "name": "ParseApiError",
+          "outcome": "rejected",
+          "status": 502
+        }
+      },
+      "stageRuleProbes": {
+        "emptyStatementValue": {
+          "expectedFlag": "statement_missing_on_derivation_stage:d1",
+          "frameCount": 0,
+          "integrityFlags": [
+            "statement_missing_on_derivation_stage:d1"
+          ],
+          "mutation": "set statement to an empty string while retaining the authored key",
+          "reachedTargetRule": true
+        },
+        "missingStatementFieldContract": {
+          "expectedFlag": "derivation_stage_contract_fields_invalid:d1",
+          "frameCount": 0,
+          "integrityFlags": [
+            "derivation_stage_contract_fields_invalid:d1"
+          ],
+          "mutation": "delete statement",
+          "reachedTargetRule": true
+        },
+        "missingWorkspaceForestValue": {
+          "expectedFlag": "workspace_forest_missing_on_derivation_stage:d1",
+          "frameCount": 0,
+          "integrityFlags": [
+            "workspace_forest_missing_on_derivation_stage:d1"
+          ],
+          "mutation": "set workspaceForest to undefined while retaining the authored key",
+          "reachedTargetRule": true
+        },
+        "unexpectedStageFieldContract": {
+          "expectedFlag": "derivation_stage_contract_fields_invalid:d1",
+          "frameCount": 0,
+          "integrityFlags": [
+            "derivation_stage_contract_fields_invalid:d1"
+          ],
+          "mutation": "add unexpected field",
+          "reachedTargetRule": true
+        },
+        "validMinimalStage": {
+          "outcome": "accepted",
+          "resultSha256": "15487c7cee8ebd4596477cf5880a9e6f2379cbffec4aa5c9f29b02325b8a13df"
+        }
+      }
+    },
+    "contract": {
+      "authoredDerivationStageFields": [
+        "statement",
+        "stageRecord",
+        "relations",
+        "workspaceForest"
+      ],
+      "modelFacingRolloutChanged": false,
+      "nodeRuntimeFloor": {
+        "minimumMajor": 24,
+        "reason": "The replay snapshot import uses Node built-in type stripping for an erasable .ts module."
+      },
+      "provenanceFieldsExcludedFromSemanticComparison": [
+        "timestamp",
+        "promptVersion",
+        "parserVersion",
+        "uiVersion"
+      ]
+    },
+    "fixtureOutputs": {
+      "mia-laughed.xbar.json": {
+        "framework": "xbar",
+        "parsedProjections": {
+          "committedNormalizedSha256": "d28f02b0476ad0e5a494341246e7d3204a05c2973dcd0ee9d1b9406a6142e1ed",
+          "committedReplaySnapshotSha256": "dee09b5f504f84f735045d1e0492c90a506096806d960298d47f9629e65e437c",
+          "currentNormalizedSha256": "d28f02b0476ad0e5a494341246e7d3204a05c2973dcd0ee9d1b9406a6142e1ed",
+          "normalizedParity": true,
+          "renderPlanParity": true,
+          "renderPlanSha256": "dee09b5f504f84f735045d1e0492c90a506096806d960298d47f9629e65e437c",
+          "renderPlanStepCount": 15,
+          "replayPlanSha256": "584235e6fd44311c5eb0201e8906cfa515c46c43d609553f6d6cbbfcd223e2f2",
+          "replayPlanStepCount": 36
+        },
+        "rawByteHashes": {
+          "normalizedFixtureSha256": "6493d05f6b0fcfbeaa98299bf20e889a9d67c8affc7f985c8fc0ec75e8116724",
+          "rawFixtureSha256": "1bf323587593ddfbe5c1364728309e555550fa29212774492aa43388dcb1fb0e",
+          "replaySnapshotSha256": "63365f32ecfa59c0e6ed949899b535f541af20857a50ad109662815d9ddb30dc"
+        },
+        "sentence": "Mia laughed."
+      },
+      "what-did-mia-see.xbar.json": {
+        "framework": "xbar",
+        "parsedProjections": {
+          "committedNormalizedSha256": "0a4533017d1d77e8804b23d7a8637aff0e6d4961692d867489e26d8bfaf927ad",
+          "committedReplaySnapshotSha256": "aaf00bb921cc6d55598ac32322a13bd41f8c3a72589cb07ca18c955a6c45e00f",
+          "currentNormalizedSha256": "0a4533017d1d77e8804b23d7a8637aff0e6d4961692d867489e26d8bfaf927ad",
+          "normalizedParity": true,
+          "renderPlanParity": true,
+          "renderPlanSha256": "aaf00bb921cc6d55598ac32322a13bd41f8c3a72589cb07ca18c955a6c45e00f",
+          "renderPlanStepCount": 19,
+          "replayPlanSha256": "b13a33c4eba1aa4b3331f7ea794729c52dd441515a3723c50fa171aa0b3dc59b",
+          "replayPlanStepCount": 41
+        },
+        "rawByteHashes": {
+          "normalizedFixtureSha256": "2d5106f5df41155d5e3453e6cb60d0e0cc3707ed2f368bae4654c3e28dd4fee6",
+          "rawFixtureSha256": "c497813f531aef76acb19153b1119015ed9547c26fd9e1d6ba0ddadb32265a6e",
+          "replaySnapshotSha256": "acfe6e91075844aee33041bd97f31c1ef80950a79ec45ddaa03438e2b4cf0895"
+        },
+        "sentence": "What did Mia see?"
+      }
+    },
+    "sourceHashes": {
+      "derivationReplayPlan.js": "f43053f32eaf60a7427a0cfe5c7c1a4c8e9e424ff353d9516368941d5cd93cdc",
+      "docs/implementation/baselines/provider-free-baseline-spec.md": "c378fc5e982bf849d7497d2bd88957065b9453973d81248a17e37ed16b0fde6c",
+      "replay/replayCompiler.ts": "738352352b45dcea5c405d53185857bd3bc91feb61d5664f0a622ec065c1a258",
+      "replay/replaySnapshot.ts": "baf3a3a0a26d7e4f2b25ae87f7d2996dbc44d2cc6d369814fae6fe2172596a20",
+      "scripts/captureProviderFreeBaseline.mjs": "40bc35af7fca98d8df08514743606f990ab0fa06466c9d4b9dd70d577e8e07a5",
+      "scripts/providerFreeNetworkGuard.cjs": "bf06a80eb6128f20addcf0dd4165b299477c4e6bd527ee8459f0e1a96df12ca8",
+      "server/babelParser.js": "73eac0948cbd3b1dcb5070f1d0619be7616a49b7787041fe03bc0354d5258dc8",
+      "server/babelParser/derivationCompiler.js": "84bf936fc5f5bf5f73bfb28d03032cbb83fc17b409ba82ed948f1d4d9c8615c2",
+      "server/babelParser/modelRuntime.js": "cdf035425a5fd9123bf46c432be4560d19796e0d7aa29450bc5db2bc2a2897a3",
+      "server/babelParser/parseNormalization.js": "cfe543f9918ae034ec2437f44a049c064e7f99af9ee399994638c96923c8915d",
+      "server/babelParser/parseRoutes.js": "61ab9169a9e6c0e8bd3410bf7b575916d944fc9f0e3ae9d048436a308919481e",
+      "server/babelParser/prompts.js": "c866617865f8a6a886dcb225821d4ab6c9bb88ae1851f4e2eb615648cb017fbe",
+      "server/babelParser/routeConfig.js": "0a6ccb29a2853b738293eeb3a8b6681ee2b74cd978c1272fe209f350a2383c59",
+      "server/babelParser/surfaceTokens.js": "0d03fd13e22a3fc51e24373c91ec84fba114047824739e914d24f96e696df2a1",
+      "server/babelParser/systemInstruction.js": "24843c855961b1f73ed72edd6054ce402cdede5c3f31fbf54c937a6af7977b18",
+      "types.ts": "c62dce99b95cf07a7417d79e2d7cc8a24ed36f67e04bd3ef357ec2bbacb8d174"
+    }
+  },
+  "semanticSha256": "f228833d7f52e2055bb1393e7dbbeb21a7bb0a6d6c1693ca3ddff78a3724d461"
+}

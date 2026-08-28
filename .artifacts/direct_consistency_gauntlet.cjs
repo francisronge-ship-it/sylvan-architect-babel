@@ -1,5 +1,11 @@
 require('./helpers/loadLocalEnv.cjs')();
-const { parseSentenceWithGemini } = require('../server/geminiParser');
+const loadCurrentParser = require('./helpers/loadCurrentParser.cjs');
+const {
+  collectMovementRelations,
+  collectResolvedVisualRelations,
+  collectStageRecords,
+  countUnresolvedAnchors
+} = require('./helpers/currentContract.cjs');
 
 const CASES = [
   { framework: 'xbar', sentence: 'It was shocking that no one arrived on time' },
@@ -44,12 +50,13 @@ function sameSeq(a, b) {
 }
 
 (async () => {
+  const { parseSentenceWithGemini } = await loadCurrentParser();
   const results = [];
   for (const testCase of CASES) {
     let final = null;
     for (let attempt = 1; attempt <= 4; attempt += 1) {
       try {
-        const bundle = await parseSentenceWithGemini(testCase.sentence, testCase.framework, 'flash-lite');
+        const bundle = await parseSentenceWithGemini(testCase.sentence, testCase.framework, 'gemini');
         const analysis = bundle.analyses[0];
         const leaves = collectLeaves(analysis.tree)
           .sort((a, b) => a[0] - b[0])
@@ -57,15 +64,17 @@ function sameSeq(a, b) {
         const surfaceOrder = Array.isArray(analysis.surfaceOrder) ? analysis.surfaceOrder : [];
         const sentenceTokens = tokenize(testCase.sentence);
         const derivationOps = Array.isArray(analysis.derivationSteps) ? analysis.derivationSteps.map((s) => s.operation) : [];
-        const movementEvents = Array.isArray(analysis.movementEvents) ? analysis.movementEvents : [];
-        const explanation = String(analysis.explanation || '').trim();
+        const visualRelations = collectResolvedVisualRelations(analysis);
+        const movementRelations = collectMovementRelations(analysis);
+        const stageRecords = collectStageRecords(analysis);
+        const notesText = stageRecords.join('\n');
         const issues = [];
         if (!sameSeq(leaves, sentenceTokens)) issues.push('LEAVES_NE_SENTENCE');
         if (!sameSeq(surfaceOrder, sentenceTokens)) issues.push('SURFACE_NE_SENTENCE');
         if (!sameSeq(leaves, surfaceOrder)) issues.push('LEAVES_NE_SURFACE');
         if (derivationOps[derivationOps.length - 1] !== 'SpellOut') issues.push('NO_FINAL_SPELLOUT');
-        if (movementEvents.length > 0 && !MOVEMENT_RE.test(explanation)) issues.push('MOVEMENT_MISSING_FROM_NOTES');
-        if (movementEvents.length === 0 && /\b(wh-movement|head-movement|A-bar movement|A-movement|internal merge|movement)\b/i.test(explanation) && !/No movement is posited/i.test(explanation)) issues.push('NOTES_MOVEMENT_WITHOUT_EVENTS');
+        if (movementRelations.length > 0 && !MOVEMENT_RE.test(notesText)) issues.push('MOVEMENT_MISSING_FROM_STAGE_RECORDS');
+        if (countUnresolvedAnchors(visualRelations) > 0) issues.push('UNRESOLVED_VISUAL_RELATION_ANCHOR');
         final = {
           sentence: testCase.sentence,
           framework: testCase.framework,
@@ -74,8 +83,9 @@ function sameSeq(a, b) {
           leaves,
           surfaceOrder,
           derivationOps,
-          movementEventsCount: movementEvents.length,
-          explanation
+          visualRelationsCount: visualRelations.length,
+          movementRelationsCount: movementRelations.length,
+          stageRecords
         };
         break;
       } catch (error) {

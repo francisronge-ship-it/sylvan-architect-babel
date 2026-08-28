@@ -10,6 +10,12 @@ interface RootLogoProps {
   inset?: number;
 }
 
+const getRootLogoSrc = () => {
+  if (typeof window === 'undefined') return '/babellogo.png';
+  const configuredSrc = String((window as Window & { __BABEL_LOGO_SRC__?: string }).__BABEL_LOGO_SRC__ || '').trim();
+  return configuredSrc || '/babellogo.png';
+};
+
 const RootLogo: React.FC<RootLogoProps> = ({
   size = 24,
   className,
@@ -31,17 +37,23 @@ const RootLogo: React.FC<RootLogoProps> = ({
       style={{
         width: size,
         height: size,
-        background: shellBackground
+        background: shellBackground,
+        display: 'inline-flex',
+        position: 'relative',
+        overflow: 'hidden',
+        flexShrink: 0,
+        isolation: 'isolate'
       }}
     >
       <img
-        src="/babellogo.png"
+        src={getRootLogoSrc()}
         alt="Babel logo"
         className="absolute h-full w-full select-none pointer-events-none"
         loading="eager"
         decoding="sync"
         fetchPriority="high"
         style={{
+          position: 'absolute',
           top: `${imageInset}%`,
           left: `${imageInset}%`,
           width: `${100 - imageInset * 2}%`,
@@ -52,7 +64,9 @@ const RootLogo: React.FC<RootLogoProps> = ({
           transformOrigin: 'center',
           mixBlendMode: blend ? 'screen' : 'normal',
           opacity: blend ? 0.95 : 1,
-          filter: blend ? 'saturate(1.12) contrast(1.04) brightness(1.08)' : 'none'
+          filter: blend ? 'saturate(1.12) contrast(1.04) brightness(1.08)' : 'none',
+          pointerEvents: 'none',
+          userSelect: 'none'
         }}
         draggable={false}
       />
