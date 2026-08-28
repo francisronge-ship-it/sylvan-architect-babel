@@ -27,14 +27,14 @@ const normalizeGeminiThinkingLevel = (value) => {
   const normalized = String(value || 'high').trim().toLowerCase().replace(/[\s_]+/g, '-');
   if (normalized === 'minimal') return 'LOW';
   if (normalized === 'low') return 'LOW';
-  if (normalized === 'medium') return 'LOW';
+  if (normalized === 'medium') return 'MEDIUM';
   if (normalized === 'high') return 'HIGH';
   return normalized.toUpperCase();
 };
 export const GEMINI_THINKING_LEVEL = normalizeGeminiThinkingLevel(process.env.GEMINI_THINKING_LEVEL);
-const GEMINI_THINKING_LEVELS = new Set(['LOW', 'HIGH']);
+const GEMINI_THINKING_LEVELS = new Set(['LOW', 'MEDIUM', 'HIGH']);
 if (!GEMINI_THINKING_LEVELS.has(GEMINI_THINKING_LEVEL)) {
-  throw new Error('GEMINI_THINKING_LEVEL must be one of: low, high.');
+  throw new Error('GEMINI_THINKING_LEVEL must be one of: low, medium, high.');
 }
 const normalizeOpenAIReasoningEffort = (value) => {
   const normalized = String(value || 'xhigh').trim().toLowerCase().replace(/[\s-]+/g, '_');
@@ -68,7 +68,7 @@ export const ANTHROPIC_THINKING_CONFIG = Object.freeze({
 
 const REASONING_EFFORT_ORDER = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 export const PROVIDER_REASONING_EFFORTS = Object.freeze({
-  gemini: Object.freeze(['low', 'high']),
+  gemini: Object.freeze(['low', 'medium', 'high']),
   gpt: Object.freeze(['low', 'medium', 'high', 'xhigh']),
   claude: Object.freeze(['low', 'medium', 'high', 'xhigh', 'max'])
 });

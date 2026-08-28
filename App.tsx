@@ -141,7 +141,7 @@ const MODEL_MODE_PILLS: Array<{
 const MODEL_MODE_SEQUENCE: ModelMode[] = ['gemini', 'gpt', 'claude'];
 
 const REASONING_OPTIONS_BY_MODEL: Record<ModelMode, ReasoningEffort[]> = {
-  gemini: ['low', 'high'],
+  gemini: ['low', 'medium', 'high'],
   gpt: ['low', 'medium', 'high', 'xhigh'],
   claude: ['low', 'medium', 'high', 'xhigh', 'max']
 };
