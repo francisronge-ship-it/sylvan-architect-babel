@@ -3,18 +3,20 @@ import path from 'node:path';
 
 const loadLocalEnv = () => {
   if (process.env.NODE_ENV === 'production') return;
-  const envPath = path.resolve(process.cwd(), '.env.local');
-  if (!fs.existsSync(envPath)) return;
-  const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const separator = trimmed.indexOf('=');
-    if (separator <= 0) continue;
-    const key = trimmed.slice(0, separator).trim();
-    if (process.env[key]) continue;
-    const value = trimmed.slice(separator + 1).trim().replace(/^['"]|['"]$/g, '');
-    process.env[key] = value;
+  const envPaths = ['.env.local', '.env'].map((name) => path.resolve(process.cwd(), name));
+  for (const envPath of envPaths) {
+    if (!fs.existsSync(envPath)) continue;
+    const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const separator = trimmed.indexOf('=');
+      if (separator <= 0) continue;
+      const key = trimmed.slice(0, separator).trim();
+      if (process.env[key]) continue;
+      const value = trimmed.slice(separator + 1).trim().replace(/^['"]|['"]$/g, '');
+      process.env[key] = value;
+    }
   }
 };
 

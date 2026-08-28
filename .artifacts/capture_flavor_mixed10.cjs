@@ -1,17 +1,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { loadChromium, resolveChromiumLaunchOptions } = require('./helpers/loadPlaywright.cjs');
 const { collectResolvedVisualRelations } = require('./helpers/currentContract.cjs');
 
-let chromium;
-try {
-  ({ chromium } = require('playwright'));
-} catch {
-  ({ chromium } = require('/Users/francisronge/.npm/_npx/e41f203b7505f1fb/node_modules/playwright'));
-}
+const chromium = loadChromium();
 
 const BASE_URL = process.env.BABEL_BASE_URL || 'http://127.0.0.1:5177/';
 const OUT_DIR = path.resolve('.artifacts/flavor-mixed10');
-const CHROME_BIN = '/Users/francisronge/Library/Caches/ms-playwright/chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 
 const CASES = [
   { id: 'min_it_wh', framework: 'minimalism', language: 'Italian', sentence: 'Quale articolo ha letto Giulia?' },
@@ -217,10 +212,7 @@ async function runCase(page, item) {
 
 (async () => {
   ensureOut();
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: CHROME_BIN
-  });
+  const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: true }));
   const context = await browser.newContext({ viewport: { width: 1832, height: 1142 } });
   const page = await context.newPage();
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });

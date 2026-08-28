@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 require('./helpers/loadLocalEnv.cjs')();
-const { parseSentenceWithGemini } = require('../server/geminiParser');
+const loadCurrentParser = require('./helpers/loadCurrentParser.cjs');
 const {
   collectMovementRelations,
   collectResolvedVisualRelations,
@@ -139,6 +139,7 @@ function analyze(bundle, testCase) {
 }
 
 (async () => {
+  const { parseSentenceWithGemini } = await loadCurrentParser();
   const results = [];
   for (const testCase of CASES) {
     let final = null;
@@ -182,7 +183,7 @@ function analyze(bundle, testCase) {
     results
   };
 
-  const outPath = path.resolve('/Users/francisronge/Documents/Babel/sylvan-architect-babel/.artifacts/direct-consistency-world-sweep.json');
+  const outPath = path.resolve('.artifacts/direct-consistency-world-sweep.json');
   fs.writeFileSync(outPath, JSON.stringify(out, null, 2));
   console.log(outPath);
   console.log(JSON.stringify(out, null, 2));

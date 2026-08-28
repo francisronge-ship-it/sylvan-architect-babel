@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 require('./helpers/loadLocalEnv.cjs')();
-const { parseSentenceWithGemini } = require('../server/geminiParser');
+const loadCurrentParser = require('./helpers/loadCurrentParser.cjs');
 const {
   collectResolvedVisualRelations,
   collectStageRecords
@@ -82,6 +82,7 @@ async function runCase(testCase) {
 }
 
 (async () => {
+  const { parseSentenceWithGemini } = await loadCurrentParser();
   const report = [];
   for (const testCase of cases) {
     const outcome = await runCase(testCase);

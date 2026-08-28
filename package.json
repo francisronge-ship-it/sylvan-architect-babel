@@ -14,8 +14,13 @@
     "verify:parse-contract": "node scripts/verifyParseContract.mjs",
     "verify:offline": "npm test && npm run verify:parse-contract",
     "verify:all": "npm run typecheck && npm run verify:offline",
+    "tier2:review:build": "node scripts/buildTier2VisualReview.mjs",
+    "tier2:review:verify": "node scripts/verifyTier2VisualReview.mjs",
+    "orchard:verify": "node scripts/verifyRelationOrchard.cjs",
+    "release:verify-assets": "node scripts/verifyReleaseAssets.mjs",
     "preview": "vite preview",
     "start": "node server/index.js",
+    "local:provider-effort": "node .artifacts/provider_effort_local_test.cjs",
     "audit": "npm audit"
   },
   "dependencies": {
@@ -35,6 +40,8 @@
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.24",
+    "esbuild": "^0.25.12",
+    "playwright": "^1.62.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.8.2",
