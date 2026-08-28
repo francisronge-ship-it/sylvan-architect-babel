@@ -134,6 +134,14 @@ mixing that work into renderer completion or the later public benchmark. This
 program answers whether Babel can reliably operate its product; it does not rank
 models or claim syntactic competence.
 
+Preparation status, 2026-08-28: the corrected contract has a reproducible
+post-fix baseline; provider-free raw-output, typed-receipt, and click-through
+Replay review plumbing is verified; and GPT 5.6 Sol, Claude Opus 5, and Claude
+Fable 5 are recorded as unqualified research candidates with provider-native
+controls. No provider was called, no live route changed, and the qualification
+sentence set remains unselected. See
+[`pre-provider-preparation-2026-08-28.md`](docs/implementation/contract-qualification/pre-provider-preparation-2026-08-28.md).
+
 1. Freeze and hash the incumbent prompt, system instruction, route config,
    request carrier, engine, and test item versions.
 2. Define the claims before running models: transport completion, contract
