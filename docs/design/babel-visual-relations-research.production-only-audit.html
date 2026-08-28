@@ -1,0 +1,2794 @@
+<!doctype html>
+<html lang="en" class="atlas-loading">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Babel Relation Orchard</title>
+  <style>
+    @font-face {
+      font-family: "Crimson Pro";
+      src: url("../../node_modules/@fontsource/crimson-pro/files/crimson-pro-latin-400-normal.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Crimson Pro";
+      src: url("../../node_modules/@fontsource/crimson-pro/files/crimson-pro-latin-700-normal.woff2") format("woff2");
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Crimson Pro";
+      src: url("../../node_modules/@fontsource/crimson-pro/files/crimson-pro-latin-400-italic.woff2") format("woff2");
+      font-weight: 400;
+      font-style: italic;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Quicksand";
+      src: url("../../node_modules/@fontsource/quicksand/files/quicksand-latin-400-normal.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "Quicksand";
+      src: url("../../node_modules/@fontsource/quicksand/files/quicksand-latin-700-normal.woff2") format("woff2");
+      font-weight: 700;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: "JetBrains Mono";
+      src: url("../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    :root {
+      color-scheme: dark;
+      --forest-deep: #020806;
+      --forest-top: #03100c;
+      --glass: rgba(0, 0, 0, 0.62);
+      --glass-quiet: rgba(255, 255, 255, 0.045);
+      --line: rgba(255, 255, 255, 0.1);
+      --line-strong: rgba(16, 185, 129, 0.34);
+      --ink: #ecfdf5;
+      --ink-soft: rgba(236, 253, 245, 0.72);
+      --muted: rgba(236, 253, 245, 0.48);
+      --emerald: #10b981;
+      --emerald-deep: #064e3b;
+      --violet: #c4b5fd;
+      --rose: #fecaca;
+      --code-bg: rgba(0, 0, 0, 0.52);
+      --babel-relation-ink: #34d399;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background-color: var(--forest-deep);
+      background-image:
+        radial-gradient(circle at 50% 8%, rgba(16, 185, 129, 0.13) 0%, transparent 48%),
+        radial-gradient(circle at 18% 24%, rgba(16, 185, 129, 0.06) 0%, transparent 30%),
+        radial-gradient(circle at 82% 68%, rgba(6, 95, 70, 0.08) 0%, transparent 34%),
+        linear-gradient(180deg, var(--forest-top) 0%, var(--forest-deep) 100%);
+      color: var(--ink);
+      font: 16px/1.62 "Quicksand", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        70deg,
+        transparent,
+        transparent 150px,
+        rgba(16, 185, 129, 0.028) 200px,
+        transparent 300px
+      );
+      mask-image: linear-gradient(to bottom, white, transparent);
+      z-index: 0;
+    }
+    a { color: var(--emerald); text-underline-offset: 0.22em; }
+    .page {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+      gap: 34px;
+      max-width: 1560px;
+      margin: 0 auto;
+      padding: 24px 28px 72px;
+    }
+    aside {
+      position: sticky;
+      top: 24px;
+      align-self: start;
+      max-height: calc(100vh - 48px);
+      overflow: auto;
+      border: 1px solid var(--line);
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      border-radius: 28px;
+      padding: 18px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+    }
+    aside h2 {
+      margin: 0 0 16px;
+      font: 800 10px/1.2 "JetBrains Mono", ui-monospace, monospace;
+      letter-spacing: 0.34em;
+      text-transform: uppercase;
+      color: rgba(16, 185, 129, 0.78);
+    }
+    aside a {
+      display: block;
+      color: rgba(236, 253, 245, 0.62);
+      text-decoration: none;
+      font: 700 11px/1.35 "Quicksand", ui-sans-serif, system-ui;
+      padding: 8px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    aside a:hover { color: var(--emerald); }
+    .toc-level-3 { padding-left: 14px; color: rgba(236, 253, 245, 0.4); font-weight: 500; }
+    main {
+      min-width: 0;
+      max-width: 1080px;
+    }
+    .hero {
+      min-height: 430px;
+      display: grid;
+      align-content: end;
+      gap: 24px;
+      margin-bottom: 24px;
+      padding: clamp(28px, 5vw, 56px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 42px;
+      background:
+        linear-gradient(135deg, rgba(6, 78, 59, 0.48), rgba(0, 0, 0, 0.72)),
+        radial-gradient(circle at 78% 20%, rgba(16, 185, 129, 0.22), transparent 34%),
+        rgba(0, 0, 0, 0.48);
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.48);
+      overflow: hidden;
+      position: relative;
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(16, 185, 129, 0.22) 0.8px, transparent 0.8px);
+      background-size: 9px 9px;
+      opacity: 0.1;
+      pointer-events: none;
+    }
+    .brand-row, .hero-copy, .signal-grid { position: relative; z-index: 1; }
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      align-self: start;
+    }
+    .brand-mark {
+      width: 46px;
+      height: 46px;
+      border-radius: 14px;
+      border: 1px solid rgba(16, 185, 129, 0.46);
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(0, 0, 0, 0.4));
+      box-shadow: 0 0 24px rgba(6, 78, 59, 0.6);
+      overflow: hidden;
+      position: relative;
+      isolation: isolate;
+    }
+    .brand-mark img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scale(1.12);
+      mix-blend-mode: screen;
+      opacity: 0.95;
+      filter: saturate(1.12) contrast(1.04) brightness(1.08);
+    }
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 30% 24%, rgba(16,185,129,0.2) 0%, rgba(16,185,129,0.08) 45%, rgba(16,185,129,0) 100%);
+      pointer-events: none;
+    }
+    .brand-row strong {
+      display: block;
+      font: 700 21px/1.1 "Crimson Pro", Georgia, serif;
+      letter-spacing: -0.02em;
+    }
+    .brand-row span {
+      display: block;
+      margin-top: 2px;
+      color: rgba(16, 185, 129, 0.72);
+      font: 800 8px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+    }
+    .hero h1 {
+      margin: 0;
+      max-width: 880px;
+      font: 700 clamp(42px, 7vw, 82px)/0.92 "Crimson Pro", Georgia, serif;
+      letter-spacing: -0.04em;
+      color: #fff;
+    }
+    .hero p {
+      max-width: 780px;
+      margin: 18px 0 0;
+      color: rgba(236, 253, 245, 0.78);
+      font-size: clamp(17px, 2vw, 22px);
+      line-height: 1.45;
+    }
+    .signal-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      max-width: 980px;
+    }
+    .signal-grid div {
+      min-height: 88px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 18px;
+      background: rgba(0, 0, 0, 0.34);
+      padding: 15px;
+    }
+    .signal-grid strong,
+    .compiler-route strong {
+      display: block;
+      color: var(--emerald);
+      font: 800 10px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+    }
+    .signal-grid span {
+      display: block;
+      margin-top: 10px;
+      color: rgba(236, 253, 245, 0.78);
+      font-weight: 700;
+      line-height: 1.25;
+    }
+    .implementation-board {
+      display: grid;
+      grid-template-columns: minmax(0, 0.86fr) minmax(330px, 1fr);
+      gap: 18px;
+      margin: 0 0 28px;
+      padding: 22px;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 32px;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+    }
+    .board-copy {
+      padding: 10px 8px 10px 4px;
+    }
+    .micro-label {
+      margin: 0 0 14px;
+      color: rgba(16, 185, 129, 0.78);
+      font: 800 9px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.46em;
+      text-transform: uppercase;
+    }
+    .board-copy h2 {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      color: white;
+      font: 700 clamp(28px, 4vw, 48px)/0.95 "Crimson Pro", Georgia, serif;
+      letter-spacing: -0.035em;
+    }
+    .board-copy p:not(.micro-label) {
+      margin-top: 18px;
+      color: rgba(236, 253, 245, 0.72);
+      font: 18px/1.45 "Crimson Pro", Georgia, serif;
+    }
+    .compiler-route {
+      display: grid;
+      gap: 10px;
+    }
+    .compiler-route div {
+      display: grid;
+      grid-template-columns: 54px minmax(0, 0.8fr) minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.045);
+    }
+    .compiler-route span {
+      color: #fff;
+      font: 800 12px/1.2 "JetBrains Mono", monospace;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .compiler-route em {
+      color: rgba(236, 253, 245, 0.56);
+      font: italic 16px/1.2 "Crimson Pro", Georgia, serif;
+    }
+    .source-note {
+      display: inline-block;
+      margin: 8px 0 24px;
+      padding: 10px 14px;
+      border: 1px solid rgba(16, 185, 129, 0.22);
+      border-radius: 999px;
+      background: rgba(6, 78, 59, 0.24);
+      color: rgba(236, 253, 245, 0.7);
+      font: 800 9px/1.4 "JetBrains Mono", monospace;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .source-note + h1 { display: none; }
+    h1, h2, h3, h4, h5, h6 {
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 58px 0 18px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(16, 185, 129, 0.22);
+      color: #fff;
+      font: 700 34px/1.02 "Crimson Pro", Georgia, serif;
+      letter-spacing: -0.025em;
+    }
+    h3 {
+      margin: 38px 0 14px;
+      color: rgba(236, 253, 245, 0.92);
+      font: 800 15px/1.18 "JetBrains Mono", ui-monospace, monospace;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+    p {
+      margin: 0 0 16px;
+      max-width: 82ch;
+      color: var(--ink-soft);
+      font: 18px/1.62 "Crimson Pro", Georgia, serif;
+    }
+    ul, ol {
+      margin: 0 0 18px 1.25rem;
+      padding: 0;
+      max-width: 86ch;
+      color: rgba(236, 253, 245, 0.7);
+    }
+    li { margin: 7px 0; }
+    code {
+      padding: 0.1em 0.28em;
+      border-radius: 4px;
+      background: rgba(16, 185, 129, 0.11);
+      color: #78f0c1;
+      font: 0.88em/1.45 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    pre {
+      overflow: auto;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 22px;
+      background: var(--code-bg);
+      color: #d1fae5;
+      padding: 20px;
+      margin: 22px 0;
+      box-shadow: inset 0 0 32px rgba(0, 0, 0, 0.35);
+    }
+    pre code {
+      padding: 0;
+      background: transparent;
+      color: inherit;
+    }
+    figure {
+      margin: 24px 0 30px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      background: rgba(0, 0, 0, 0.56);
+      padding: 14px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+    }
+    figure img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 0 auto;
+      border-radius: 14px;
+      background: #fff;
+    }
+    figcaption {
+      margin-top: 12px;
+      color: var(--muted);
+      font: 800 10px/1.4 "JetBrains Mono", ui-monospace, monospace;
+      text-align: center;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    ::selection {
+      background: rgba(16, 185, 129, 0.8);
+      color: #fff;
+    }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #050a08; }
+    ::-webkit-scrollbar-thumb { background: #064e3b; border-radius: 999px; }
+    #babel-implementation-bridge {
+      margin-top: 34px;
+      border-top-color: rgba(16, 185, 129, 0.42);
+      color: #fff;
+    }
+    .current-renderer-lab {
+      margin: 30px 0 34px;
+      padding: 24px;
+      border: 1px solid rgba(16, 185, 129, 0.24);
+      border-radius: 34px;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(16, 185, 129, 0.12), transparent 38%),
+        rgba(0, 0, 0, 0.54);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.44);
+    }
+    .current-renderer-lab h2 {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      color: #fff;
+      font: 700 clamp(32px, 5vw, 54px)/0.96 "Crimson Pro", Georgia, serif;
+      letter-spacing: 0;
+    }
+    .current-renderer-lab > p {
+      margin: 14px 0 0;
+      max-width: 88ch;
+      color: rgba(236, 253, 245, 0.73);
+      font-size: 19px;
+    }
+    .renderer-truth-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 22px 0 24px;
+    }
+    .renderer-truth-strip span {
+      min-height: 54px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.045);
+      color: rgba(236, 253, 245, 0.72);
+      padding: 10px;
+      font: 800 10px/1.35 "JetBrains Mono", monospace;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .babel-render-grid {
+      display: grid;
+      gap: 18px;
+    }
+    .babel-render-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+      gap: 16px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 26px;
+      background: rgba(0, 0, 0, 0.48);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 20px 50px rgba(0, 0, 0, 0.28);
+    }
+    .babel-render-card-header {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+      align-items: end;
+      gap: 18px;
+      padding: 2px 4px 0;
+    }
+    .babel-render-archetype {
+      display: inline-block;
+      margin-bottom: 12px;
+      border: 1px solid rgba(16, 185, 129, 0.32);
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.1);
+      color: rgba(120, 240, 193, 0.92);
+      padding: 8px 10px;
+      font: 800 9px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+    .babel-render-card-header h3 {
+      margin: 0;
+      color: #fff;
+      font: 800 16px/1.15 "JetBrains Mono", monospace;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .babel-render-card-header p {
+      margin: 0;
+      color: rgba(236, 253, 245, 0.65);
+      font-size: 16px;
+      line-height: 1.35;
+    }
+    .babel-contract-report {
+      margin: 10px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 3px;
+      font: 500 11px/1.4 "JetBrains Mono", monospace;
+    }
+    .babel-contract-report li {
+      padding: 4px 8px;
+      border-radius: 6px;
+      border-left: 2px solid rgba(239, 68, 68, 0.7);
+      background: rgba(239, 68, 68, 0.1);
+      color: rgba(254, 202, 202, 0.95);
+    }
+    .babel-lens-toggle {
+      margin-top: 16px;
+      border: 1px solid rgba(16, 185, 129, 0.34);
+      border-radius: 9px;
+      background: rgba(16, 185, 129, 0.09);
+      color: rgba(236, 253, 245, 0.8);
+      padding: 8px 10px;
+      font: 800 9px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .babel-lens-toggle[aria-pressed="true"] {
+      background: rgba(16, 185, 129, 0.12);
+      color: #ecfdf5;
+      box-shadow: inset 0 0 0 1px rgba(236, 253, 245, 0.08);
+    }
+    .babel-lens-node {
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    .vr-item {
+      cursor: pointer;
+      pointer-events: visiblePainted;
+    }
+    .vr-relation-active {
+      --babel-relation-ink: #6ee7b7;
+      opacity: 1 !important;
+      filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.5)) !important;
+    }
+    .vr-relation-quiet {
+      opacity: 0.3 !important;
+    }
+    .vr-relation-quiet.babel-partial-copy-deletion-mark {
+      opacity: 0.58 !important;
+    }
+    .vr-relation-active.babel-ellipsis-ghost-label {
+      opacity: 0.82 !important;
+      filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.5)) !important;
+    }
+    .vr-relation-active .babel-trajectory-path {
+      filter: none;
+    }
+    .vr-relation-active .babel-trajectory-arrowhead {
+      stroke: var(--babel-relation-ink);
+    }
+    .vr-relation-active .babel-carrier-arrowhead {
+      fill: var(--babel-relation-ink);
+    }
+    .babel-split-antecedence-path-shadow,
+    .babel-split-antecedence-path {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-split-antecedence-path-shadow {
+      stroke: rgba(2, 12, 8, 0.85);
+      stroke-width: 5.4px;
+      pointer-events: none;
+    }
+    .babel-split-antecedence-path {
+      stroke: #34d399;
+      stroke-width: 2.4px;
+    }
+    .babel-split-antecedence-arrowhead {
+      fill: #34d399;
+      stroke: none;
+    }
+    .babel-split-antecedence-origin {
+      fill: rgba(1, 12, 8, 0.96);
+      stroke: #34d399;
+      stroke-width: 2px;
+      vector-effect: non-scaling-stroke;
+    }
+    .vr-relation-active .babel-split-antecedence-path {
+      stroke: var(--babel-relation-ink);
+    }
+    .vr-relation-active .babel-split-antecedence-origin {
+      stroke: var(--babel-relation-ink);
+    }
+    .vr-relation-hit-target {
+      fill: none;
+      stroke: transparent;
+      stroke-width: 16px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+      pointer-events: stroke;
+    }
+    .vr-relation-area-hit-target {
+      fill: transparent;
+      pointer-events: all !important;
+    }
+    .babel-render-card[data-lens-active="true"] svg g:has(> .vr-item),
+    .babel-render-card:has(.babel-lens-node:hover) svg g:has(> .vr-item),
+    .babel-render-card:has(.babel-lens-toggle:hover) svg g:has(> .vr-item),
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) svg g:has(> .vr-item) {
+      pointer-events: auto;
+    }
+    .babel-render-card[data-lens-active="true"] svg .vr-item,
+    .babel-render-card:has(.babel-lens-node:hover) svg .vr-item,
+    .babel-render-card:has(.babel-lens-toggle:hover) svg .vr-item,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) svg .vr-item {
+      pointer-events: visiblePainted;
+    }
+    .babel-render-card[data-lens-active="true"] svg .vr-relation-hit-target,
+    .babel-render-card:has(.babel-lens-node:hover) svg .vr-relation-hit-target,
+    .babel-render-card:has(.babel-lens-toggle:hover) svg .vr-relation-hit-target,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) svg .vr-relation-hit-target {
+      pointer-events: stroke;
+    }
+    .babel-forest-light-canvas {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      mix-blend-mode: screen;
+      opacity: 0;
+      transition: opacity 180ms ease;
+      z-index: 2;
+    }
+    .babel-trajectory-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-trajectory-path {
+      fill: none;
+      stroke: #34d399;
+      stroke-width: 2.1;
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 5px rgba(52, 211, 153, 0.42));
+    }
+    .babel-trajectory-path-shadow {
+      fill: none;
+      stroke: rgba(2, 12, 8, 0.85);
+      stroke-width: 5.4;
+      stroke-linecap: round;
+    }
+    .babel-trajectory-arrowhead {
+      fill: none;
+      stroke: #34d399;
+      stroke-width: 2.1;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    /*
+     * Every trajectory is Babel green. Lowering is already distinguished by
+     * running downward, which is the distinction the source plates draw.
+     *
+     * A trace number is a tspan on the trace label and deliberately sets no
+     * fill of its own: it inherits the label's, so it tracks lens highlighting
+     * the way an authored subscript does. The binding letter is a separate mark
+     * and keeps the bright .babel-binding-index styling.
+     */
+    .babel-control-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-predication-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-pair-merge-relation-layer,
+    .babel-blocked-extraction-relation-layer,
+    .babel-idiom-chunk-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-binding-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-feature-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-theta-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-intervention-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-pf-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-lf-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-anchor-set-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-anchor-set-badge {
+      fill: rgba(2, 24, 15, 0.92);
+      stroke: rgba(52, 211, 153, 0.9);
+      stroke-width: 1.2px;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-anchor-set-badge-number {
+      fill: rgba(167, 243, 208, 0.98);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .babel-anchor-set-rail {
+      stroke: rgba(52, 211, 153, 0.66);
+      stroke-width: 1.4px;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-anchor-set-rail-label {
+      fill: rgba(110, 231, 183, 0.95);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .babel-anchor-set-stub {
+      stroke: rgba(52, 211, 153, 0.42);
+      stroke-width: 1px;
+      stroke-dasharray: 3 3;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-focus-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-scope-information-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-ellipsis-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-island-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-pg-path-node {
+      fill: rgba(1, 8, 5, 0.54);
+      stroke: rgba(167, 243, 208, 0.88);
+      stroke-width: 2.2px;
+      vector-effect: non-scaling-stroke;
+      filter: drop-shadow(0 0 3px rgba(52, 211, 153, 0.24));
+    }
+    .babel-pg-path-node-secondary {
+      stroke: rgba(94, 234, 157, 0.76);
+    }
+    .babel-pg-copy-branch-shadow,
+    .babel-pg-copy-branch {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-pg-copy-branch-shadow {
+      stroke: rgba(1, 8, 5, 0.92);
+      stroke-width: 5px;
+    }
+    .babel-pg-copy-branch {
+      stroke: rgba(167, 243, 208, 0.92);
+      stroke-width: 1.7px;
+      filter: drop-shadow(0 0 3px rgba(52, 211, 153, 0.3));
+    }
+    .babel-pg-copy-ring-shadow,
+    .babel-pg-copy-ring {
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-pg-copy-ring-shadow {
+      fill: #010805;
+      stroke: rgba(1, 8, 5, 0.96);
+      stroke-width: 5px;
+    }
+    .babel-pg-copy-ring {
+      fill: #010805;
+      stroke: rgba(167, 243, 208, 0.96);
+      stroke-width: 2.1px;
+      filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.38));
+    }
+    .babel-pg-blocked-edge {
+      stroke: rgba(167, 243, 208, 0.96);
+      stroke-width: 3.2px;
+      stroke-linecap: square;
+      vector-effect: non-scaling-stroke;
+      filter: drop-shadow(0 0 3px rgba(52, 211, 153, 0.28));
+    }
+    .babel-gapping-correspondence {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.88);
+      stroke-width: 3px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+      filter: drop-shadow(0 0 3px rgba(52, 211, 153, 0.18));
+    }
+    .babel-gapping-correspondence-pair {
+      stroke-dasharray: 11 10;
+    }
+    .babel-gapping-arrowhead {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.92);
+      stroke-width: 1.8px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .babel-gapping-index {
+      fill: #d1fae5;
+      stroke: rgba(1, 8, 5, 0.92);
+      stroke-width: 3px;
+      paint-order: stroke;
+      font: 800 24px/1 "Crimson Pro", Georgia, serif;
+      font-style: italic;
+    }
+    .babel-control-domain {
+      fill: none;
+      stroke: rgba(94, 234, 157, 0.92);
+      stroke-width: 5.8px;
+      stroke-dasharray: 24 15;
+      stroke-linecap: square;
+      filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.45));
+    }
+    .babel-control-dependency {
+      fill: none;
+      stroke: rgba(94, 234, 157, 0.95);
+      stroke-width: 7.4px;
+      stroke-linecap: butt;
+      stroke-linejoin: round;
+      stroke-dasharray: 20 15;
+      filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.55));
+    }
+    .babel-control-dependency-marker path {
+      fill: none;
+      stroke: rgba(94, 234, 157, 0.95);
+      stroke-width: 7.4px;
+      stroke-linecap: square;
+      stroke-linejoin: round;
+    }
+    .babel-predication-path {
+      fill: none;
+      stroke: rgba(110, 231, 183, 0.94);
+      stroke-width: 5.2px;
+      stroke-dasharray: 11 12;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 3px rgba(52, 211, 153, 0.32));
+    }
+    .babel-native-branch-overlay {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.72);
+      stroke-width: 3.8px;
+      stroke-dasharray: 12 11;
+      stroke-linecap: butt;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.3));
+    }
+    .babel-blocked-extraction-branch-mask {
+      fill: none;
+      stroke: #01110c;
+      stroke-width: 10px;
+      stroke-linecap: round;
+    }
+    .babel-blocked-extraction-path {
+      fill: none;
+      stroke: rgba(110, 231, 183, 0.92);
+      stroke-width: 4.2px;
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.3));
+    }
+    .babel-blocked-extraction-marker path {
+      fill: rgba(110, 231, 183, 0.96);
+      stroke: none;
+    }
+    .babel-analysis-verdict-label,
+    .babel-analysis-judgment {
+      fill: var(--babel-relation-ink);
+      stroke: rgba(1, 8, 5, 0.96);
+      stroke-width: 6px;
+      paint-order: stroke;
+      font-family: "Crimson Pro", Georgia, serif;
+      font-size: 44px;
+      font-style: italic;
+      font-weight: 650;
+    }
+    .babel-analysis-verdict-label {
+      text-decoration: underline;
+    }
+    .babel-analysis-verdict-label {
+      font-size: 80px;
+    }
+    .babel-analysis-judgment {
+      font-size: 160px;
+      text-decoration: none;
+    }
+    .babel-idiom-chunk-underline,
+    .babel-idiom-domain-bracket {
+      fill: none;
+      stroke: rgba(209, 250, 229, 0.9);
+      stroke-width: 3.8px;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+      filter: drop-shadow(0 0 3px rgba(52, 211, 153, 0.2));
+    }
+    .babel-control-index {
+      fill: #ecfdf5;
+      stroke: rgba(1, 8, 5, 0.94);
+      stroke-width: 7px;
+      paint-order: stroke;
+      font-family: "Crimson Pro", Georgia, serif;
+      font-size: 42px;
+      font-style: italic;
+      font-weight: 700;
+    }
+    .babel-binding-domain {
+      fill: rgba(52, 211, 153, 0.17);
+      stroke: rgba(94, 234, 157, 0.82);
+      stroke-width: 3.8px;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 8px rgba(52, 211, 153, 0.26));
+    }
+    .babel-binding-index {
+      fill: #ecfdf5;
+      stroke: rgba(1, 8, 5, 0.94);
+      stroke-width: 7px;
+      paint-order: stroke;
+      font-family: "Crimson Pro", Georgia, serif;
+      font-size: 42px;
+      font-style: italic;
+      font-weight: 700;
+    }
+    .babel-relation-index {
+      fill: var(--emerald) !important;
+    }
+    .babel-renderer-authored-index,
+    .babel-renderer-authored-terminal {
+      fill: #34d399 !important;
+    }
+    .babel-feature-plaque-shell {
+      fill: rgba(2, 18, 13, 0.74);
+      stroke: rgba(94, 234, 157, 0.58);
+      stroke-width: 1.5px;
+      filter: drop-shadow(0 0 5px rgba(20, 184, 166, 0.16));
+    }
+    .babel-feature-plaque-title {
+      fill: rgba(167, 243, 208, 0.92);
+      font: 800 20px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .babel-feature-text {
+      fill: #ecfdf5;
+      stroke: rgba(1, 8, 5, 0.76);
+      stroke-width: 2px;
+      paint-order: stroke;
+      font: 800 30px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.02em;
+    }
+    .babel-feature-row[data-feature-state="valued"] .babel-feature-text {
+      fill: #6ee7b7;
+    }
+    .babel-feature-valued-dot {
+      fill: rgba(110, 231, 183, 0.92);
+      filter: drop-shadow(0 0 5px rgba(52, 211, 153, 0.58));
+    }
+    .babel-agreement-case-relation-layer {
+      pointer-events: none;
+    }
+    .babel-replaces-generic-relation-arrows .movement-arrow {
+      display: none !important;
+    }
+    .babel-agree-directed-path {
+      fill: none;
+      stroke: rgba(110, 231, 183, 0.82);
+      stroke-width: 1.8px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-agree-directed-path-cyclic {
+      stroke: rgba(110, 231, 183, 0.82);
+      stroke-width: 1.8px;
+    }
+    .babel-agree-arrowhead {
+      fill: rgba(110, 231, 183, 0.94);
+    }
+    .babel-agree-cycle-badge circle {
+      fill: rgba(6, 78, 55, 0.86);
+      stroke: rgba(110, 231, 183, 0.86);
+      stroke-width: 1.4px;
+    }
+    .babel-agree-cycle-badge text {
+      fill: #ecfdf5;
+      font: 800 34px/1 "JetBrains Mono", monospace;
+    }
+    .babel-agree-cycle-badge text.babel-relation-index {
+      fill: #ecfdf5 !important;
+    }
+    .babel-feature-sharing-vine {
+      fill: none;
+      stroke: rgba(110, 231, 183, 0.54);
+      stroke-width: 1.35px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-shared-feature-plaque .babel-feature-plaque-shell {
+      fill: rgba(2, 18, 13, 0.9);
+      stroke: rgba(94, 234, 157, 0.7);
+    }
+    .babel-case-assignment-path {
+      fill: none;
+      stroke: rgba(110, 231, 183, 0.82);
+      stroke-width: 1.8px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-case-collection-path {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.44);
+      stroke-width: 1.25px;
+      stroke-dasharray: 4 8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-dependent-case-elbow {
+      fill: none;
+      stroke: rgba(110, 231, 183, 0.76);
+      stroke-width: 1.6px;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-dependent-case-endpoint {
+      fill: rgba(110, 231, 183, 0.96);
+      stroke: rgba(2, 18, 13, 0.96);
+      stroke-width: 1.2px;
+    }
+    .babel-dependent-case-state {
+      fill: #ecfdf5;
+      stroke: rgba(1, 8, 5, 0.74);
+      stroke-width: 1px;
+      paint-order: stroke;
+      font: 700 36px/1 "JetBrains Mono", monospace;
+    }
+    .babel-dependent-case-state-plaque .babel-feature-plaque-shell {
+      fill: rgba(2, 18, 13, 0.9);
+      stroke: rgba(94, 234, 157, 0.62);
+    }
+    .babel-theta-grid-shell {
+      fill: rgba(2, 18, 13, 0.78);
+      stroke: rgba(94, 234, 157, 0.58);
+      stroke-width: 1.5px;
+      filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.16));
+    }
+    .babel-theta-grid-title {
+      fill: rgba(167, 243, 208, 0.94);
+      font: 900 20px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.16em;
+    }
+    .babel-theta-grid-rule {
+      stroke: rgba(94, 234, 157, 0.28);
+      stroke-width: 1.35px;
+    }
+    .babel-theta-grid-predicate,
+    .babel-theta-grid-role,
+    .babel-theta-grid-index {
+      fill: rgba(236, 253, 245, 0.88);
+      stroke: rgba(1, 8, 5, 0.76);
+      stroke-width: 3px;
+      paint-order: stroke;
+      font: 850 26px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.01em;
+    }
+    .babel-theta-grid-role {
+      fill: #6ee7b7;
+    }
+    .babel-theta-grid-index {
+      fill: rgba(236, 253, 245, 0.82);
+      font-size: 25px;
+      font-style: italic;
+    }
+    .babel-theta-terminal-index {
+      fill: #6ee7b7;
+      stroke: rgba(1, 8, 5, 0.82);
+      stroke-width: 4px;
+      paint-order: stroke;
+    }
+    .babel-theta-role-label {
+      fill: #6ee7b7;
+      stroke: rgba(1, 8, 5, 0.82);
+      stroke-width: 4px;
+      paint-order: stroke;
+      font: 900 32px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.02em;
+      filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.20));
+    }
+    .babel-pf-plate-shell {
+      fill: rgba(2, 18, 13, 0.82);
+      stroke: rgba(94, 234, 157, 0.62);
+      stroke-width: 1.8px;
+      filter: drop-shadow(0 0 7px rgba(16, 185, 129, 0.18));
+    }
+    .babel-pf-plate-title {
+      fill: rgba(167, 243, 208, 0.94);
+      font: 900 24px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.16em;
+    }
+    .babel-pf-plate-rule {
+      stroke: rgba(94, 234, 157, 0.28);
+      stroke-width: 1.4px;
+    }
+    .babel-pf-plate-text,
+    .babel-pf-plate-arrow {
+      fill: rgba(236, 253, 245, 0.88);
+      stroke: rgba(1, 8, 5, 0.78);
+      stroke-width: 3px;
+      paint-order: stroke;
+      font: 800 28px/1 "JetBrains Mono", monospace;
+    }
+    .babel-pf-plate-arrow,
+    .babel-pf-plate-output {
+      fill: rgba(110, 231, 183, 0.92);
+    }
+    .babel-pf-plate-text-final {
+      fill: #ecfdf5;
+    }
+    .babel-phrasal-spellout-label {
+      fill: rgba(110, 231, 183, 0.96);
+      stroke: rgba(1, 8, 5, 0.86);
+      paint-order: stroke;
+      font-family: "JetBrains Mono", monospace;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+    .babel-pf-correspondence-shell {
+      fill: rgba(2, 18, 13, 0.9);
+      stroke: rgba(167, 243, 208, 0.68);
+      filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.14));
+    }
+    .babel-pf-correspondence-title {
+      fill: rgba(167, 243, 208, 0.76);
+      font-family: "JetBrains Mono", monospace;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+    .babel-pf-correspondence-link {
+      stroke: rgba(167, 243, 208, 0.64);
+      stroke-linecap: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-pf-correspondence-source,
+    .babel-pf-correspondence-exponent {
+      fill: rgba(236, 253, 245, 0.94);
+      stroke: rgba(1, 8, 5, 0.82);
+      paint-order: stroke;
+      font-family: "JetBrains Mono", monospace;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+    .babel-pf-correspondence-exponent {
+      fill: rgba(110, 231, 183, 0.96);
+    }
+    .babel-pf-morphology-shell {
+      fill: rgba(2, 18, 13, 0.86);
+      stroke: rgba(94, 234, 157, 0.58);
+      stroke-width: 1.8px;
+      filter: drop-shadow(0 0 7px rgba(16, 185, 129, 0.16));
+    }
+    .babel-pf-morphology-title,
+    .babel-linearization-failure-mark {
+      fill: rgba(167, 243, 208, 0.94);
+      stroke: rgba(1, 8, 5, 0.76);
+      stroke-width: 3px;
+      paint-order: stroke;
+      font: 900 24px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.14em;
+    }
+    .babel-linearization-failure-mark {
+      fill: #ecfdf5;
+      font-size: 27px;
+    }
+    .babel-pf-morphology-rule {
+      stroke: rgba(94, 234, 157, 0.28);
+      stroke-width: 1.4px;
+    }
+    .babel-fission-bundle-shell {
+      fill: rgba(5, 35, 25, 0.82);
+      stroke: rgba(110, 231, 183, 0.62);
+      stroke-width: 1.7px;
+    }
+    .babel-fission-bundle-title,
+    .babel-linearization-column-title,
+    .babel-pf-lane-label {
+      fill: rgba(110, 231, 183, 0.82);
+      stroke: rgba(1, 8, 5, 0.76);
+      stroke-width: 3px;
+      paint-order: stroke;
+      font: 900 17px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.08em;
+    }
+    .babel-fission-bundle-row,
+    .babel-impoverishment-feature,
+    .babel-pf-lane-expression,
+    .babel-linearization-row {
+      fill: rgba(236, 253, 245, 0.90);
+      stroke: rgba(1, 8, 5, 0.76);
+      stroke-width: 3px;
+      paint-order: stroke;
+      font: 800 21px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0;
+    }
+    .babel-fission-arrow {
+      fill: rgba(110, 231, 183, 0.94);
+      stroke: rgba(1, 8, 5, 0.78);
+      stroke-width: 3px;
+      paint-order: stroke;
+      font: 800 34px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0;
+    }
+    .babel-impoverishment-feature {
+      text-anchor: middle;
+      font-size: 28px;
+    }
+    .babel-impoverishment-output {
+      fill: #a7f3d0;
+    }
+    .babel-impoverishment-link {
+      stroke: rgba(167, 243, 208, 0.90);
+      stroke-width: 3.2px;
+      stroke-linecap: round;
+    }
+    .babel-impoverishment-cross {
+      stroke: #ecfdf5;
+      stroke-width: 3.5px;
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 3px rgba(16, 185, 129, 0.24));
+    }
+    .babel-pf-lane-label {
+      font-size: 18px;
+    }
+    .babel-pf-lane-expression {
+      font-size: 24px;
+    }
+    .babel-pf-lane-expression-current,
+    .babel-linearization-row-current {
+      fill: #a7f3d0;
+      font-weight: 900;
+    }
+    .babel-linearization-column-title {
+      font-size: 16px;
+    }
+    .babel-linearization-row {
+      font-size: 19px;
+    }
+    .babel-linearization-row-conflict {
+      fill: #ecfdf5;
+      font-weight: 900;
+      text-decoration: underline;
+      text-decoration-color: rgba(110, 231, 183, 0.86);
+      text-decoration-thickness: 2px;
+    }
+    .babel-lf-domain {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.58);
+      stroke-width: 2.4px;
+      stroke-dasharray: 16 12;
+      filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.12));
+    }
+    .babel-lf-domain[data-lf-domain-kind="polarity"] {
+      fill: none;
+      stroke: rgba(209, 250, 229, 0.72);
+      stroke-width: 2.9px;
+      stroke-dasharray: 18 12;
+    }
+    .babel-lf-path {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.88);
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.16));
+    }
+    .babel-lf-path-qr {
+      stroke-width: 4px;
+      stroke-dasharray: 18 15;
+    }
+    .babel-lf-path-polarity {
+      stroke-width: 3.8px;
+    }
+    .babel-lf-arrowhead {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.90);
+      stroke-width: 4.8px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .babel-lf-operator-mark {
+      fill: rgba(110, 231, 183, 0.94);
+      stroke: rgba(1, 8, 5, 0.78);
+      stroke-width: 3.8px;
+      paint-order: stroke;
+      font: 900 66px/1 "Crimson Pro", serif;
+      font-style: italic;
+      letter-spacing: 0;
+      filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.18));
+    }
+    .babel-strong-npi-focus-mark,
+    .babel-f-projection-feature {
+      fill: #a7f3d0;
+      stroke: rgba(1, 8, 5, 0.92);
+      stroke-width: 3px;
+      paint-order: stroke;
+      font: 900 34px/1 "Crimson Pro", serif;
+      font-style: italic;
+      letter-spacing: 0;
+    }
+    .babel-cooper-storage-bracket {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.88);
+      stroke-width: 3.4px;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-cooper-storage-connector {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.68);
+      stroke-width: 2.4px;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-cooper-storage-key,
+    .babel-cooper-storage-value {
+      fill: #d1fae5;
+      stroke: rgba(1, 8, 5, 0.86);
+      stroke-width: 2.8px;
+      paint-order: stroke;
+      font: 800 31px/1 "IBM Plex Mono", monospace;
+      letter-spacing: 0;
+    }
+    .babel-cooper-storage-value {
+      fill: #6ee7b7;
+      font-weight: 700;
+    }
+    .babel-accord-path {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.84);
+      stroke-width: 3.2px;
+      stroke-dasharray: 11 9;
+      stroke-linecap: butt;
+      stroke-linejoin: miter;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-accord-arrowhead {
+      fill: #a7f3d0;
+    }
+    .babel-accord-index-box {
+      fill: rgba(1, 20, 14, 0.96);
+      stroke: #a7f3d0;
+      stroke-width: 2.6px;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-accord-index,
+    .babel-accord-feature {
+      fill: #d1fae5;
+      stroke: rgba(1, 8, 5, 0.90);
+      stroke-width: 2.8px;
+      paint-order: stroke;
+      font: 800 33px/1 "Crimson Pro", serif;
+      letter-spacing: 0;
+    }
+    .babel-accord-index {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 24px;
+    }
+    .babel-strong-npi-path {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.72);
+      stroke-width: 1.6px;
+      stroke-linecap: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-strong-npi-path-inner {
+      stroke: rgba(110, 231, 183, 0.64);
+      stroke-width: 1.45px;
+    }
+    .babel-strong-npi-feature-mark {
+      fill: #d1fae5;
+      stroke: none;
+      font: 700 72px/1 "IBM Plex Mono", monospace;
+      font-style: normal;
+      letter-spacing: 0;
+    }
+    .babel-strong-npi-focus-mark {
+      stroke-width: 1.2px;
+      font-size: 58px;
+    }
+    .babel-f-projection-path {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.76);
+      stroke-width: 3px;
+      stroke-dasharray: 12 10;
+      stroke-linecap: butt;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-f-projection-arrowhead {
+      fill: #a7f3d0;
+    }
+    .babel-f-projection-accent {
+      fill: #d1fae5;
+      stroke: rgba(1, 8, 5, 0.92);
+      stroke-width: 3px;
+      paint-order: stroke;
+      font: 900 36px/1 "Crimson Pro", serif;
+      letter-spacing: 0;
+    }
+    /*
+     * Constituent enclosures. The remnant's landing is an outline, the way the
+     * source draws it; the smuggling carrier is filled, the way Belletti shades
+     * the chunk that travels. Both sit behind the tree so no label is hidden.
+     */
+    .babel-constituent-enclosure {
+      fill: none;
+      stroke: rgba(167, 243, 208, 0.85);
+      stroke-width: 3.2px;
+    }
+    .babel-enclosure-remnant-landing {
+      stroke-dasharray: none;
+    }
+    /*
+     * The carrier chunk is Babel green, not the source's print gray: the papers
+     * supply notation and geometry, the lab supplies its own visual language.
+     * The gradient is defined per-card in SVG defs; this rule carries the
+     * stroke and glow.
+     */
+    /* Belletti's heavy carrier head: solid, green, sized to the chunk. */
+    .babel-carrier-arrowhead {
+      fill: rgba(52, 211, 153, 0.92);
+      stroke: none;
+    }
+    .babel-enclosure-carrier-chunk {
+      fill: url(#babel-carrier-gradient);
+      stroke: rgba(52, 211, 153, 0.85);
+      filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.28));
+    }
+    /* The carrier travels as a block, so its path carries the source's weight. */
+    .babel-trajectory-path-smuggling {
+      stroke-width: 7px;
+      stroke: rgba(52, 211, 153, 0.9);
+      stroke-linejoin: miter;
+      stroke-linecap: butt;
+      filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.3));
+    }
+    .babel-trajectory-path-roll-up {
+      stroke-linejoin: miter;
+      stroke-linecap: butt;
+    }
+    .babel-lf-copy-label {
+      filter: blur(0.18px) drop-shadow(0 0 4px rgba(110, 231, 183, 0.14));
+    }
+    .babel-lf-strike-shadow {
+      stroke: rgba(1, 8, 5, 0.92);
+      stroke-width: 7px;
+      stroke-linecap: square;
+    }
+    .babel-lf-strike {
+      stroke: rgba(167, 243, 208, 0.88);
+      stroke-width: 3.6px;
+      stroke-linecap: square;
+    }
+    .babel-partial-copy-deletion-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-partial-copy-deletion-strike-shadow,
+    .babel-partial-copy-deletion-strike {
+      stroke-linecap: square;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-partial-copy-deletion-strike-shadow {
+      stroke: rgba(1, 8, 5, 0.94);
+      stroke-width: 3.4px;
+    }
+    .babel-partial-copy-deletion-strike {
+      stroke: rgba(167, 243, 208, 0.92);
+      stroke-width: 1.6px;
+      filter: drop-shadow(0 0 2px rgba(52, 211, 153, 0.28));
+    }
+    .babel-lf-plate-title {
+      fill: rgba(167, 243, 208, 0.94);
+      font: 900 20px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.14em;
+      filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.12));
+    }
+    .babel-lf-plate-text {
+      fill: rgba(236, 253, 245, 0.88);
+      stroke: rgba(1, 8, 5, 0.72);
+      stroke-width: 2.6px;
+      paint-order: stroke;
+      font: 800 25px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.01em;
+    }
+    /*
+     * Bounding-node cuts. Every cut carries identical colour and weight: they
+     * mark the same kind of crossing, so ranking them would assert an order the
+     * relation never authored.
+     */
+    .babel-island-barrier-shadow {
+      stroke: rgba(1, 8, 5, 0.92);
+      stroke-width: 6.4;
+      stroke-linecap: square;
+    }
+    .babel-island-barrier-cut {
+      stroke: #34d399;
+      stroke-width: 2.6;
+      stroke-linecap: square;
+      filter: drop-shadow(0 0 5px rgba(52, 211, 153, 0.4));
+    }
+    .babel-phase-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .babel-phase-arc-shadow,
+    .babel-phase-arc {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .babel-phase-arc-shadow {
+      stroke: rgba(1, 8, 5, 0.95);
+      stroke-width: 10px;
+    }
+    .babel-phase-arc-shadow-primary {
+      stroke-width: 12px;
+    }
+    .babel-phase-arc {
+      stroke: rgba(94, 234, 157, 0.84);
+      stroke-width: 4px;
+      filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.38));
+    }
+    .babel-phase-arc-primary {
+      stroke: rgba(110, 231, 183, 0.94);
+      stroke-width: 5.2px;
+    }
+    .babel-domain-locality-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+    }
+    .babel-transfer-edge-outline {
+      fill: rgba(4, 24, 17, 0.42);
+      stroke: rgba(167, 243, 208, 0.82);
+      stroke-width: 1.7;
+      rx: 4;
+      ry: 4;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-transfer-phase-arc-shadow,
+    .babel-transfer-phase-arc,
+    .babel-transfer-domain-arc-shadow,
+    .babel-transfer-domain-arc,
+    .babel-transfer-access-shadow,
+    .babel-transfer-access-path,
+    .babel-improper-candidate-rail-shadow,
+    .babel-improper-candidate-rail,
+    .babel-improper-candidate-shadow,
+    .babel-improper-candidate-path {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-transfer-phase-arc-shadow,
+    .babel-transfer-domain-arc-shadow,
+    .babel-transfer-access-shadow,
+    .babel-improper-candidate-rail-shadow,
+    .babel-improper-candidate-shadow {
+      stroke: rgba(1, 9, 6, 0.9);
+      stroke-width: 5.6;
+    }
+    .babel-transfer-phase-arc {
+      stroke: rgba(110, 231, 183, 0.86);
+      stroke-width: 2.6;
+    }
+    .babel-transfer-domain-arc {
+      stroke: rgba(110, 231, 183, 0.72);
+      stroke-width: 2.2;
+      stroke-dasharray: 10 10;
+    }
+    .babel-transfer-component-label,
+    .babel-transfer-edge-label {
+      fill: rgba(167, 243, 208, 0.82);
+      font-family: var(--mono);
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    .babel-transfer-edge-label {
+      text-anchor: end;
+    }
+    .babel-transfer-access-path {
+      stroke: rgba(110, 231, 183, 0.72);
+      stroke-width: 2.2;
+      stroke-dasharray: 9 9;
+    }
+    .babel-domain-locality-arrowhead {
+      fill: #6ee7b7;
+    }
+    .babel-transfer-access-origin {
+      fill: #6ee7b7;
+      stroke: rgba(1, 9, 6, 0.94);
+      stroke-width: 2px;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-anti-locality-cap-shadow,
+    .babel-anti-locality-cap {
+      fill: none;
+      stroke-linecap: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-anti-locality-cap-shadow {
+      stroke: rgba(1, 9, 6, 0.94);
+      stroke-width: 5px;
+    }
+    .babel-anti-locality-cap {
+      stroke: #6ee7b7;
+      stroke-width: 2.4px;
+    }
+    .babel-anti-locality-face {
+      fill: rgba(167, 243, 208, 0.9);
+      stroke: rgba(1, 9, 6, 0.94);
+      stroke-width: 1.4px;
+      paint-order: stroke fill;
+      font-family: "Crimson Pro", Georgia, serif;
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    .babel-domain-locality-x-shadow,
+    .babel-domain-locality-x,
+    .babel-domain-locality-check-shadow,
+    .babel-domain-locality-check {
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-domain-locality-x-shadow {
+      stroke: rgba(1, 9, 6, 0.94);
+      stroke-width: 5;
+    }
+    .babel-domain-locality-x {
+      stroke: #a7f3d0;
+      stroke-width: 2.4;
+    }
+    .babel-domain-locality-check-shadow {
+      stroke: rgba(1, 9, 6, 0.94);
+      stroke-width: 5.5;
+    }
+    .babel-domain-locality-check {
+      stroke: #a7f3d0;
+      stroke-width: 2.8;
+    }
+    .babel-trajectory-path.babel-locality-path-failed {
+      stroke: rgba(110, 231, 183, 0.68);
+      stroke-dasharray: 9 9;
+      filter: none;
+    }
+    .babel-trajectory-path-shadow.babel-locality-path-failed {
+      stroke-dasharray: 9 9;
+    }
+    .babel-trajectory-path.babel-locality-path-licensed {
+      stroke: #34d399;
+    }
+    .babel-improper-forbidden-region {
+      stroke: rgba(52, 211, 153, 0.85);
+      stroke-width: 2.2px;
+      rx: 5;
+      ry: 5;
+      vector-effect: non-scaling-stroke;
+    }
+    .babel-improper-candidate-rail,
+    .babel-improper-candidate-path {
+      stroke: rgba(167, 243, 208, 0.82);
+      stroke-width: 2.1;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .babel-improper-candidate-path-blocked {
+      stroke: rgba(167, 243, 208, 0.62);
+    }
+    .babel-intervention-search-shadow,
+    .babel-intervention-search-path {
+      fill: none;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+    }
+    .babel-intervention-search-shadow {
+      stroke: rgba(1, 8, 5, 0.94);
+      stroke-width: 7px;
+      stroke-dasharray: 18 14;
+    }
+    .babel-intervention-search-path {
+      stroke: rgba(167, 243, 208, 0.86);
+      stroke-width: 3.7px;
+      stroke-dasharray: 18 14;
+      filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.18));
+    }
+    .babel-intervention-x-shadow,
+    .babel-intervention-x-mark,
+    .babel-intervention-arrowhead-shadow,
+    .babel-intervention-arrowhead {
+      fill: none;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+    }
+    .babel-intervention-x-shadow {
+      stroke: rgba(1, 8, 5, 0.96);
+      stroke-width: 10px;
+    }
+    .babel-intervention-x-mark {
+      stroke: rgba(110, 231, 183, 0.96);
+      stroke-width: 5px;
+      filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.24));
+    }
+    .babel-intervention-arrowhead-shadow {
+      stroke: rgba(1, 8, 5, 0.96);
+      stroke-width: 8px;
+    }
+    .babel-intervention-arrowhead {
+      stroke: rgba(167, 243, 208, 0.92);
+      stroke-width: 4px;
+      filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.22));
+    }
+    .babel-multidominance-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .babel-multidominance-branch-shadow,
+    .babel-multidominance-branch {
+      fill: none;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+    }
+    .babel-multidominance-branch-shadow {
+      stroke: rgba(1, 8, 5, 0.94);
+      stroke-width: 6.5px;
+    }
+    .babel-multidominance-branch {
+      stroke: rgba(94, 234, 157, 0.78);
+      stroke-width: 3.2px;
+      filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.22));
+    }
+    .babel-multidominance-branch-native {
+      stroke: rgba(110, 231, 183, 0.94);
+      stroke-width: 3.2px;
+    }
+    .babel-argument-sharing-relation-layer {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .babel-argument-sharing-domain {
+      fill: none;
+      stroke: rgba(110, 231, 183, 0.58);
+      stroke-width: 2.6px;
+      filter: drop-shadow(0 0 3px rgba(16, 185, 129, 0.14));
+    }
+    .babel-argument-sharing-object-box {
+      fill: rgba(1, 18, 12, 0.94);
+      stroke: rgba(167, 243, 208, 0.9);
+      stroke-width: 2.8px;
+      filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.2));
+    }
+    .babel-argument-sharing-object-label {
+      fill: rgba(209, 250, 229, 0.94);
+      stroke: rgba(1, 8, 5, 0.86);
+      stroke-width: 2px;
+      paint-order: stroke fill;
+      text-anchor: middle;
+      font: 800 30px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0;
+    }
+    .babel-focus-branch-mask {
+      fill: none;
+      stroke: rgba(1, 8, 5, 0.94);
+      stroke-width: 8px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .babel-focus-branch-strong {
+      fill: none;
+      stroke: rgba(126, 88, 30, 0.98);
+      stroke-width: 6.2px;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 3px rgba(181, 129, 45, 0.22));
+    }
+    .babel-focus-branch-weak {
+      fill: none;
+      stroke: rgba(126, 88, 30, 0.46);
+      stroke-width: 3.4px;
+      stroke-dasharray: 9 12;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    /*
+     * Neutral geometric relations share one ink and acquire their glow only
+     * from the common relation-active host. Semantic state marks and plaque
+     * surfaces intentionally stay outside this policy.
+     */
+    svg :is(
+      .babel-gapping-correspondence,
+      .babel-gapping-arrowhead,
+      .babel-control-domain,
+      .babel-control-dependency,
+      .babel-control-dependency-marker path,
+      .babel-predication-path,
+      .babel-binding-domain,
+      .babel-trajectory-path:not(.babel-trajectory-path-shadow),
+      .babel-pg-path-node,
+      .babel-pg-copy-branch,
+      .babel-pg-copy-ring,
+      .babel-pg-blocked-edge,
+      .babel-native-branch-overlay,
+      .babel-blocked-extraction-path,
+      .babel-idiom-chunk-underline,
+      .babel-idiom-domain-bracket,
+      .babel-lf-domain,
+      .babel-lf-path,
+      .babel-lf-arrowhead,
+      .babel-enclosure-carrier-chunk,
+      .babel-island-barrier-cut,
+      .babel-phase-arc,
+      .babel-improper-candidate-rail,
+      .babel-improper-candidate-path,
+      .babel-intervention-search-path,
+      .babel-intervention-x-mark,
+      .babel-intervention-arrowhead,
+      .babel-multidominance-branch,
+      .babel-argument-sharing-domain,
+      .babel-argument-sharing-object-box,
+      .babel-strong-npi-path,
+      .babel-anti-locality-cap,
+      .babel-domain-locality-x
+    ) {
+      stroke: var(--babel-relation-ink, #34d399) !important;
+      filter: none;
+    }
+    svg :is(
+      .babel-carrier-arrowhead,
+      .babel-blocked-extraction-marker path,
+      .babel-lf-operator-mark,
+      .babel-transfer-access-origin,
+      .babel-accord-arrowhead,
+      .babel-f-projection-arrowhead
+    ) {
+      fill: var(--babel-relation-ink, #34d399) !important;
+      filter: none;
+    }
+    svg .babel-trajectory-path-shadow {
+      stroke: rgba(2, 12, 8, 0.85) !important;
+      filter: none;
+    }
+    svg .babel-ellipsis-antecedent-label {
+      filter: none;
+    }
+    svg .babel-improper-forbidden-region {
+      fill: rgba(52, 211, 153, 0.075) !important;
+    }
+    svg .babel-argument-sharing-domain {
+      opacity: 0.72;
+    }
+    svg .vr-relation-active .babel-argument-sharing-domain {
+      opacity: 1;
+    }
+    svg .babel-strong-npi-path {
+      stroke-width: 1.55px;
+    }
+    .babel-render-card[data-lens-active="true"] .terminal-label:not(.babel-lens-node),
+    .babel-render-card:has(.babel-lens-node:hover) .terminal-label:not(.babel-lens-node),
+    .babel-render-card:has(.babel-lens-toggle:hover) .terminal-label:not(.babel-lens-node),
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .terminal-label:not(.babel-lens-node) {
+      opacity: 0.62;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-forest-light-canvas,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-forest-light-canvas,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-forest-light-canvas,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-forest-light-canvas {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-trajectory-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-trajectory-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-trajectory-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-trajectory-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-control-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-control-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-control-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-control-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-predication-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-predication-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-predication-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-predication-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-pair-merge-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-pair-merge-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-pair-merge-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-pair-merge-relation-layer,
+    .babel-render-card[data-lens-active="true"] .babel-blocked-extraction-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-blocked-extraction-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-blocked-extraction-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-blocked-extraction-relation-layer,
+    .babel-render-card[data-lens-active="true"] .babel-idiom-chunk-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-idiom-chunk-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-idiom-chunk-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-idiom-chunk-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-binding-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-binding-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-binding-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-binding-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-island-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-island-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-island-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-island-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-phase-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-phase-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-phase-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-phase-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-domain-locality-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-domain-locality-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-domain-locality-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-domain-locality-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-feature-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-feature-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-feature-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-feature-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-theta-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-theta-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-theta-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-theta-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-intervention-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-intervention-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-intervention-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-intervention-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-pf-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-pf-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-pf-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-pf-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-lf-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-lf-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-lf-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-lf-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-anchor-set-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-anchor-set-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-anchor-set-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-anchor-set-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-ellipsis-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-ellipsis-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-ellipsis-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-ellipsis-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-partial-copy-deletion-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-partial-copy-deletion-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-partial-copy-deletion-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-partial-copy-deletion-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-multidominance-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-multidominance-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-multidominance-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-multidominance-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-argument-sharing-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-argument-sharing-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-argument-sharing-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-argument-sharing-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-focus-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-focus-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-focus-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-focus-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-scope-information-relation-layer,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-scope-information-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-scope-information-relation-layer,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-scope-information-relation-layer {
+      opacity: 1;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-multidominance-shared-label,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-multidominance-shared-label,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-multidominance-shared-label,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-multidominance-shared-label {
+      filter: drop-shadow(0 0 5px rgba(110, 231, 183, 0.24));
+    }
+    .babel-render-card[data-lens-active="true"] .babel-ellipsis-ghost-label,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-ellipsis-ghost-label,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-ellipsis-ghost-label,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-ellipsis-ghost-label {
+      fill: rgba(209, 250, 229, 0.34) !important;
+      stroke: rgba(1, 8, 5, 0.54) !important;
+      opacity: 0.52 !important;
+      filter: blur(0.25px) drop-shadow(0 0 5px rgba(167, 243, 208, 0.12)) !important;
+    }
+    .babel-render-card[data-lens-active="true"] .babel-ellipsis-antecedent-label,
+    .babel-render-card:has(.babel-lens-node:hover) .babel-ellipsis-antecedent-label,
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-ellipsis-antecedent-label,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-ellipsis-antecedent-label {
+      filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.18));
+    }
+    .babel-render-card[data-lens-active="true"] .babel-lens-node:not(.vr-relation-active),
+    .babel-render-card:has(.babel-lens-node:hover) .babel-lens-node:not(.vr-relation-active),
+    .babel-render-card:has(.babel-lens-toggle:hover) .babel-lens-node:not(.vr-relation-active),
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .babel-lens-node:not(.vr-relation-active) {
+      opacity: 1;
+      stroke: transparent !important;
+      stroke-width: 0 !important;
+      filter: none !important;
+    }
+    .babel-render-card[data-lens-active="true"] .vr-relation-active.babel-ellipsis-ghost-label,
+    .babel-render-card:has(.babel-lens-node:hover) .vr-relation-active.babel-ellipsis-ghost-label,
+    .babel-render-card:has(.babel-lens-toggle:hover) .vr-relation-active.babel-ellipsis-ghost-label,
+    .babel-render-card:has(.babel-lens-toggle:focus-visible) .vr-relation-active.babel-ellipsis-ghost-label {
+      opacity: 0.82 !important;
+      filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.5)) !important;
+    }
+    /*
+     * A card may opt out of the two-column layout when its tree is genuinely
+     * wide. A roll-up derivation re-expands every copy at every step, so its
+     * final frame is several times the width of an ordinary example; squeezing
+     * it into the narrow pane is what made the last one unreadable. The props
+     * panel drops below instead of beside.
+     */
+    .babel-render-card--wide {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .babel-render-card--wide .babel-render-mount {
+      height: 62vh;
+      max-height: 780px;
+    }
+    .babel-render-mount {
+      min-height: 480px;
+      height: 54vh;
+      max-height: 620px;
+      border: 1px solid rgba(16, 185, 129, 0.14);
+      border-radius: 22px;
+      background: linear-gradient(180deg, #04140e 0%, #020806 100%);
+      overflow: hidden;
+      position: relative;
+    }
+    .babel-render-mount[data-archetype^="H5."] {
+      min-height: 840px;
+      height: 92vh;
+      max-height: 960px;
+    }
+    .babel-render-mount > div {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      border-radius: 22px;
+      background: linear-gradient(180deg, #04140e 0%, #020806 100%);
+    }
+    .babel-render-mount > div::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(16, 185, 129, 0.08) 0.8px, transparent 0.8px);
+      background-size: 8px 8px;
+      opacity: 0.08;
+      pointer-events: none;
+    }
+    .babel-render-mount svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      position: relative;
+      z-index: 1;
+    }
+    .babel-render-mount > div > div:first-child {
+      position: absolute;
+      top: 18px;
+      left: 20px;
+      z-index: 5;
+      pointer-events: none;
+      opacity: 0.78;
+      color: rgba(16, 185, 129, 0.82);
+      font: 800 10px/1.4 "JetBrains Mono", monospace;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+    .babel-render-mount [data-babel-replay-panel="true"] {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 14px;
+      z-index: 8;
+      height: 142px;
+      max-height: 142px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 16px;
+      background: rgba(2, 8, 6, 0.94);
+      padding: 10px;
+      color: rgba(236, 253, 245, 0.86);
+      font: 11px/1.45 "JetBrains Mono", monospace;
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+    }
+    .babel-render-mount [data-babel-replay-timeline="true"] {
+      display: none;
+    }
+    .babel-render-mount [data-babel-replay-details="true"] {
+      min-height: 0;
+      flex: 1 1 auto;
+      overflow-y: auto;
+    }
+    .babel-render-mount [data-babel-replay-panel="true"] button {
+      margin: 0 6px 8px 0;
+      border: 1px solid rgba(16, 185, 129, 0.24);
+      border-radius: 8px;
+      background: rgba(16, 185, 129, 0.08);
+      color: rgba(236, 253, 245, 0.78);
+      padding: 6px 8px;
+      font: 800 9px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .babel-render-mount [data-babel-replay-panel="true"] input[type="range"] {
+      display: none;
+    }
+    .babel-render-code {
+      min-width: 0;
+      display: grid;
+      align-content: start;
+      gap: 12px;
+    }
+    .babel-render-code-label {
+      color: rgba(16, 185, 129, 0.76);
+      font: 800 9px/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.26em;
+      text-transform: uppercase;
+    }
+    .babel-render-code pre {
+      margin: 0;
+      max-height: 480px;
+      border-radius: 18px;
+      white-space: pre-wrap;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    @media (max-width: 960px) {
+      .page { display: block; padding: 18px 14px 56px; }
+      aside { position: static; max-height: none; margin-bottom: 30px; }
+      .hero { min-height: auto; border-radius: 28px; }
+      .signal-grid, .implementation-board { grid-template-columns: 1fr; }
+      .renderer-truth-strip { grid-template-columns: 1fr 1fr; }
+      .current-renderer-lab { padding: 16px; border-radius: 26px; }
+      .babel-render-card,
+      .babel-render-card-header { grid-template-columns: 1fr; }
+      .babel-render-mount { min-height: 430px; height: 64vh; }
+      .babel-render-mount[data-archetype^="H5."] { min-height: 860px; height: 96vh; }
+      .babel-render-mount[data-archetype^="H6."] { min-height: 720px; height: 82vh; }
+      .compiler-route div { grid-template-columns: 48px 1fr; }
+      .compiler-route em { grid-column: 2; }
+    }
+    @media print {
+      body { background: white; color: black; }
+      aside { display: none; }
+      .page { display: block; padding: 0; }
+      a { color: inherit; }
+      figure { break-inside: avoid; }
+      .hero, .implementation-board { border: 1px solid #ddd; box-shadow: none; color: black; }
+    }
+
+
+    /* Minimal relation archive shell. */
+    .archive-main {
+      min-width: 0;
+      max-width: none;
+    }
+    .archive-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 28px;
+      align-items: end;
+      padding: 20px 0 28px;
+      border-bottom: 1px solid rgba(110, 231, 183, 0.18);
+    }
+    .archive-kicker,
+    .archive-header h1,
+    .archive-header p,
+    .archive-section-head h2,
+    .archive-section-head p,
+    .source-archive h2,
+    .source-archive p,
+    .archive-footer {
+      letter-spacing: 0;
+    }
+    .archive-header .archive-kicker {
+      margin: 0 0 14px;
+      color: #6ee7b7;
+      font: 700 11px/1.2 "JetBrains Mono", monospace;
+      text-transform: uppercase;
+    }
+    .archive-header h1 {
+      margin: 0;
+      color: #f4fff9;
+      font: 700 clamp(30px, 4vw, 52px)/1.05 "JetBrains Mono", monospace;
+    }
+    .archive-header p {
+      max-width: 720px;
+      margin: 18px 0 0;
+      color: rgba(236, 253, 245, 0.66);
+      font-size: 16px;
+      line-height: 1.55;
+    }
+    .archive-nav {
+      display: flex;
+      gap: 18px;
+      padding-bottom: 4px;
+      font: 600 12px/1.2 "JetBrains Mono", monospace;
+    }
+    .archive-nav a {
+      color: rgba(236, 253, 245, 0.7);
+      text-decoration: none;
+    }
+    .archive-nav a:hover,
+    .archive-nav a:focus-visible {
+      color: #6ee7b7;
+    }
+    .relation-atlas {
+      padding-top: 42px;
+    }
+    .atlas-cards-shell {
+      position: relative;
+      min-height: clamp(500px, 68vh, 760px);
+    }
+    #babel-current-renderer-lab,
+    #babel-relation-sidebar {
+      transition: opacity 180ms ease-out;
+    }
+    html.atlas-loading #babel-current-renderer-lab,
+    html.atlas-loading #babel-relation-sidebar {
+      opacity: 0;
+    }
+    html.atlas-loading .source-archive,
+    html.atlas-loading .archive-footer {
+      display: none;
+    }
+    html.atlas-ready .atlas-loading-state,
+    html.atlas-ready .atlas-sidebar-loading {
+      display: none;
+    }
+    .atlas-loading-state {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      min-height: clamp(500px, 68vh, 760px);
+      padding: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 26px;
+      background: rgba(0, 0, 0, 0.48);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 20px 50px rgba(0, 0, 0, 0.28);
+    }
+    .atlas-loading-label {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      color: rgba(110, 231, 183, 0.62);
+      font: 600 10px/1.2 "JetBrains Mono", monospace;
+      text-transform: uppercase;
+    }
+    .atlas-loading-heading {
+      display: grid;
+      gap: 12px;
+      width: min(280px, 55%);
+    }
+    .atlas-loading-pill,
+    .atlas-loading-title,
+    .atlas-loading-button,
+    .atlas-loading-line,
+    .atlas-sidebar-loading span {
+      background: rgba(110, 231, 183, 0.12);
+      animation: atlas-loading-pulse 1.4s ease-in-out infinite;
+    }
+    .atlas-loading-pill {
+      width: 210px;
+      height: 28px;
+      border-radius: 999px;
+    }
+    .atlas-loading-title {
+      width: 240px;
+      height: 18px;
+      border-radius: 3px;
+    }
+    .atlas-loading-button {
+      width: 108px;
+      height: 34px;
+      border-radius: 8px;
+    }
+    .atlas-loading-canvas {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-height: clamp(390px, 54vh, 610px);
+      margin-top: 20px;
+      padding: 28px;
+      border: 1px solid rgba(16, 185, 129, 0.16);
+      border-radius: 18px;
+      background: rgba(0, 12, 8, 0.34);
+    }
+    .atlas-loading-line {
+      height: 9px;
+      border-radius: 2px;
+    }
+    .atlas-loading-line:nth-child(1) { width: 34%; }
+    .atlas-loading-line:nth-child(2) { width: 58%; }
+    .atlas-loading-line:nth-child(3) { width: 46%; }
+    .atlas-sidebar-loading {
+      display: grid;
+      gap: 14px;
+      padding-top: 8px;
+    }
+    .atlas-sidebar-loading span {
+      display: block;
+      width: 78%;
+      height: 20px;
+      border-radius: 3px;
+    }
+    .atlas-sidebar-loading span:nth-child(even) { width: 62%; }
+    @keyframes atlas-loading-pulse {
+      0%, 100% { opacity: 0.42; }
+      50% { opacity: 0.78; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .atlas-loading-pill,
+      .atlas-loading-title,
+      .atlas-loading-button,
+      .atlas-loading-line,
+      .atlas-sidebar-loading span {
+        animation: none;
+      }
+    }
+    .archive-section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 28px;
+      align-items: end;
+      margin-bottom: 24px;
+    }
+    .archive-section-head h2,
+    .source-archive h2 {
+      margin: 0;
+      color: #f4fff9;
+      font: 700 19px/1.2 "JetBrains Mono", monospace;
+    }
+    .archive-section-head p,
+    .source-archive p {
+      max-width: 680px;
+      margin: 0;
+      color: rgba(236, 253, 245, 0.58);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .current-renderer-lab {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+    .babel-render-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 24px;
+    }
+    .babel-render-card,
+    .babel-render-card--wide {
+      grid-template-columns: minmax(0, 1fr);
+      grid-column: auto;
+    }
+    .babel-render-card {
+      scroll-margin-top: 24px;
+      row-gap: 20px;
+    }
+    .babel-render-card-header {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: start;
+      gap: 20px;
+      padding: 0;
+    }
+    .babel-render-code {
+      display: none !important;
+    }
+    .relation-sidebar {
+      border-color: rgba(16, 185, 129, 0.2);
+    }
+    .relation-sidebar nav {
+      display: block;
+    }
+    .relation-sidebar-link span,
+    .relation-sidebar-link strong {
+      display: block;
+      letter-spacing: 0;
+    }
+    .relation-sidebar-link span {
+      margin-bottom: 4px;
+      color: rgba(110, 231, 183, 0.62);
+      font: 600 9px/1.25 "JetBrains Mono", monospace;
+      text-transform: uppercase;
+    }
+    .relation-sidebar-link strong {
+      color: inherit;
+      font: 600 11px/1.3 "Quicksand", ui-sans-serif, system-ui;
+    }
+    .visual-vocabulary {
+      margin-top: 64px;
+      padding-top: 38px;
+      border-top: 1px solid rgba(110, 231, 183, 0.18);
+      scroll-margin-top: 24px;
+    }
+    .babel-vocabulary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .babel-vocabulary-specimen {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid rgba(110, 231, 183, 0.15);
+      border-radius: 6px;
+      background:
+        radial-gradient(circle at 1px 1px, rgba(110, 231, 183, 0.08) 1px, transparent 1.2px) 0 0 / 20px 20px,
+        rgba(0, 18, 12, 0.72);
+    }
+    .babel-vocabulary-specimen h3 {
+      margin: 0;
+      padding: 14px 16px 0;
+      color: rgba(236, 253, 245, 0.7);
+      font: 650 10px/1.25 "JetBrains Mono", monospace;
+      text-transform: uppercase;
+    }
+    .babel-vocabulary-specimen svg {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      overflow: visible;
+    }
+    .source-archive {
+      margin-top: 60px;
+      padding-top: 32px;
+      border-top: 1px solid rgba(110, 231, 183, 0.18);
+    }
+    .source-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 28px;
+      margin: 20px 0 0;
+      padding: 0;
+      list-style: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .source-list a {
+      display: block;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(236, 253, 245, 0.72);
+      text-decoration: none;
+      font: 500 12px/1.45 "JetBrains Mono", monospace;
+    }
+    .source-list a:hover,
+    .source-list a:focus-visible {
+      color: #6ee7b7;
+    }
+    .source-count {
+      margin-left: 10px;
+      color: rgba(110, 231, 183, 0.56);
+      font: 600 11px/1.2 "JetBrains Mono", monospace;
+      white-space: nowrap;
+    }
+    .babel-source-groups {
+      display: grid;
+      gap: 52px;
+      margin-top: 24px;
+    }
+    .babel-source-group {
+      content-visibility: auto;
+      contain-intrinsic-block-size: auto 720px;
+    }
+    .babel-source-group > header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(110, 231, 183, 0.15);
+    }
+    .babel-source-group > header h3,
+    .source-records h3 {
+      margin: 0;
+      color: rgba(236, 253, 245, 0.78);
+      font: 650 12px/1.35 "JetBrains Mono", monospace;
+    }
+    .babel-source-group > header span {
+      color: rgba(110, 231, 183, 0.5);
+      font: 600 10px/1 "JetBrains Mono", monospace;
+    }
+    .babel-source-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .babel-source-figure {
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      border: 1px solid rgba(110, 231, 183, 0.14);
+      border-radius: 6px;
+      background: rgba(0, 18, 12, 0.72);
+    }
+    .babel-source-figure a {
+      display: block;
+      color: inherit;
+      text-decoration: none;
+    }
+    .babel-source-figure:has(a:hover),
+    .babel-source-figure:has(a:focus-visible) {
+      border-color: rgba(110, 231, 183, 0.5);
+    }
+    .babel-source-image {
+      display: grid;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      place-items: center;
+      overflow: hidden;
+      background: #fff;
+    }
+    .babel-source-image img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .babel-source-figure figcaption {
+      min-height: 46px;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      color: rgba(236, 253, 245, 0.66);
+      font: 500 10px/1.35 "JetBrains Mono", monospace;
+      overflow-wrap: anywhere;
+    }
+    .source-records {
+      margin-top: 54px;
+    }
+    .source-records h3 {
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(110, 231, 183, 0.15);
+    }
+    .source-records .source-list {
+      margin-top: 0;
+      border-top: 0;
+    }
+    .archive-footer {
+      margin-top: 42px;
+      color: rgba(236, 253, 245, 0.38);
+      font: 500 11px/1.4 "JetBrains Mono", monospace;
+    }
+    @media (max-width: 1100px) {
+      .archive-header,
+      .archive-section-head,
+      .babel-render-card-header {
+        grid-template-columns: 1fr;
+        display: grid;
+      }
+      .source-list {
+        grid-template-columns: 1fr;
+      }
+      .babel-vocabulary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .babel-source-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 620px) {
+      .babel-vocabulary-grid {
+        grid-template-columns: 1fr;
+      }
+      .babel-source-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 960px) {
+      .page {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+      }
+      aside {
+        max-height: min(320px, 42vh);
+        overflow: auto;
+        margin-bottom: 22px;
+      }
+      .archive-main {
+        width: 100%;
+      }
+      .archive-nav {
+        flex-wrap: wrap;
+        gap: 10px 16px;
+      }
+      .archive-nav a {
+        white-space: nowrap;
+      }
+    }
+    @media (min-width: 961px) and (max-width: 1250px) {
+      .page {
+        display: block;
+        padding: 18px 20px 56px;
+      }
+      aside {
+        position: static;
+        max-height: 280px;
+        margin-bottom: 30px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="archive-top" class="page">
+    <aside class="relation-sidebar" aria-label="Relation index">
+      <h2>Relations</h2>
+      <div class="atlas-sidebar-loading" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <nav id="babel-relation-sidebar" aria-busy="true"></nav>
+    </aside>
+
+    <main class="archive-main">
+      <header class="archive-header">
+        <div>
+          <p class="archive-kicker">Babel · relation orchard</p>
+          <h1>Babel Relation Orchard</h1>
+        </div>
+        <nav class="archive-nav" aria-label="Orchard navigation">
+          <a href="https://francisronge.github.io/sylvan-architect-babel/">Research</a>
+          <a href="https://francisronge.github.io/sylvan-architect-babel/research/relation-orchard/">Report</a>
+          <a href="#relation-cards">Cards</a>
+          <a href="#visual-vocabulary">Vocabulary</a>
+          <a href="#sources">Sources</a>
+          <a href="#contribute">Contribute</a>
+        </nav>
+      </header>
+
+      <section id="relation-cards" class="relation-atlas current-renderer-lab" aria-labelledby="relation-cards-title">
+        <div class="archive-section-head">
+          <h2 id="relation-cards-title">Relation cards</h2>
+        </div>
+        <div class="atlas-cards-shell">
+          <div class="atlas-loading-state" role="status" aria-live="polite">
+            <span class="atlas-loading-label">Loading relation cards</span>
+            <div class="atlas-loading-heading" aria-hidden="true">
+              <span class="atlas-loading-pill"></span>
+              <span class="atlas-loading-title"></span>
+              <span class="atlas-loading-button"></span>
+            </div>
+            <div class="atlas-loading-canvas" aria-hidden="true">
+              <span class="atlas-loading-line"></span>
+              <span class="atlas-loading-line"></span>
+              <span class="atlas-loading-line"></span>
+            </div>
+          </div>
+          <div id="babel-current-renderer-lab" aria-live="polite" aria-busy="true"></div>
+        </div>
+      </section>
+
+      <section id="visual-vocabulary" class="visual-vocabulary" aria-labelledby="visual-vocabulary-title">
+        <div class="archive-section-head">
+          <h2 id="visual-vocabulary-title">Visual vocabulary</h2>
+          <p>Babel's relation marks in isolation: no trees, sentences, or derivations.</p>
+        </div>
+        <div id="babel-visual-vocabulary" aria-live="polite" aria-busy="true"></div>
+      </section>
+
+      <section id="sources" class="source-archive" aria-labelledby="sources-title">
+        <div class="archive-section-head">
+          <h2 id="sources-title">Sources</h2>
+        </div>
+        <div class="source-records">
+          <h3>Research records</h3>
+          <ul class="source-list">
+            <li><a href="./visual-relations-source-recovery-2026-07-26.md">Primitive and source recovery</a></li>
+            <li><a href="./visual-relations-source-recovery-2026-07-30.md">Relation-family source recovery</a></li>
+            <li><a href="./visual-relations-domains-phases-locality-research-2026-07-31.md">Domains, phases, and locality</a></li>
+            <li><a href="./visual-relations-silence-ellipsis-pronunciation-research-2026-08-01.md">Silence, ellipsis, and pronunciation</a></li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="contribute" class="source-archive" aria-labelledby="contribute-title">
+        <div class="archive-section-head">
+          <h2 id="contribute-title">Missing a relation?</h2>
+          <p>I could not cover every relation in syntax. If something is missing, open an issue with a source and an example tree, or send a pull request that adds it to Babel. I may also have made mistakes, as may the models I worked with; if you notice one, please open an issue and let me know.</p>
+        </div>
+        <ul class="source-list">
+          <li><a href="https://francisronge.github.io/sylvan-architect-babel/research/relation-orchard/">Read how the orchard was made</a></li>
+          <li><a href="https://github.com/francisronge/sylvan-architect-babel/issues/new?title=Relation%20proposal%3A%20">Propose a relation</a></li>
+          <li><a href="https://github.com/francisronge/sylvan-architect-babel/pulls">Browse pull requests</a></li>
+          <li><a href="https://github.com/francisronge/sylvan-architect-babel">Babel on GitHub</a></li>
+        </ul>
+      </section>
+
+      <footer class="archive-footer">Research archive · relation system completed August 2026</footer>
+    </main>
+  </div>
+
+  <script>window.__BABEL_LOGO_SRC__ = "../../public/babellogo.png";</script>
+    <script src="./visual-relations-current-lab.production-only-audit.r96.bundle.js?v=pair-merge-branch-overlay-r170"></script>
+</body>
+</html>

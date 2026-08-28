@@ -2,9 +2,19 @@
 
 Date: 2026-04-26
 
-Status: local-only research note. Do not commit.
+Status: historical renderer research notebook. Current implementation authority
+lives in the renderer closeout and Tier-2 dispatch specification linked from
+`docs/README.md`.
 
 Purpose: collect how syntacticians actually draw relations on and around trees, then translate that into a Babel visual-relations design that keeps the linguistic ontology open.
+
+Active scope: research and Lab work are limited to relations Babel can author
+with current-stage syntax-node anchors, renderer-derived geometry, or
+Replay-derived state comparisons. Syntax-prosody tiers, signed-language loci
+and articulator timelines, external speaker/addressee anchors, AVMs, complete
+non-isomorphic projections, and other non-node endpoint systems are historical
+research only. They are not remaining work unless Francis explicitly changes
+the contract scope.
 
 ## Core Finding
 
@@ -27,17 +37,169 @@ For Babel this means: `visualRelations` must not be "movement arrows with a new 
 
 The renderer can have finite visual primitives. The model-authored ontology must stay open.
 
+## Babel Implementation Bridge
+
+This is the missing bridge between the source plates and Babel's UI.
+
+The sources do not become a closed ontology. They become a renderer grammar.
+
+Pipeline:
+
+1. The parser keeps writing open `visualRelations`.
+2. Babel preserves the model's original relation name, subtype, anchors, and evidence.
+3. A relation compiler reads anchor topology and stage context.
+4. The compiler emits a finite `relationRenderPlan`.
+5. Three.js renders that plan as an overlay layer synced to the tree coordinates.
+6. Replay decides when the relation appears, animates, persists, hides, or becomes focus-only.
+7. Canopy stays clean by default.
+
+The contract does not change. The UI gets smarter.
+
+### What Three.js Receives
+
+Three.js should not receive free-drawn semantic guesses. It should receive safe render plans derived from anchored syntax.
+
+Example render plan:
+
+```json
+{
+  "relationId": "r17",
+  "sourceKind": "model-authored-open-relation",
+  "renderFamily": "trajectory",
+  "layer": "replay",
+  "anchors": [
+    { "role": "pronounced phrase", "nodeId": "dp_which_book", "x": 0.42, "y": 0.18 },
+    { "role": "lower copy", "nodeId": "t_which_book", "x": 0.72, "y": 0.66 }
+  ],
+  "marks": [
+    {
+      "type": "bezierPath",
+      "from": "t_which_book",
+      "to": "dp_which_book",
+      "pathSpace": "tree",
+      "style": "phrasalMovement"
+    }
+  ],
+  "evidence": "stageRecord sentence that licenses the relation"
+}
+```
+
+Important: the model never draws the path. Babel computes the path from real anchors after tree layout.
+
+### Coordinate Contract
+
+The tree layout remains the source of truth.
+
+- D3/current tree layout computes node positions.
+- Babel normalizes node, domain, and surface-token coordinates into canvas space.
+- A transparent Three.js overlay uses an orthographic camera aligned to the tree viewport.
+- Relation marks are positioned from normalized anchors, not raw pixels.
+- Zoom/pan must transform the tree and relation overlay together.
+
+This lets Babel keep the current tree renderer while adding a richer Three.js relation layer.
+
+### Source Plate To Babel Primitive
+
+Movement:
+
+- Source practice: curved arrows plus trace/copy witness.
+- Babel primitive: `CurvePath` / `Line2` trajectory in tree space, with separate head and phrasal presets.
+- Replay behavior: animate only on the stage where movement happens; persist after introduction if useful.
+
+Identity/copy:
+
+- Source practice: coindices, traces, copies, reconstruction positions.
+- Babel primitive: shared subscript labels, lineage outline, multi-anchor focus rail.
+- Replay behavior: no arrow unless a displacement stage exists.
+
+Binding/control/coreference:
+
+- Source practice: coindices, c-command tree geometry, local domains, PRO.
+- Babel primitive: shared coindices plus a dotted dependency on focus when the source analysis licenses one, with domain tint and c-command path highlighting.
+- Replay behavior: focus/lens relation, not always-on overlay.
+
+Agree/features:
+
+- Source practice: feature labels near nodes, probe-goal relation only when relevant.
+- Babel primitive: anchored feature bundles near the syntactic objects that bear or value those features.
+- Replay behavior: before/after valuation states.
+
+Domains/phases/islands:
+
+- Source practice: boxes, brackets, phase edges, complement/spell-out regions.
+- Babel primitive: translucent region meshes/planes, edge bands, complement shading.
+- Replay behavior: domain introduced when the stage creates or uses it.
+
+Ellipsis/silence:
+
+- Source practice: shaded/deleted constituent, silent internal structure, antecedent relation.
+- Babel primitive: muted subtree, collapsed silent bracket, recoverability bridge.
+- Replay behavior: hidden structure can expand on click; silence never looks pronounced.
+
+Multidominance/sharing:
+
+- Source practice: one node/subtree with multiple mothers.
+- Babel primitive: DAG affordance: one shared node with multiple incoming dominance edges.
+- Replay behavior: if Babel cannot lay out a full DAG yet, use one canonical shared subtree plus explicit connector stubs.
+
+Scope/LF:
+
+- Source practice: QR, traces, scope brackets, covert operator-variable dependencies.
+- Babel primitive: LF overlay, dotted covert path, scope brackets around interpreted domain.
+- Replay behavior: introduced in LF frames; never animated like overt movement unless the derivation says so.
+
+### Relation Lens Rule
+
+The frontend must not show every relation at full volume.
+
+Default:
+
+- Canopy shows a clean professional tree.
+- Replay shows the active relation for the current derivational moment.
+- Notes can cite relation evidence without drawing everything.
+
+On hover/click:
+
+- reveal all anchors
+- show the source `stageRecord` evidence
+- show the relation family Babel inferred for rendering
+- show the original model-authored relation name unchanged
+
+Layer toggles:
+
+- trajectories
+- identity/copies
+- binding/control/coreference
+- features/Agree/licensing
+- domains/phases/islands
+- silence/ellipsis
+- sharing/multidominance
+- Scope/LF
+
+### What We Should Build First
+
+1. `resolveVisualRelations`: preserve open relation names but infer render family from anchors and stage context.
+2. `relationRenderPlan`: convert resolved relations into safe render marks.
+3. `ThreeRelationOverlay`: orthographic transparent overlay synced with the tree viewport.
+4. `ReplayRelationLens`: only the active relation is emphasized; other layers are dim or hidden.
+5. Three starter families:
+   - movement trajectory
+   - identity/coindexation
+   - domain region
+
+This gives Babel the bridge without changing the parse contract.
+
 ## Source Plates
 
-These are source screenshots/plates to inspect while designing. Some are hotlinked from public source pages so the local research doc does not copy image files into the repo.
+These are source screenshots/plates to inspect while designing. The HTML companion caches the reachable plates under `visual-relations-assets/` so the local page does not depend on remote hotlinking. Source pages remain listed for provenance.
 
-### Head Movement: T-Lowering And V-Raising
+### Head Movement: T-To-C And Dependency Contrast
 
-Source: The Science of Syntax, "Head-movement".
+Sources: The Science of Syntax, "Head-movement"; Wikipedia, "Subject-auxiliary inversion".
 
-![English T lowering from The Science of Syntax](https://opentext.ku.edu/app/uploads/quicklatex/quicklatex.com-921e20e2ce8b1787afb510c7e3051565_l3.png)
+![Subject-auxiliary inversion movement analysis](visual-relations-assets/head-movement-subject-aux-inversion.png)
 
-![French V raising from The Science of Syntax](https://opentext.ku.edu/app/uploads/quicklatex/quicklatex.com-7b26da758cc835a9422e508518589ba2_l3.png)
+![Subject-auxiliary inversion dependency contrast](visual-relations-assets/head-movement-dependency-contrast.png)
 
 What matters:
 
@@ -56,7 +218,7 @@ Design implication:
 
 Source: The Science of Syntax, "Binding theory".
 
-![Binding/c-command diagram from The Science of Syntax](https://opentext.ku.edu/app/uploads/quicklatex/quicklatex.com-14437a27b120c966f53d60baa075fbdb_l3.png)
+![Binding/c-command diagram from The Science of Syntax](visual-relations-assets/binding-c-command.png)
 
 What matters:
 
@@ -67,7 +229,8 @@ What matters:
 Design implication:
 
 - Babel needs non-arrow relations.
-- Binding/control/coreference should use identity halos, index badges, and domain shading.
+- Binding/control/coreference should use coindices, local-domain shading, and c-command path highlighting.
+- Do not draw a movement arrow unless the derivation says something moved.
 - Clicking an antecedent should reveal bound dependents and the domain that licenses or blocks the dependency.
 
 ### TreeForm: Movement, Coreference, Feature Association
@@ -137,14 +300,53 @@ Design implication:
 - Anchors must have model-authored roles.
 - The renderer must support fan-out, forked dependencies, and shared dependency labels.
 
+### Multi-Anchor Source Decision
+
+Accepted source plate:
+
+- Torr (2019), Figure 3.31, "Across-the-board Movement Schema." It visibly supplies the complete drawing convention Babel needs: one pronounced landing occurrence, one indexed trace in each conjunct, and two separate phrasal trajectories converging on the landing.
+- Agbayani and Ishii (2023), example (14), explicitly shows one real gap and
+  two nested parasitic gaps. It licenses a plural parasitic-gap anchor set;
+  Babel still draws only the ordinary movement trajectory.
+- Oded (2011), page 75, reproducing Nunes (2004:100), shows `which paper`
+  first in two separate phrase markers and then in one final CP. It licenses
+  the second sideward context: a cross-workspace movement followed by ordinary
+  wh-movement, with both paths retained in the final frame.
+
+Generalization contexts:
+
+- The three-conjunct ATB card deliberately raises Torr's fan-in from two to
+  three. It is a renderer stress context, not a claim that Torr's figure itself
+  has three conjuncts.
+- The multiple-parasitic-gap card translates Agbayani and Ishii's one-real,
+  two-parasitic topology onto a different Babel tree.
+- The second sideward card follows the Nunes/Oded derivational order directly:
+  separate workspaces, sideward remerge, workspace combination, then
+  wh-movement.
+
+Rejected as Babel drawing precedents:
+
+- The Assmann chain-composition schematic describes formal chain composition, but it does not supply reusable relation geometry or a concrete syntax-tree drawing convention.
+- The Haida and Repp sideward-movement derivation shows COPY/MERGE notation and resulting trees, but no visible cross-workspace trajectory or arrow. It therefore cannot define how Babel should draw the relation.
+
+The rejected figures may remain research evidence for the analyses. They are not accepted source plates and must not be used to invent renderer geometry.
+
 ### Phase / Domain Boundaries
 
-Source: Gunes 2024 on PIC and prosodic phrasing:
-https://www.mdpi.com/2226-471X/9/5/162
+Sources:
+
+- Zhiyan Gao, "How to draw an arc on a syntax tree with LaTeX":
+  https://gaozhiyan.wordpress.com/2016/12/06/how-to-draw-an-arc/
+- Gunes 2024 on PIC and prosodic phrasing:
+  https://www.mdpi.com/2226-471X/9/5/162
+
+![A phase drawn as an arc over its syntax-tree domain](visual-relations-assets/source-recovery-2026-07-30/phase-arc-gao-2016.png)
 
 What matters:
 
 - Phases are visual-domain objects, not only node-to-node relations.
+- A real syntax-tree precedent draws the phase as an arc fitted over the
+  relevant projection and distinguishes the phase arc from a spell-out arc.
 - The crucial contrast is inside/outside a domain and edge/complement accessibility.
 - Phase effects can also interact with PF/prosodic boundaries.
 
@@ -189,7 +391,7 @@ What matters:
 Design implication:
 
 - Babel needs hidden-structure rendering.
-- An ellipsis site should be shown as a muted collapsed subtree, a deletion veil, or a recoverable ghost, not as a movement trace.
+- An ellipsis site should be shown as a muted/collapsed subtree, a shaded deletion site, or a recoverable silent constituent, not as a movement trace.
 - Clicking the ellipsis site should reveal the antecedent and optionally expand the silent structure.
 
 ### Multidominance / Right Node Raising
@@ -211,7 +413,395 @@ Design implication:
 
 - Babel must eventually support DAG-like display.
 - A shared constituent should not be faked as two independent copies unless the analysis says copy.
-- Shared material needs a "same node, multiple parents" visual affordance or a shared-subtree portal.
+- Shared material needs a "same node, multiple parents" visual affordance.
+
+## Real-Life Drawing Plates By Relation
+
+These plates are the drawing contract for Babel. The goal is not to invent generic UI decorations. The goal is to imitate the notation syntacticians already use, then make it interactive, layered, and beautiful.
+
+Source images are cached locally in `visual-relations-assets/` for this repo. Some academic source pages expose stable image files; others expose only figure pages or article pages. When a direct image is a secondary reachable rendering, the primary source page is still listed beside it.
+
+### Movement
+
+Head movement / inversion source plates:
+
+![Subject-auxiliary inversion movement analysis](visual-relations-assets/head-movement-subject-aux-inversion.png)
+
+![Subject-auxiliary inversion dependency contrast](visual-relations-assets/head-movement-dependency-contrast.png)
+
+Phrasal/successive movement source plates:
+
+![Successive-cyclic phase movement](visual-relations-assets/phase-movement-step.png)
+
+Across-the-board movement source plate:
+
+![Across-the-board movement schema with two trace-to-landing trajectories](visual-relations-assets/atb-torr-movement-schema.png)
+
+Source pages:
+
+- The Science of Syntax, "Head-movement":
+  https://opentext.ku.edu/syntax/chapter/head-movement/
+- Wikipedia, "Subject-auxiliary inversion":
+  https://en.wikipedia.org/wiki/Subject%E2%80%93auxiliary_inversion
+- TreeForm movement figure:
+  https://www.researchgate.net/figure/Syntax-tree-illustrating-movement-in-a-question-and-its-corresponding-answer-C-is-a_fig3_220675427
+- Minimalist Program phase-movement diagrams:
+  https://en.wikipedia.org/wiki/Minimalist_program
+- Overleaf/forest arrows for syntax diagrams:
+  https://www.overleaf.com/latex/templates/arrows-for-syntax-diagrams-with-forest/xjyvcszgcspv
+- Torr, *Wide-Coverage Statistical Parsing with Minimalist Grammars* (2019), Figure 3.31:
+  https://era.ed.ac.uk/server/api/core/bitstreams/762162ab-2460-4b50-abce-4a402f12d95c/content
+
+How syntacticians draw it:
+
+- Head movement is tight and local: a short curved or vertical arrow from one head position to another head position.
+- Lowering is still a head-to-head path, but it goes downward; it must not be forced into the wh-movement look.
+- Phrasal movement uses a larger curved path outside the tree body, often with the lower trace/copy left in place.
+- Successive-cyclic movement is drawn as staged movement through phase edges, not one magical long jump.
+- Across-the-board movement uses one landing occurrence and one trace in each conjunct, with a separate trajectory from each trace converging on the landing.
+- The arrow is only the reader aid. The trace/copy/gap is the structural witness.
+
+Babel drawing rule:
+
+- Head movement snaps to head/preterminal anchors and uses compact curves.
+- Phrasal movement uses outer Bezier trajectories that avoid branches and labels.
+- Lowering uses a downward head-to-head trajectory and belongs to the PF/morphology layer when the analysis says postsyntactic lowering.
+- Across-the-board movement composes one existing phrasal trajectory per authored source trace into one landing. It does not invent a generic fan hub.
+- Movement is invalid as a confident drawing unless there is a lower witness in `workspaceForest`.
+
+### Identity / Copy
+
+Source plates:
+
+![Parasitic gap tree with trace and parasitic gap labels](visual-relations-assets/parasitic-gap-tree.png)
+
+![Co-indexation relation plate](visual-relations-assets/co-indexation.png)
+
+![Reconstruction at a phase edge](visual-relations-assets/reconstruction-vp-phase.png)
+
+Source pages:
+
+- Wikimedia Commons parasitic gap tree:
+  https://commons.wikimedia.org/wiki/File:Parasitic_gap_tree.png
+- Minimalist Program reconstruction/coindexation diagrams:
+  https://en.wikipedia.org/wiki/Minimalist_program
+
+How syntacticians draw it:
+
+- Identity is usually a subscript index: `DP_i`, `t_i`, `PRO_i`, `her_i`.
+- Copies/traces can be angle-bracketed, muted, crossed, or labeled `t`.
+- One pronounced phrase may be linked to several silent positions, as in parasitic gaps.
+- Identity can exist without a visible arrow. An arrow only belongs there if a stage says displacement happened.
+
+Babel drawing rule:
+
+- Default identity rendering is shared subscript index plus a subtle lineage outline on focus.
+- Multi-anchor identity must be supported: one antecedent, multiple traces/gaps/copies.
+- No arrow for identity alone.
+- Replay can show copy persistence over time, but Canopy should stay readable.
+
+### Binding / Control / Coreference
+
+Source plates:
+
+![Binding/c-command diagram from The Science of Syntax](visual-relations-assets/binding-c-command.png)
+
+![MIT control and raising tree plate](visual-relations-assets/mit-control-raising.png)
+
+![MIT control infinitive tree plate](visual-relations-assets/mit-control-infinitive.png)
+
+Source pages:
+
+- The Science of Syntax, binding theory:
+  https://opentext.ku.edu/syntax/chapter/binding-theory/
+- MIT 24.902 control notes:
+  https://web.mit.edu/norvin/www/24.902/control.html
+- CAS LX 522 Binding Theory lecture:
+  https://www.slideserve.com/valiant/cas-lx-522-syntax-i
+
+How syntacticians draw it:
+
+- Binding/coreference is marked with coindices on the relevant DPs/pronouns/anaphors.
+- The proof is configurational: c-command and local domain, not a motion path.
+- Control is often drawn with `PRO` as a silent embedded subject and the controller coindexed with it.
+- Domains can be boxed or shaded to show what counts as local.
+
+Babel drawing rule:
+
+- Use a dotted dependency only on focus, and add direction only when the source analysis licenses it.
+- Show shared subscript indices by default when relation layer is active.
+- Shade the binding/control domain on focus.
+- Keep `PRO`, pro, and other null categories muted but structurally present.
+
+### Agree / Features
+
+Verified direct tree evidence:
+
+![Merge and AGREE: T with unvalued phi features checked against a DP goal](visual-relations-assets/agree-merge-and-agree.jpg)
+
+![Minimalist derivation tree viewer with probe-goal Agree notes](visual-relations-assets/agree-sandiway-probe-goal.png)
+
+Background / weaker evidence:
+
+![UMass syntax workshop whiteboard with Agree and ellipsis annotations](visual-relations-assets/umass-syntax-workshop.jpg)
+
+![Co-indexation as feature checking](visual-relations-assets/co-indexation.png)
+
+![Formal features: interpretable and uninterpretable feature inventories](visual-relations-assets/agree-formal-features.jpg)
+
+![Feature hierarchy: semantic, phi, agreement and number features](visual-relations-assets/agree-with-features.jpg)
+
+Source pages:
+
+- Elly van Gelderen, "Historical Generative Syntax: What Diachronic Cycles Tell Us" (direct feature bundles on a tree):
+  https://www.slideserve.com/frayne/historical-generative-syntax-what-diachronic-cycles-tell-us-powerpoint-ppt-presentation
+- Sandiway Fong, Minimalist Program Grammar Implementation (derivation viewer with probe-goal Agree notes):
+  https://sandiway.arizona.edu/mpp/cuny2012/examples/index.html
+- Baker, "Agreement and Case", in The Cambridge Handbook of Generative Syntax:
+  https://www.cambridge.org/core/books/cambridge-handbook-of-generative-syntax/agreementand-case/3A209D00E2B25DBD3FEE9AFFF08B538E
+- Deal-style cyclic Agree reference candidate, "Cyclic Agree and the interaction of multiple feature probes":
+  https://link.springer.com/article/10.1007/s11049-022-09538-1
+- Partial/defective Agree reference candidate:
+  https://link.springer.com/article/10.1007/s10828-025-09165-1
+- Feature valuation / Agree reference candidate with phi and Case feature notation:
+  https://www.degruyterbrill.com/document/doi/10.1515/probus-2020-0001/html?lang=en
+- UMass Syntax Workshop whiteboard:
+  https://people.umass.edu/kbj/homepage/syntaxworkshop.html
+- Minimalist Program Agree/coindexation section:
+  https://en.wikipedia.org/wiki/Minimalist_program
+- CAS LX 522 split-INFL / AgrP lecture:
+  https://www.slideserve.com/eugenia-parsons/cas-lx-522-syntax-i
+
+Evidence status:
+
+- Current evidence supports compact feature bundles near heads/DPs.
+- Some pedagogical diagrams draw Agree/probe-goal arrows, but Babel reserves arrows for movement.
+- Treat the current Babel prototype as the general feature-valuation UI: anchored feature bundles on syntactic objects.
+
+How syntacticians draw it:
+
+- Feature relations are mostly written as labels near heads/nodes: `PRES +AGR`, `[NOM]`, `[ACC]`, phi-feature bundles, valued/unvalued features.
+- Probe-goal relations can be discussed in Replay text, but the visual relation itself is the anchored feature bundle.
+- Before/after valuation is often a derivational contrast rather than a single static tree.
+
+Babel drawing rule:
+
+- Feature labels live next to the syntactic node/head they belong to.
+- Long feature bundles wrap inside the same anchored feature card instead of spilling over the tree.
+- Do not draw arrows or dependency lines for feature valuation; movement owns arrows.
+- Replay should show before/after valuation, not just a final label.
+- Do not make Agree look like movement unless the derivation also says movement occurred.
+
+### Domains / Phases / Islands
+
+Source plates:
+
+![Phase arc over a syntax tree](visual-relations-assets/source-recovery-2026-07-30/phase-arc-gao-2016.png)
+
+![Successive movement through phase edge](visual-relations-assets/phase-movement-step.png)
+
+![MDPI phase/prosodic-domain figure](visual-relations-assets/mdpi-phase-prosodic-domain.png)
+
+Source pages:
+
+- Citko, "Classic phases", in Phase Theory:
+  https://www.cambridge.org/core/books/phase-theory/classic-phases/75F738E01BD6CE3AB5F9A77670A71CB2
+- Zhiyan Gao, "How to draw an arc on a syntax tree with LaTeX":
+  https://gaozhiyan.wordpress.com/2016/12/06/how-to-draw-an-arc/
+- Gunes 2024, "Prosodic Rephrasing and Violations of the Phase Impenetrability Condition":
+  https://www.mdpi.com/2226-471X/9/5/162
+- CAS LX 522 LF lecture, QR island constraints:
+  https://www.slideserve.com/dotty/cas-lx-522-syntax-i-powerpoint-ppt-presentation
+
+How syntacticians draw it:
+
+- Domains are not arrows. They are areas: boxed phrases, bracketed strings, ellipses, phase labels, edge positions, or spell-out regions.
+- Phase-edge movement is shown as stopping at the edge before moving on.
+- Islands are usually shown by bracketed/boxed domains plus failed extraction paths or starred examples.
+- Prosodic domains can be ellipses or brackets around surface chunks rather than tree nodes.
+
+Babel drawing rule:
+
+- Draw domains as translucent regions, edge bands, complement shading, and outside labels.
+- A relation can terminate at a domain edge, not only at a node.
+- Islands/phases should be layered and focusable. They must not cover the whole tree by default.
+
+### PF Realization / Vocabulary Insertion
+
+Source plate:
+
+![Vocabulary Insertion equations](visual-relations-assets/source-recovery-2026-07-30/pf-vocabulary-insertion-embick-noyer-2004.png)
+
+Source:
+
+- Embick and Noyer, *Distributed Morphology and the Syntax/Morphology
+  Interface* (2004 draft):
+  https://dingo.sbs.arizona.edu/~hharley/courses/PDF/EmbickNoyerDM.pdf
+
+What matters:
+
+- Vocabulary Insertion maps an abstract morphosyntactic terminal to a
+  phonological exponent.
+- The source writes those mappings as compact equations, including
+  context-sensitive allomorphy.
+- Babel therefore uses one equation row per authored insertion step and may
+  show an ordered series of rows when the analysis authors composition.
+- The renderer does not infer roots, affixes, exponents, or rule order.
+
+### Theta Roles / Argument Grids
+
+Source plate:
+
+![Theta grid for give with Agent, Theme, and Goal indices](visual-relations-assets/source-recovery-2026-07-30/theta-grid-cas-lx522-slide33.jpg)
+
+Source:
+
+- *CAS LX 522 Syntax I, Week 5b: Theta Theory*, slide 33:
+  https://www.slideserve.com/rmilliner/cas-lx-522-syntax-i-powerpoint-ppt-presentation
+
+What matters:
+
+- The predicate heads a compact grid of theta roles.
+- Each role is paired with the index carried by its anchored argument.
+- Babel keeps that grid-plus-index convention while deriving the number and
+  names of rows from the authored relation.
+- A one-role predicate therefore produces one row; the renderer never assumes
+  an Agent, Theme, and Goal template.
+
+### Ellipsis / Silence
+
+Source plates:
+
+![VP ellipsis tree with shaded VP site](visual-relations-assets/vp-ellipsis-shaded.jpg)
+
+Source pages:
+
+- Syntax III VP ellipsis lecture:
+  https://www.slideserve.com/drea/syntax-iii-powerpoint-ppt-presentation
+- Merchant, The Syntax of Sluicing:
+  https://academic.oup.com/book/48626/chapter/422372911
+- Cecchetto et al. on predicate ellipsis in LIS:
+  https://www.sciencedirect.com/science/article/abs/pii/S0024384114002952
+
+How syntacticians draw it:
+
+- Silent structure is still structure.
+- The ellipsis site is often a shaded VP/IP/TP region, a bracketed silent constituent, or overt material followed by parenthesized recoverable material.
+- Antecedent recoverability is a relation between the silent site and an earlier pronounced structure.
+- Traces, PRO, null heads, and deleted constituents are visually different from pronounced terminals.
+
+Babel drawing rule:
+
+- Render silence as muted nodes/subtrees, not as absence.
+- Ellipsis gets a shaded/collapsed site plus an antecedent bridge on focus.
+- Clicking can expand the hidden subtree and highlight the antecedent.
+- Never color an unpronounced leaf like a pronounced surface token.
+
+### Multidominance / Sharing
+
+Source plates:
+
+![Multidominance shared node example](visual-relations-assets/multidominance-shared-node.png)
+
+![Coordination multidominance example](visual-relations-assets/multidominance-coordination.png)
+
+#### Object Sharing In A Serial-Verb Construction
+
+![Object sharing as one object with two verbal mothers](visual-relations-assets/source-recovery-2026-08-02/sharing-coordination-non-tree/object-sharing-hiraiwa-bodomo-figure19.png)
+
+Source: Hiraiwa and Bodomo (2008), "Object-Sharing as Symmetric Sharing:
+Evidence from Dagaare," Figure 19:
+https://www.lingref.com/cpp/wccfl/26/paper1678.pdf
+
+What the source actually draws:
+
+- The object is structurally dominated by both verbal projections. That
+  multi-mother topology is part of the syntax tree, not a relation overlay.
+- Two overlapping ovals emphasize the two verbal domains.
+- A box emphasizes the shared `OBJ` node.
+
+Current-contract decision: Babel must not invent the second mother branch. The
+source does, however, justify a relation lens made only from its transferable
+highlighting marks: one tilted oval for each authored predicate domain and one
+standalone `OBJ` box at their overlap beside the single existing object. The
+Lab card keeps the syntax tree-shaped and authors that object exactly once; the
+overlay asserts its participation in both domains without adding a mother,
+copy, or syntax node.
+
+#### Determiner Sharing Is Analysis-Dependent
+
+![Determiner sharing derived by split topicalization and clausal ellipsis](visual-relations-assets/source-recovery-2026-08-02/sharing-coordination-non-tree/determiner-sharing-schwarzer-figure77.png)
+
+Source: Schwarzer (2025), "Determiner sharing in German by clausal ellipsis
+and split topicalization," Figure 77:
+https://link.springer.com/article/10.1007/s10828-025-09164-2
+
+What the figure means:
+
+- It is an analysis of the apparent sharing construction by split
+  topicalization plus clausal ellipsis.
+- Its solid curves are ordinary movement arrows. Its dashed curve labels the
+  ellipsis site.
+- It contains no distinct graphical mark for Determiner Sharing.
+- Babel could display this exact analysis only if the complete lower syntax,
+  traces, and silent clause were already model-authored. The relation renderer
+  cannot create or duplicate them.
+
+Decision: reject this figure as a Determiner Sharing drawing reference. It
+illustrates a derivational analysis using existing movement and ellipsis
+notation, not a transferable sharing overlay or a new Lab card.
+
+Source pages:
+
+- Bosveld-de Smet and de Vries, "Visualizing Non-subordination and Multidominance in Tree Diagrams":
+  https://research.rug.nl/en/publications/visualizing-non-subordination-and-multidominance-in-tree-diagrams
+- Philip, "What Divides, and What Unites, Right-Node Raising":
+  https://direct.mit.edu/ling/article/54/4/685/107990/What-Divides-and-What-Unites-Right-Node-Raising
+- Reachable TeX reproduction of multidominance drawing practice:
+  https://tex.stackexchange.com/questions/695594/multidominance-tree-with-forest
+
+How syntacticians draw it:
+
+- True multidominance is one constituent with multiple mothers.
+- It is drawn as a graph: one node/subtree receives more than one dominance line.
+- This is different from copy theory. Copies are two positions connected by identity; multidominance is one shared object.
+- Right Node Raising may be analyzed as ellipsis, multidominance, or both; the drawing must follow the chosen analysis.
+
+Babel drawing rule:
+
+- Prefer actual DAG rendering where possible: one shared node, multiple incoming dominance edges.
+- If the tree layout cannot support full DAG yet, show one canonical shared subtree with explicit multiple-parent connector lines.
+- Do not duplicate shared material unless the analysis says copy.
+- The inspector must list every parent path for a shared node.
+
+### Scope / LF
+
+Source plates:
+
+![QR slide: quantifier raised over TP](visual-relations-assets/qr-raised-quantifier.jpg)
+
+![QP adjoined to TP position](visual-relations-assets/qp-adjoined-tp.jpg)
+
+![Y-model covert movement branch](visual-relations-assets/y-model-covert-movement.jpg)
+
+Source page:
+
+- CAS LX 522 Syntax I, LF lecture:
+  https://www.slideserve.com/dotty/cas-lx-522-syntax-i-powerpoint-ppt-presentation
+
+How syntacticians draw it:
+
+- LF is still tree-like: syntacticians draw covert movement as QR, operator-variable structures, traces, and scope positions.
+- QR is often shown as `[every book]_i [TP Sue read t_i]`, or as a QP adjoined to TP.
+- Scope domains are brackets or structural adjunction sites.
+- Covert movement is explicitly invisible at PF, so it must not be styled like ordinary overt movement.
+
+Babel drawing rule:
+
+- Scope/LF gets a distinct LF layer.
+- Covert paths are dotted/low-opacity and introduced only in LF replay frames.
+- Scope brackets sit above or around the interpreted domain.
+- Overt movement and covert LF relations must be visually distinguishable even when both use a path.
 
 ## Exact Drawing Practices Found
 
@@ -287,8 +877,8 @@ Feature checking/valuation is commonly shown through feature labels near nodes: 
 
 Babel rule:
 
-- Feature relations need badges and before/after valuation states.
-- A dashed probe-goal line is useful only when it clarifies search or locality.
+- Feature relations need node-adjacent labels and before/after valuation states.
+- Do not draw probe-goal arrows or dependency lines; movement owns arrows.
 - Feature valuation should not be forced into movement geometry.
 
 ### 8. Some Relations Are Multi-Anchor
@@ -313,7 +903,7 @@ Babel rule:
 
 ### 10. Some Analyses Need More Than A Tree
 
-PF lowering, local dislocation, linearization, prosody, ellipsis recoverability, and multidominance often need another visual plane.
+Prosody, ellipsis recoverability, and multidominance often need another visual plane.
 
 Babel rule:
 
@@ -377,8 +967,8 @@ Use for:
 
 Visual form:
 
-- shared index badge
-- thin glow around chain members
+- shared subscript/index label
+- thin lineage outline around chain members
 - optional chain rail in side inspector
 - no arrow unless the stage says there is displacement
 
@@ -400,8 +990,8 @@ Use for:
 
 Visual form:
 
-- dotted or curved relation line without arrowhead
-- shared index badge
+- dotted or curved relation line; add an arrowhead only when the source analysis licenses direction
+- shared subscript/index label
 - domain shading for binding domain
 - c-command path highlight when clicked
 - PRO remains silent/muted
@@ -425,8 +1015,8 @@ Use for:
 
 Visual form:
 
-- feature badges on nodes
-- dashed probe-goal line if useful
+- feature labels on nodes
+- anchored feature bundles with valued/unvalued state
 - before/after state in replay
 - relation inspector shows valuation path
 - intervention blockers can be highlighted as local obstacles
@@ -479,7 +1069,7 @@ Use for:
 Visual form:
 
 - muted ghost subtree
-- collapsed "silent structure" capsule
+- collapsed silent-structure bracket
 - deletion veil or hatch
 - antecedent bridge
 - expandable hidden structure
@@ -503,7 +1093,7 @@ Use for:
 Visual form:
 
 - shared node with multiple incoming parent lines
-- or one canonical shared node plus portals from conjuncts
+- or one canonical shared node plus connector stubs from conjuncts
 - relation inspector shows every parent path
 - if analysis chooses ellipsis instead, use ellipsis visuals instead
 
@@ -530,41 +1120,18 @@ Use for:
 Visual form:
 
 - separate PF/morphology lane
-- morpheme badges on terminals/heads
+- morpheme labels on terminals/heads
 - hierarchy-sensitive lowering path in tree-space
 - adjacency-sensitive local dislocation in surface-string space
-- fusion: many feature nodes collapse into one exponent capsule
+- fusion: many feature nodes collapse into one exponent grouping
 - fission: one feature bundle splits into multiple exponents
-- suppletion/readjustment: replacement badge with before/after
+- suppletion/readjustment: replacement label with before/after
 
 Critical rule:
 
 - PF operations must not be visually confused with narrow-syntax movement.
 
-### I. Linearization / Surface-Order Relations
-
-Use for:
-
-- discontinuous constituency
-- extraposition
-- heavy shift
-- surface scrambling
-- clitic placement
-- prosodic rephrasing
-- final surface witness
-
-Visual form:
-
-- surface string rail below the tree
-- token-to-leaf connectors on hover
-- crossings can be shown as temporary relation curves
-- final Canopy remains clean unless relation layer is active
-
-Critical rule:
-
-- Babel’s core promise is deep structure to surface order. The surface rail should make that explicit.
-
-### J. Scope / LF Relations
+### I. Scope / LF Relations
 
 Use for:
 
@@ -573,7 +1140,7 @@ Use for:
 - scope reconstruction
 - focus association
 - operator-variable interpretation
-- negative polarity licensing if modeled at LF
+- negative polarity answers if modeled at LF
 
 Visual form:
 
@@ -581,10 +1148,13 @@ Visual form:
 - dotted covert path
 - scope bracket above domain
 - operator-variable line distinct from overt movement
+- for negative polarity answers: a `Pol` head pronounced as the answer particle, recovered TP material boxed and ghosted as non-surfacing when the analysis authors it, generated high/lower sigma marks, and a curved sigma dependency. Corrected 2026-07-26: this is Pasquereau (2020) on French polar response particles specifically, so it is inactive history in the lab rather than an active general relation. It must not be drawn for arbitrary negation or for NPI licensing, which are separate phenomena.
 
 Critical rule:
 
 - Covert relations must look covert. Do not animate them like overt tree movement unless the derivation stage says to.
+- Generated LF marks are relation-layer objects, not `workspaceForest` nodes.
+- If the recovered proposition is not present as a current-stage anchor, Babel must not fabricate that recovered tree; it can only draw the weaker relation that is actually anchored.
 
 ## Proposed Babel Contract Direction
 
@@ -627,7 +1197,6 @@ Example visual-routing logic:
 - multiple anchors with same role class: multi-anchor dependency candidate
 - feature-bearing anchors: feature relation candidate
 - hidden/collapsed subtree anchor: ellipsis/silence candidate
-- anchors in surface rail: PF/linearization candidate
 
 This preserves open ontology because the renderer is interpreting geometry, not forcing theory categories.
 
@@ -708,7 +1277,6 @@ These are layers, not modes:
 - Silence/ellipsis
 - Sharing/multidominance
 - PF/morphology
-- Linearization/surface
 - Scope/LF
 
 The user can turn layers on/off without changing the derivation.
@@ -762,8 +1330,8 @@ Build the visual-relations layer in this order:
 
 4. Core visual forms
    - trajectory arrow
-   - identity halo/index
-   - feature badge/dashed probe-goal
+   - shared index/lineage outline
+   - anchored feature bundle
    - domain box
    - ellipsis ghost/collapse
    - multi-anchor fan
