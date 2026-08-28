@@ -1,5 +1,6 @@
 import { buildDerivationReplayPlan } from '../derivationReplayPlan.js';
 import type { ParseBundle } from '../types.ts';
+import { collectPronouncedTerminalSequence } from './pronouncedTerminals.ts';
 import {
   adaptDerivationStagesForReplay,
   buildPlaybackStepsFromDerivationFrames,
@@ -41,7 +42,7 @@ export const buildReplaySnapshotProjection = (bundle: ParseBundle): ReplaySnapsh
     ? analysis.derivationStages
     : [];
   const sentence = String(bundle.sentence || '').trim()
-    || (Array.isArray(analysis.surfaceOrder) ? analysis.surfaceOrder.join(' ') : '');
+    || collectPronouncedTerminalSequence(analysis.tree).join(' ');
   const frames = adaptDerivationStagesForReplay(derivationStages);
   const replayPlan = buildDerivationReplayPlan({ derivationStages }) as DerivationReplayPlan;
   const steps = buildPlaybackStepsFromDerivationFrames(

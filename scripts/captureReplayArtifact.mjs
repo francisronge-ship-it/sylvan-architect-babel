@@ -4,6 +4,7 @@ import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { collectPronouncedTerminalSequence } from '../replay/pronouncedTerminals.ts';
 
 const DEFAULT_VIEWPORT = { width: 1600, height: 1000 };
 
@@ -27,7 +28,7 @@ const hasArg = (name) => args.includes(`--${name}`);
 const repoRoot = process.cwd();
 const bundlePath = path.resolve(readArg('bundle'));
 const outDir = path.resolve(readArg('out'));
-const appUrl = readArg('app-url', 'http://127.0.0.1:5173');
+const appUrl = readArg('app-url', 'http://127.0.0.1:5177');
 const browserPath = readArg('browser', '');
 const viewport = {
   width: Number(readArg('width', String(DEFAULT_VIEWPORT.width))) || DEFAULT_VIEWPORT.width,
@@ -60,7 +61,7 @@ const sentence = String(
   request.sentence
   || rawBundleWrapper.sentence
   || parseBundle.sentence
-  || (Array.isArray(firstAnalysis?.surfaceOrder) ? firstAnalysis.surfaceOrder.join(' ') : '')
+  || collectPronouncedTerminalSequence(firstAnalysis?.tree).join(' ')
   || ''
 ).trim();
 const framework = request.framework === 'minimalism' || firstAnalysis?.provenance?.framework === 'minimalism'

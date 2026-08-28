@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { parseSentence, ParseServiceError } from './services/parseService';
 import {
-  DerivationStep,
   ParseBundle,
   ParseFailure,
   ParseResult,
@@ -12,6 +11,7 @@ import TreeVisualizer from './components/TreeVisualizer';
 import RootLogo from './components/RootLogo';
 import FailurePanel from './components/FailurePanel';
 import { collectDerivationStageRecords } from './derivationNotes.js';
+import { collectPronouncedTerminalSequence } from './replay/pronouncedTerminals.ts';
 import {
   createTreeBankBundleSnapshot,
   loadTreeBankBundleSnapshot
@@ -534,70 +534,6 @@ const buildMilesNotation = (
   return serializeMilesNode(tree).trim();
 };
 
-const getPreferredDerivationSteps = (parse: ParseResult | null): DerivationStep[] => {
-  if (!parse) return [];
-  return Array.isArray(parse.derivationSteps) ? parse.derivationSteps : [];
-};
-
-const ensureReplaySpelloutStep = (parse: ParseResult | null): DerivationStep[] | undefined => {
-  if (!parse) return undefined;
-  const existing = getPreferredDerivationSteps(parse);
-  const spelloutSteps = existing.filter((step) => String(step?.operation || '').trim() === 'SpellOut');
-  const structuralSteps = existing.filter((step) => {
-    const operation = String(step?.operation || '').trim();
-    return operation !== 'SpellOut';
-  });
-  const rootId = String(parse.tree?.id || '').trim() || undefined;
-  const rootLabel = String(parse.tree?.label || '').trim() || 'Tree';
-  const surfaceOrder = Array.isArray(parse.surfaceOrder)
-    ? parse.surfaceOrder.map((token) => String(token || '').trim()).filter(Boolean)
-    : [];
-  const buildDeterministicReplaySpelloutNote = (tokens: string[]): string => {
-    if (!Array.isArray(tokens) || tokens.length === 0) {
-      return 'Final spellout of the committed surface order.';
-    }
-    return `Committed surface order: ${tokens.join(' ')}`;
-  };
-  const ensuredSpellout = spelloutSteps.length > 0
-    ? spelloutSteps.map((step) => {
-        const effectiveSpelloutOrder = Array.isArray(step?.spelloutOrder) && step.spelloutOrder.length > 0
-          ? step.spelloutOrder.map((token) => String(token || '').trim()).filter(Boolean)
-          : surfaceOrder;
-        return {
-          ...step,
-          targetNodeId: step?.targetNodeId || rootId,
-          targetLabel: step?.targetLabel || rootLabel,
-          sourceNodeIds: Array.isArray(step?.sourceNodeIds) && step.sourceNodeIds.length > 0
-            ? step.sourceNodeIds
-            : (rootId ? [rootId] : undefined),
-          sourceLabels: Array.isArray(step?.sourceLabels) && step.sourceLabels.length > 0
-            ? step.sourceLabels
-            : [rootLabel],
-          recipe: step?.recipe || `SpellOut(${rootLabel})`,
-          spelloutOrder: effectiveSpelloutOrder,
-          note: buildDeterministicReplaySpelloutNote(effectiveSpelloutOrder)
-        };
-      })
-    : (surfaceOrder.length > 0
-      ? [
-          {
-            operation: 'SpellOut',
-            targetNodeId: rootId,
-            targetLabel: rootLabel,
-            sourceNodeIds: rootId ? [rootId] : undefined,
-            sourceLabels: [rootLabel],
-            recipe: 'SpellOut',
-            workspaceAfter: [rootLabel],
-            spelloutOrder: surfaceOrder,
-            note: buildDeterministicReplaySpelloutNote(surfaceOrder)
-          }
-        ]
-      : []);
-
-  const replaySteps = [...structuralSteps, ...ensuredSpellout];
-  return replaySteps.length > 0 ? replaySteps : undefined;
-};
-
 const App: React.FC = () => {
   const appContainerRef = useRef<HTMLDivElement>(null);
   const treeBankSaveSuccessTimeoutRef = useRef<number | null>(null);
@@ -676,7 +612,10 @@ const App: React.FC = () => {
   const reasoningControlLabel = reasoningControlLabelForRoute(modelRoute);
   const isTreeBankView = workspaceView === 'treeBank';
   const hideShowcaseInput = showcaseMode && Boolean(activeParse);
-  const replayDerivationSteps = useMemo(() => ensureReplaySpelloutStep(activeParse), [activeParse]);
+  const replayDerivationSteps = useMemo(
+    () => activeParse?.derivationSteps?.filter((step) => String(step?.operation || '').trim() !== 'SpellOut'),
+    [activeParse]
+  );
   const canopyMilesNotation = useMemo(() => {
     if (!activeParse) return '';
     return buildMilesNotation(activeParse.tree, 'canopy');
@@ -783,12 +722,10 @@ const App: React.FC = () => {
           ? savedRecord.request as Record<string, any>
           : {};
         const firstAnalysis = bundle.analyses[0];
-        const surfaceOrderSentence = Array.isArray(firstAnalysis?.surfaceOrder)
-          ? firstAnalysis.surfaceOrder.map((token) => String(token || '').trim()).filter(Boolean).join(' ')
-          : '';
+        const pronouncedTerminalSentence = collectPronouncedTerminalSequence(firstAnalysis?.tree).join(' ');
         const nextSentence =
           String(requestRecord.sentence || savedRecord.sentence || bundle.sentence || '').trim()
-          || surfaceOrderSentence
+          || pronouncedTerminalSentence
           || 'Sentence unavailable';
         const nextFramework = requestRecord.framework === 'minimalism'
           ? 'minimalism'
@@ -1714,4 +1651,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-

@@ -201,9 +201,20 @@ const visibleTreeSignature = (payload) => {
 const expectedSurfaceTokens = (bundleWrapper) => {
   const bundle = unwrapBundle(bundleWrapper);
   const analysis = Array.isArray(bundle?.analyses) ? bundle.analyses[0] : null;
-  if (Array.isArray(analysis?.surfaceOrder) && analysis.surfaceOrder.length > 0) {
-    return analysis.surfaceOrder.map(normalizeToken).filter(Boolean);
-  }
+  const pronounced = [];
+  const visit = (node) => {
+    if (!node || typeof node !== 'object') return;
+    const children = childrenOf(node);
+    if (children.length > 0) {
+      children.forEach(visit);
+      return;
+    }
+    if (node.silent === true) return;
+    const surface = String(node.word || '').trim();
+    if (surface) pronounced.push(normalizeToken(surface));
+  };
+  visit(analysis?.tree);
+  if (pronounced.length > 0) return pronounced.filter(Boolean);
   return String(bundleWrapper?.request?.sentence || '')
     .split(/\s+/)
     .map(normalizeToken)
