@@ -10,8 +10,8 @@ selected, and the current product routes and model controls were not changed.
 
 [`pre-provider-contract.manifest.json`](pre-provider-contract.manifest.json)
 binds the current audited contract and deterministic pipeline to commit
-`8b5189b15ebbb0f3ef03784806d965452d0a2f16`. Its overall source digest is
-`89356500f563595ed41caf62427952c8e1de0c5618660151e5930b13b73358ff`.
+`b70e73b608792ffdc2f9fa8e0bc0559c4973697f`. Its overall source digest is
+`4247b848095593dbf1e2113ac567b7d490896745282a4425a8e45e530fac24c4`.
 The qualification item set is deliberately recorded as `unselected`.
 
 The historical incumbent manifest remains unchanged. This new manifest is the
@@ -72,18 +72,18 @@ node scripts/captureContractFingerprint.mjs \
   --item-set-status unselected
 
 npm run qualification:smoke -- \
-  --out .artifacts/contract-qualification/pre-provider-8b5189b
+  --out .artifacts/contract-qualification/pre-provider-b70e73b
 
 npm run qualification:review -- \
-  --run .artifacts/contract-qualification/pre-provider-8b5189b \
+  --run .artifacts/contract-qualification/pre-provider-b70e73b \
   --out review \
   --browser "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 ```
 
 The provider-free run receipt is
-`0eaa76b9d92b08717eda07ca5f5e1af4846ea482ee5e8a27f87a055cdd0dd075`.
+`17add3861cd0cf632a145ab5f68e80bdb334241049507bae855a3caab98aa8f3`.
 The visual review receipt is
-`65b69a5a1e91ea104726ea7a45b5dedc4d3da11bef135a0004e4c761937d0ee4`.
+`ba9c57b0f3e0d6942d915cb9aeb731b1976c3a0442026f702871a18906cffbac`.
 Both record `providerCallsMade: false`.
 
 ## Next decision
