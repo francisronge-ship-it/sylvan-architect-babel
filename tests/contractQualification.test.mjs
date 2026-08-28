@@ -53,6 +53,13 @@ test('qualification plans distinguish plumbing smoke data from a selected item s
   );
 });
 
+test('qualification plans preserve the exact submitted sentence', () => {
+  const input = plan();
+  input.attempts[0].request.sentence = '  Mia laughed.\n';
+  const validated = validateQualificationPlan(input);
+  assert.equal(validated.attempts[0].request.sentence, '  Mia laughed.\n');
+});
+
 test('a valid saved response preserves raw bytes and prepares every analysis for review', () => {
   const [attempt] = validateQualificationPlan(plan()).attempts;
   const rawText = `  ${JSON.stringify(fixture.payload)}\n`;

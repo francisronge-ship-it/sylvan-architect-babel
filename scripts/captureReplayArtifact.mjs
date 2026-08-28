@@ -416,11 +416,18 @@ const canonicalizePayloadVisibleIds = (payload) => {
         && metadata.bareStructuralLeaf !== true
       );
     });
-    const retained = resolved || (
-      strictHiddenAncestorFilter && /::__[^:]+$/.test(normalized)
-        ? normalized
-        : ''
-    );
+    const syntheticLeaf = strictHiddenAncestorFilter
+      ? candidates.find((candidate) => {
+        const metadata = nodeMetadataById.get(candidate);
+        return Boolean(
+          metadata
+          && /::__[^:]+$/.test(candidate)
+          && metadata.layoutOnly !== true
+          && metadata.bareStructuralLeaf !== true
+        );
+      })
+      : '';
+    const retained = resolved || syntheticLeaf;
     if (retained && !visibleIds.includes(retained)) visibleIds.push(retained);
   });
   return {

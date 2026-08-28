@@ -46,6 +46,13 @@ const requireNonemptyString = (value, path) => {
   return value.trim();
 };
 
+const requireExactSentence = (value, path) => {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`${path} must be a non-empty string.`);
+  }
+  return value;
+};
+
 const requireExactFields = (value, fields, path) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError(`${path} must be an object.`);
@@ -88,7 +95,7 @@ export const validateQualificationPlan = (input) => {
     seenIds.add(id);
 
     requireExactFields(attempt.request, ['sentence', 'framework'], `${path}.request`);
-    const sentence = requireNonemptyString(attempt.request.sentence, `${path}.request.sentence`);
+    const sentence = requireExactSentence(attempt.request.sentence, `${path}.request.sentence`);
     if (!['xbar', 'minimalism'].includes(attempt.request.framework)) {
       throw new TypeError(`${path}.request.framework must be xbar or minimalism.`);
     }
