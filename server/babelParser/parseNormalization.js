@@ -45,6 +45,17 @@ export const createParseNormalizationHelpers = ({
       integrityFlags: payloadIntegrityFlags,
       validationIssues
     });
+    const stageRecordIssue = validationIssues.find(
+      (issue) => issue?.ruleId === 'DERIVATION_STAGE_RECORD_NONEMPTY'
+    );
+    if (stageRecordIssue) {
+      throw new ParseApiError(
+        'BAD_MODEL_RESPONSE',
+        `Model output violated ${stageRecordIssue.ruleId}.`,
+        502,
+        withFailureDetails({}, stageRecordIssue)
+      );
+    }
     if (usesDerivationStages) {
       payloadIntegrityFlags.push('derivation_stages_compiled_to_derivation_frames');
     }

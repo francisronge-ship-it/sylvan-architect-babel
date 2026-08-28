@@ -224,3 +224,66 @@ test('preserves every distinct analysis in the strict ambiguity envelope', () =>
   assert.equal(bundle.analyses.length, 3);
   assert.equal(bundle.ambiguityDetected, true);
 });
+
+test('never substitutes an earlier committed tree for a split final stage', () => {
+  const payload = buildCurrentContractPayload();
+  payload.derivationStages.push({
+    statement: 'The final authored state is split and has not converged.',
+    stageRecord: 'The final state still contains separate nominal and verbal workspaces.',
+    relations: [],
+    workspaceForest: [
+      { refId: 'np_mia' },
+      { refId: 'vp_laughed' }
+    ]
+  });
+
+  assert.throws(
+    () => __test__.normalizeParseBundle(
+      payload,
+      'xbar',
+      'Mia laughed.',
+      'gemini',
+      true,
+      { payloadIntegrityFlags: [] }
+    ),
+    (error) => {
+      assert.equal(error.code, 'INCOMPLETE_GENERATION');
+      assert.equal(error.failure.ruleId, 'GENERATION_DID_NOT_CONVERGE');
+      assert.equal(error.failure.stageIndex, 4);
+      return true;
+    }
+  );
+});
+
+test('keeps the existing surface-mismatch result for a split final stage with different words', () => {
+  const payload = buildCurrentContractPayload();
+  payload.derivationStages.push({
+    statement: 'The final authored state is split and changes the input words.',
+    stageRecord: 'The final state contains Noa and the earlier verbal workspace as separate objects.',
+    relations: [],
+    workspaceForest: [
+      {
+        id: 'np_noa',
+        label: 'NP',
+        children: [{ id: 'n_noa', label: 'N', word: 'Noa', tokenIndex: 0, children: [] }]
+      },
+      { refId: 'vp_laughed' }
+    ]
+  });
+
+  assert.throws(
+    () => __test__.normalizeParseBundle(
+      payload,
+      'xbar',
+      'Mia laughed.',
+      'gemini',
+      true,
+      { payloadIntegrityFlags: [] }
+    ),
+    (error) => {
+      assert.equal(error.code, 'BAD_MODEL_RESPONSE');
+      assert.equal(error.failure.ruleId, 'SURFACE_ORDER_EXACT');
+      return true;
+    }
+  );
+});

@@ -288,6 +288,18 @@ export const isTruncatedGeneration = (generation) => {
   );
 };
 
+const SUCCESSFUL_GENERATION_STOPS = new Set([
+  'COMPLETED',
+  'END_TURN',
+  'STOP',
+  'STOP_SEQUENCE'
+]);
+
+export const isSuccessfulGenerationStop = (generation) => {
+  const finishReason = String(generation?.candidates?.[0]?.finishReason || '').toUpperCase();
+  return SUCCESSFUL_GENERATION_STOPS.has(finishReason);
+};
+
 export const summarizeGeneration = (generation) => {
   const contentParts = Array.isArray(generation?.candidates?.[0]?.content?.parts)
     ? generation.candidates[0].content.parts
@@ -347,11 +359,19 @@ export const assertGenerationComplete = ({
   attempts = []
 }) => {
   const generationMeta = summarizeGeneration(generation);
-  if (!isTruncatedGeneration(generation)) return generationMeta;
+  const lengthStop = isTruncatedGeneration(generation);
+  if (!lengthStop && isSuccessfulGenerationStop(generation)) return generationMeta;
+
+  const ruleId = lengthStop
+    ? 'GENERATION_LENGTH_STOP'
+    : 'GENERATION_COMPLETED_STOP_FAILURE';
+  const message = lengthStop
+    ? `The ${provider} generation stopped at its output limit before parsing.`
+    : `The ${provider} generation completed with ${generationMeta.finishReason} instead of a successful stop.`;
 
   throw new ParseApiError(
     'INCOMPLETE_GENERATION',
-    `The ${provider} generation stopped at its output limit before parsing.`,
+    message,
     422,
     withFailureDetails({
       provider,
@@ -365,7 +385,7 @@ export const assertGenerationComplete = ({
       attempts
     }, {
       failureClass: 'incomplete_generation',
-      ruleId: 'GENERATION_LENGTH_STOP',
+      ruleId,
       stageIndex: null,
       fieldPath: '$',
       offendingValue: {

@@ -89,7 +89,7 @@ const {
   normalizeDerivationFrames,
   canonicalizeDerivationRootCandidateForSentence,
   selectCommittedDerivationRoot,
-  findLatestCommittedDerivationFrame,
+  findCommittedFinalDerivationFrame,
   buildCanonicalDerivationFromDerivationFrames
 } = createDerivationCompilerHelpers({
   ParseApiError,
@@ -166,7 +166,7 @@ export const __test__ = {
   normalizeDerivationFrames,
   canonicalizeDerivationRootCandidateForSentence,
   selectCommittedDerivationRoot,
-  findLatestCommittedDerivationFrame,
+  findCommittedFinalDerivationFrame,
   buildCanonicalDerivationFromDerivationFrames,
   buildSystemInstruction,
   buildParseContentsPrompt,

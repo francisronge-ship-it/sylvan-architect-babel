@@ -34,11 +34,7 @@ export const createDerivationCompilerHelpers = ({
     throw new ParseApiError('BAD_MODEL_RESPONSE', message, 502);
   };
 
-  const isSubstantiveStageRecordText = (value) => {
-    const text = normalizeOptionalStepText(value);
-    if (!text || text.length < 24 || !/\p{L}/u.test(text)) return false;
-    return text.split(/\s+/).filter(Boolean).length >= 4;
-  };
+  const isSubstantiveStageRecordText = (value) => Boolean(normalizeOptionalStepText(value));
 
   const normalizeRelations = (
     value,
@@ -185,10 +181,10 @@ export const createDerivationCompilerHelpers = ({
         }
 
         if (!isSubstantiveStageRecordText(stage.stageRecord)) {
-          integrityFlags.push(`stage_record_missing_or_thin:${stageId}`);
+          integrityFlags.push(`stage_record_missing:${stageId}`);
           recordValidationIssue(validationIssues, {
             failureClass: 'contract_misunderstanding',
-            ruleId: 'DERIVATION_STAGE_RECORD_SUBSTANTIVE',
+            ruleId: 'DERIVATION_STAGE_RECORD_NONEMPTY',
             stageIndex,
             fieldPath: `$.derivationStages[${stageIndex}].stageRecord`,
             offendingValue: stage.stageRecord
@@ -434,24 +430,22 @@ export const createDerivationCompilerHelpers = ({
     return candidates.length === 1 ? candidates[0] : null;
   };
 
-  const findLatestCommittedDerivationFrame = (derivationFrames, sentenceTokens = []) => {
-    if (!Array.isArray(derivationFrames)) return null;
-    for (let index = derivationFrames.length - 1; index >= 0; index -= 1) {
-      const frame = derivationFrames[index];
-      const root = selectCommittedDerivationRoot(
-        getFrameWorkspaceForest(frame),
-        sentenceTokens
-      );
-      if (root) return { frame, frameIndex: index, root };
-    }
-    return null;
+  const findCommittedFinalDerivationFrame = (derivationFrames, sentenceTokens = []) => {
+    if (!Array.isArray(derivationFrames) || derivationFrames.length === 0) return null;
+    const frameIndex = derivationFrames.length - 1;
+    const frame = derivationFrames[frameIndex];
+    const root = selectCommittedDerivationRoot(
+      getFrameWorkspaceForest(frame),
+      sentenceTokens
+    );
+    return root ? { frame, frameIndex, root } : null;
   };
 
   const buildCanonicalDerivationFromDerivationFrames = (
     derivationFrames,
     sentenceTokens = []
   ) => {
-    const committedFrame = findLatestCommittedDerivationFrame(
+    const committedFrame = findCommittedFinalDerivationFrame(
       derivationFrames,
       sentenceTokens
     );
@@ -473,7 +467,7 @@ export const createDerivationCompilerHelpers = ({
     normalizeDerivationFrames,
     canonicalizeDerivationRootCandidateForSentence,
     selectCommittedDerivationRoot,
-    findLatestCommittedDerivationFrame,
+    findCommittedFinalDerivationFrame,
     buildCanonicalDerivationFromDerivationFrames
   };
 };

@@ -2,6 +2,10 @@
 
 Date: 2026-08-28
 
+> Historical baseline. The eight defects recorded here were addressed in
+> [`contract-defect-closeout-2026-08-28.md`](contract-defect-closeout-2026-08-28.md).
+> The exact-surface and JSON delimiter-repair policies remain open.
+
 This is the Program 1 audit of Babel's current model-facing interface. It covers
 the path from browser request through prompt construction, provider transport,
 JSON ingress, normalization, deterministic compilation, Replay handoff,

@@ -135,11 +135,6 @@ export interface Provenance {
   parserVersion?: string;
   uiVersion?: string;
   payloadIntegrityFlags?: string[];
-  payloadTranscriberUsed?: boolean;
-  payloadTranscriberModel?: string;
-  payloadTranscriberPromptTokenCount?: number;
-  payloadTranscriberOutputTokenCount?: number;
-  payloadTranscriberTotalTokenCount?: number;
   hasDerivationStages?: boolean;
   parsePromptTokenCount?: number;
   parseOutputTokenCount?: number;

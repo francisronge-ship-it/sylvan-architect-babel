@@ -142,9 +142,9 @@ models or claim syntactic competence.
 3. Preserve the failure taxonomy in every receipt: transport/serialization,
    incomplete generation, contract misunderstanding, linguistic failure,
    deterministic engine failure, and valid-but-unexpected analysis.
-4. First measure whether malformed outputs still occur. Keep recovery only for
-   demonstrated transport or JSON failures, and only when it preserves authored
-   linguistic content. Prefer eliminating the need for the payload transcriber.
+4. First measure whether malformed outputs still occur. Keep automatic recovery
+   only for demonstrated transport or JSON failures that cannot change authored
+   linguistic content. The model-based payload transcriber has been removed.
 5. Before paid calls, verify that Babel can run the intended test items, save
    existing sample responses, and present every derivation in a convenient
    click-through review surface. This checks the testing plumbing, not models.
