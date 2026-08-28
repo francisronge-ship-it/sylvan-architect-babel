@@ -70,7 +70,7 @@ const completeRelation = () => ({
 
 test('the production relation registry is versioned and populated with exact identities', () => {
   assert.equal(productionRelationRegistry.registryId, 'babel.semantic-visual-grammar');
-  assert.equal(productionRelationRegistry.version, '2');
+  assert.equal(productionRelationRegistry.version, '11');
   assert.ok(productionRelationRegistry.entries.length > 0);
   assert.ok(Object.isFrozen(productionRelationRegistry));
   // Every identity is exact or declared case/whitespace folding — nothing else.
@@ -93,6 +93,182 @@ test('the production relation registry is versioned and populated with exact ide
   assert.equal(dispatchOutcome('CliticCluster'), 'unregistered');
   assert.equal(dispatchOutcome('AbarMovementParty'), 'unregistered');
   assert.equal(dispatchOutcome('bespoke-open-agreement'), 'unregistered');
+});
+
+test('alternative required roles and minimum authored items fail closed', () => {
+  const missingWitness = dispatchRelation({
+    registry: productionRelationRegistry,
+    relation: {
+      relation: 'AbarMove',
+      anchors: { lowerCopy: 'low', pronouncedCopy: 'high' }
+    },
+    stageIndex: 0,
+    relationIndex: 0
+  });
+  assert.equal(missingWitness.outcome, 'signature-incomplete');
+  assert.ok(missingWitness.signatureIssues.some((issue) => (
+    issue.kind === 'missing-role-group'
+    && issue.roles.includes('traceWitness')
+  )));
+
+  const singletonIdentity = dispatchRelation({
+    registry: productionRelationRegistry,
+    relation: { relation: 'Identity', anchors: { occurrence: 'only-one' } },
+    stageIndex: 0,
+    relationIndex: 1
+  });
+  assert.equal(singletonIdentity.outcome, 'signature-incomplete');
+  assert.ok(singletonIdentity.signatureIssues.some((issue) => (
+    issue.kind === 'insufficient-items'
+    && issue.minPresentItems === 2
+  )));
+});
+
+test('ParasiticGap accepts each complete facet alternative and rejects an incomplete movement facet', () => {
+  const dispatch = (anchors, relationIndex) => dispatchRelation({
+    registry: productionRelationRegistry,
+    relation: { relation: 'ParasiticGap', anchors },
+    stageIndex: 0,
+    relationIndex
+  });
+
+  [
+    { filler: 'filler', realGap: 'ordinary-gap', traceWitness: 'trace' },
+    { parasiticGaps: ['parasitic-gap-a', 'parasitic-gap-b'] },
+    { primaryPath: ['primary-a', 'primary-b'], secondaryPath: ['secondary-a'] }
+  ].forEach((anchors, relationIndex) => {
+    const result = dispatch(anchors, relationIndex);
+    assert.equal(
+      result.outcome,
+      'resolved',
+      `complete ParasiticGap facet should resolve: ${JSON.stringify(result.signatureIssues)}`
+    );
+  });
+
+  const incompleteMovement = dispatch(
+    { filler: 'filler', realGap: 'ordinary-gap' },
+    3
+  );
+  assert.equal(incompleteMovement.outcome, 'signature-incomplete');
+  assert.ok(incompleteMovement.signatureIssues.some((issue) => (
+    issue.kind === 'missing-role-alternative'
+  )));
+});
+
+test('production signatures reject relations that their render families cannot draw', () => {
+  const dispatch = (relation, anchors, relationIndex = 0) => dispatchRelation({
+    registry: productionRelationRegistry,
+    relation: { relation, anchors },
+    stageIndex: 0,
+    relationIndex
+  });
+  const rejectsWith = (relation, anchors, kind, relationIndex = 0) => {
+    const result = dispatch(relation, anchors, relationIndex);
+    assert.equal(result.outcome, 'signature-incomplete', relation);
+    assert.ok(
+      result.signatureIssues.some((issue) => issue.kind === kind),
+      `${relation} should report ${kind}: ${JSON.stringify(result.signatureIssues)}`
+    );
+  };
+
+  rejectsWith(
+    'AcrossTheBoardMovement',
+    { sources: ['s1', 's2'], traceWitnesses: ['w1', 'w2'] },
+    'missing-role-group'
+  );
+  rejectsWith(
+    'AcrossTheBoardMovement',
+    {
+      sources: ['s1', 's2'],
+      traceWitnesses: ['w1', 'w2', 'w3'],
+      pronouncedCopy: 'landing'
+    },
+    'unequal-role-lengths',
+    1
+  );
+  rejectsWith('CyclicAgree', { probe: 'probe' }, 'missing-role-group', 2);
+  rejectsWith(
+    'Intervention',
+    { intervener: 'closer', target: 'lower' },
+    'missing-role-group',
+    3
+  );
+  rejectsWith(
+    'IdiomChunkCointerpretation',
+    { first: 'a', second: 'b', third: 'c' },
+    'missing-role-group',
+    4
+  );
+  rejectsWith(
+    'CyclicLinearization',
+    { lowerCopy: 'low', traceWitness: 'trace', pronouncedCopy: 'high' },
+    'missing-role',
+    5
+  );
+  rejectsWith(
+    'StrongNPILicensing',
+    { licensor: 'exh', npi: 'npi', focusOperator: 'only' },
+    'incomplete-role-group',
+    6
+  );
+
+  [
+    ['SplitAntecedence', { antecedents: ['only'], dependent: 'dependent' }],
+    ['Multidominance', { parents: ['only'], shared: 'shared' }],
+    ['ArgumentSharing', { domains: ['only'], shared: 'shared' }],
+    ['FeatureSharing', { bearers: ['only'] }]
+  ].forEach(([relation, anchors], index) => {
+    rejectsWith(relation, anchors, 'invalid-arity', index + 7);
+  });
+});
+
+test('production signatures preserve every complete alternative shape', () => {
+  const resolves = (relation, anchors, relationIndex) => {
+    const result = dispatchRelation({
+      registry: productionRelationRegistry,
+      relation: { relation, anchors },
+      stageIndex: 0,
+      relationIndex
+    });
+    assert.equal(
+      result.outcome,
+      'resolved',
+      `${relation} should resolve: ${JSON.stringify(result.signatureIssues)}`
+    );
+  };
+
+  resolves(
+    'AcrossTheBoardMovement',
+    {
+      sources: ['s1', 's2'],
+      traceWitnesses: ['w1', 'w2'],
+      pronouncedCopy: 'landing'
+    },
+    0
+  );
+  resolves('CyclicAgree', { probe: 'probe', searchDomain: 'domain' }, 1);
+  resolves(
+    'Intervention',
+    { probe: 'higher', intervener: 'closer', target: 'lower' },
+    2
+  );
+  resolves(
+    'IdiomChunkCointerpretation',
+    { interpretationDomain: 'vp', predicateChunk: 'v', argumentChunk: 'dp' },
+    3
+  );
+  resolves('CyclicLinearization', { order: ['first', 'second'] }, 4);
+  resolves('StrongNPILicensing', { licensor: 'exh', npi: 'npi' }, 5);
+  resolves(
+    'StrongNPILicensing',
+    {
+      licensor: 'exh',
+      npi: 'npi',
+      focusOperator: 'only',
+      focusAssociate: 'subject'
+    },
+    6
+  );
 });
 
 test('unregistered names receive literal displays and no semantic marks', () => {

@@ -73,11 +73,97 @@ const normalizeRoleRules = (value, path) => {
   }));
 };
 
+const normalizeRequiredAny = (value, path, declaredRoles, allowAdditional) => {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new TypeError(`${path} must be an array.`);
+
+  return value.map((group, groupIndex) => {
+    const groupPath = `${path}[${groupIndex}]`;
+    if (!Array.isArray(group) || group.length === 0) {
+      throw new TypeError(`${groupPath} must be a non-empty array.`);
+    }
+    const normalized = group.map((role, roleIndex) => (
+      requireNonemptyText(role, `${groupPath}[${roleIndex}]`)
+    ));
+    if (new Set(normalized).size !== normalized.length) {
+      throw new TypeError(`${groupPath} cannot repeat a role.`);
+    }
+    if (!allowAdditional) {
+      const undeclared = normalized.find((role) => !declaredRoles.has(role));
+      if (undeclared) {
+        throw new TypeError(`${groupPath} names undeclared role ${undeclared}.`);
+      }
+    }
+    return normalized;
+  });
+};
+
+const normalizeRoleGroups = (
+  value,
+  path,
+  declaredRoles,
+  allowAdditional,
+  { minGroups = 1, minRoles = 1 } = {}
+) => {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new TypeError(`${path} must be an array.`);
+  if (value.length < minGroups) {
+    throw new TypeError(`${path} must contain at least ${minGroups} group(s).`);
+  }
+
+  return value.map((group, groupIndex) => {
+    const groupPath = `${path}[${groupIndex}]`;
+    if (!Array.isArray(group) || group.length < minRoles) {
+      throw new TypeError(`${groupPath} must contain at least ${minRoles} role(s).`);
+    }
+    const normalized = group.map((role, roleIndex) => (
+      requireNonemptyText(role, `${groupPath}[${roleIndex}]`)
+    ));
+    if (new Set(normalized).size !== normalized.length) {
+      throw new TypeError(`${groupPath} cannot repeat a role.`);
+    }
+    if (!allowAdditional) {
+      const undeclared = normalized.find((role) => !declaredRoles.has(role));
+      if (undeclared) {
+        throw new TypeError(`${groupPath} names undeclared role ${undeclared}.`);
+      }
+    }
+    return normalized;
+  });
+};
+
+const normalizeRequiredAlternatives = (
+  value,
+  path,
+  declaredRoles,
+  allowAdditional
+) => {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new TypeError(`${path} must be a non-empty array.`);
+  }
+  return value.map((alternative, alternativeIndex) => normalizeRoleGroups(
+    alternative,
+    `${path}[${alternativeIndex}]`,
+    declaredRoles,
+    allowAdditional
+  ));
+};
+
 const normalizeSignatureBlock = (value, path) => {
   const block = value ?? {};
   if (!isRecord(block)) throw new TypeError(`${path} must be an object.`);
   const unexpected = Object.keys(block).filter(
-    (key) => !['required', 'optional', 'allowAdditional'].includes(key)
+    (key) => ![
+      'required',
+      'optional',
+      'requiredAny',
+      'requiredAlternatives',
+      'allOrNone',
+      'sameLength',
+      'minPresentItems',
+      'allowAdditional'
+    ].includes(key)
   );
   if (unexpected.length > 0) {
     throw new TypeError(`${path} has unsupported fields: ${unexpected.join(', ')}.`);
@@ -92,10 +178,47 @@ const normalizeSignatureBlock = (value, path) => {
   ) {
     throw new TypeError(`${path}.allowAdditional must be boolean.`);
   }
+  const allowAdditional = block.allowAdditional === true;
+  const declaredRoles = new Set([...Object.keys(required), ...Object.keys(optional)]);
+  const requiredAny = normalizeRequiredAny(
+    block.requiredAny,
+    `${path}.requiredAny`,
+    declaredRoles,
+    allowAdditional
+  );
+  const requiredAlternatives = normalizeRequiredAlternatives(
+    block.requiredAlternatives,
+    `${path}.requiredAlternatives`,
+    declaredRoles,
+    allowAdditional
+  );
+  const allOrNone = normalizeRoleGroups(
+    block.allOrNone,
+    `${path}.allOrNone`,
+    declaredRoles,
+    allowAdditional,
+    { minRoles: 2 }
+  );
+  const sameLength = normalizeRoleGroups(
+    block.sameLength,
+    `${path}.sameLength`,
+    declaredRoles,
+    allowAdditional,
+    { minRoles: 2 }
+  );
+  const minPresentItems = block.minPresentItems ?? 0;
+  if (!Number.isInteger(minPresentItems) || minPresentItems < 0) {
+    throw new TypeError(`${path}.minPresentItems must be a non-negative integer.`);
+  }
   return {
     required,
     optional,
-    allowAdditional: block.allowAdditional === true
+    requiredAny,
+    requiredAlternatives,
+    allOrNone,
+    sameLength,
+    minPresentItems,
+    allowAdditional
   };
 };
 

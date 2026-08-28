@@ -80,6 +80,66 @@ const validateStructuredBlock = (relation, field, signature) => {
       issues.push({ kind: 'missing-role', field, role });
     }
   });
+  signature.requiredAny.forEach((roles) => {
+    if (!roles.some((role) => Object.hasOwn(record, role))) {
+      issues.push({ kind: 'missing-role-group', field, roles: [...roles] });
+    }
+  });
+  if (
+    signature.requiredAlternatives.length > 0
+    && !signature.requiredAlternatives.some((alternative) => (
+      alternative.every((roles) => roles.some((role) => Object.hasOwn(record, role)))
+    ))
+  ) {
+    issues.push({
+      kind: 'missing-role-alternative',
+      field,
+      alternatives: signature.requiredAlternatives.map((alternative) => (
+        alternative.map((roles) => [...roles])
+      ))
+    });
+  }
+  signature.allOrNone.forEach((roles) => {
+    const presentRoles = roles.filter((role) => Object.hasOwn(record, role));
+    if (presentRoles.length > 0 && presentRoles.length < roles.length) {
+      issues.push({
+        kind: 'incomplete-role-group',
+        field,
+        roles: [...roles],
+        presentRoles
+      });
+    }
+  });
+  signature.sameLength.forEach((roles) => {
+    const present = roles
+      .filter((role) => Object.hasOwn(record, role))
+      .map((role) => ({ role, result: authoredItems(record[role], field) }));
+    if (
+      present.length === roles.length
+      && present.every(({ result }) => result.valid)
+      && new Set(present.map(({ result }) => result.items.length)).size > 1
+    ) {
+      issues.push({
+        kind: 'unequal-role-lengths',
+        field,
+        roles: [...roles],
+        observedItems: Object.fromEntries(
+          present.map(({ role, result }) => [role, result.items.length])
+        )
+      });
+    }
+  });
+  const presentItems = Object.values(record).reduce((count, value) => (
+    count + (Array.isArray(value) ? value.length : value === undefined ? 0 : 1)
+  ), 0);
+  if (presentItems < signature.minPresentItems) {
+    issues.push({
+      kind: 'insufficient-items',
+      field,
+      observedItems: presentItems,
+      minPresentItems: signature.minPresentItems
+    });
+  }
 
   Object.entries(record).forEach(([role, value]) => {
     const rule = signature.required[role] ?? signature.optional[role];
