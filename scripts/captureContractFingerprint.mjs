@@ -28,9 +28,15 @@ const explicitSections = {
   ],
   providerBoundary: [
     'server/babelParser/routeConfig.js',
+    'server/babelParser/researchModelCatalog.js',
     'server/babelParser/modelRuntime.js',
     'server/babelParser/parseRoutes.js',
     'server/babelParser/generationRecord.js'
+  ],
+  qualificationTools: [
+    'scripts/buildContractQualificationDryRun.mjs',
+    'scripts/buildContractQualificationReview.mjs',
+    'scripts/captureReplayArtifact.mjs'
   ],
   deterministicIngress: [
     'server/babelParser.js',
@@ -71,8 +77,32 @@ const recursiveSections = {
       && !relativePath.startsWith('benchmark')
       && !relativePath.startsWith('derivationalDatabase')
     )
+  },
+  qualificationHarness: {
+    root: 'contractQualification',
+    include: (relativePath) => /\.(?:js|json)$/.test(relativePath)
   }
 };
+
+const argumentValue = (name, fallback = '') => {
+  const index = process.argv.indexOf(`--${name}`);
+  return index >= 0 ? String(process.argv[index + 1] || '') : fallback;
+};
+
+const outputPath = path.resolve(repoRoot, argumentValue('out', defaultOutput));
+const label = argumentValue('label', 'program-1-incumbent-contract').trim();
+if (!label) throw new Error('--label must be a non-empty string.');
+const qualificationItemSetStatus = argumentValue('item-set-status', 'unselected').trim();
+if (!['unselected', 'selected-draft', 'frozen'].includes(qualificationItemSetStatus)) {
+  throw new Error('--item-set-status must be unselected, selected-draft, or frozen.');
+}
+const qualificationItemSetManifest = argumentValue('item-set-manifest').trim();
+if (qualificationItemSetStatus === 'unselected' && qualificationItemSetManifest) {
+  throw new Error('An unselected item set cannot have --item-set-manifest.');
+}
+if (qualificationItemSetStatus !== 'unselected' && !qualificationItemSetManifest) {
+  throw new Error(`${qualificationItemSetStatus} requires --item-set-manifest.`);
+}
 
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
@@ -126,6 +156,18 @@ const sectionPaths = Object.fromEntries([
   ])
 ]);
 
+if (qualificationItemSetManifest) {
+  const absoluteItemSetPath = path.resolve(repoRoot, qualificationItemSetManifest);
+  const relativeItemSetPath = path.relative(repoRoot, absoluteItemSetPath).split(path.sep).join('/');
+  if (relativeItemSetPath.startsWith('../') || path.isAbsolute(relativeItemSetPath)) {
+    throw new Error('--item-set-manifest must stay inside the Babel repository.');
+  }
+  if (!fs.existsSync(absoluteItemSetPath)) {
+    throw new Error(`Item-set manifest does not exist: ${relativeItemSetPath}`);
+  }
+  sectionPaths.qualificationItemSet = [relativeItemSetPath];
+}
+
 const auditedSourcePaths = Object.entries(sectionPaths)
   .filter(([name]) => name !== 'captureTool')
   .flatMap(([, paths]) => paths);
@@ -165,18 +207,19 @@ const gitCommit = execFileSync('git', ['rev-parse', 'HEAD'], {
 }).trim();
 
 const manifest = {
-  schemaVersion: 1,
-  label: 'program-1-incumbent-contract',
+  schemaVersion: 2,
+  label,
   repositoryCommit: gitCommit,
   auditedSourcesMatchCommit: true,
+  qualificationItemSet: {
+    status: qualificationItemSetStatus,
+    ...(qualificationItemSetManifest
+      ? { manifest: path.relative(repoRoot, path.resolve(repoRoot, qualificationItemSetManifest)).split(path.sep).join('/') }
+      : {})
+  },
   overallSha256: sha256(overallInput),
   sections
 };
-
-const outputArgumentIndex = process.argv.indexOf('--out');
-const outputPath = outputArgumentIndex >= 0
-  ? path.resolve(repoRoot, process.argv[outputArgumentIndex + 1])
-  : defaultOutput;
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, `${JSON.stringify(manifest, null, 2)}\n`);
