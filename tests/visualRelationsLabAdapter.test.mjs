@@ -332,6 +332,10 @@ test('the Orchard keeps card prose out and preserves its source manifest', async
     new URL('../docs/design/babel-visual-relations-research.production-only-audit.html', import.meta.url),
     'utf8'
   );
+  const publicHtml = await readFile(
+    new URL('../docs/research/relation-orchard/orchard.html', import.meta.url),
+    'utf8'
+  );
   let sourceAssets = [];
   try {
     sourceAssets = await readdir(
@@ -361,9 +365,11 @@ test('the Orchard keeps card prose out and preserves its source manifest', async
     assert.match(path, /^visual-relations-assets\/.+\.(?:png|jpe?g|webp|gif)$/i);
   });
   assert.match(gallery, /loading="lazy"/);
-  assert.doesNotMatch(html, /id="babel-source-gallery"/);
-  assert.doesNotMatch(html, /191 figures/);
-  assert.match(html, />Research records</);
+  for (const releasedHtml of [html, publicHtml]) {
+    assert.doesNotMatch(releasedHtml, /id="babel-source-gallery"/);
+    assert.doesNotMatch(releasedHtml, /191 figures/);
+    assert.match(releasedHtml, />Research records</);
+  }
 });
 
 test('the visual vocabulary is exhaustive, isolated, and tree-free', async () => {
