@@ -36,6 +36,9 @@ export const createParseNormalizationHelpers = ({
     const payloadIntegrityFlags = Array.isArray(options?.payloadIntegrityFlags)
       ? options.payloadIntegrityFlags.slice()
       : [];
+    const payloadRepairDiagnostics = Array.isArray(options?.payloadRepairDiagnostics)
+      ? structuredClone(options.payloadRepairDiagnostics)
+      : [];
     const validationIssues = [];
     const sentenceTokens = tokenizeSentenceSurfaceOrder(sentence);
     const rawDerivationStages = parsed.derivationStages;
@@ -159,6 +162,9 @@ export const createParseNormalizationHelpers = ({
       uiVersion: normalizeOptionalStepText(process.env.BABEL_UI_VERSION || process.env.VERCEL_GIT_COMMIT_SHA),
       payloadIntegrityFlags: payloadIntegrityFlags.length > 0
         ? Array.from(new Set(payloadIntegrityFlags))
+        : undefined,
+      payloadRepairDiagnostics: payloadRepairDiagnostics.length > 0
+        ? payloadRepairDiagnostics
         : undefined,
       hasDerivationStages: derivationStages.length > 0
     };

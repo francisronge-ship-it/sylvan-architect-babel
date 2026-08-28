@@ -125,6 +125,21 @@ export interface RawOutputArtifact {
   data: string;
 }
 
+export type PayloadRepairKind =
+  | 'insert_closers_before_mismatched_closer'
+  | 'remove_unmatched_closer'
+  | 'append_closers_at_end_of_output';
+
+export interface PayloadRepairDiagnostic {
+  kind: PayloadRepairKind;
+  /** UTF-8 byte offset in the JSON candidate after BOM and outer-whitespace removal. */
+  candidateByteOffset: number;
+  removedText: string;
+  insertedText: string;
+  removedBytesHex: string;
+  insertedBytesHex: string;
+}
+
 export interface Provenance {
   modelRoute?: 'gemini' | 'gpt' | 'claude' | 'local';
   framework?: 'xbar' | 'minimalism';
@@ -135,6 +150,7 @@ export interface Provenance {
   parserVersion?: string;
   uiVersion?: string;
   payloadIntegrityFlags?: string[];
+  payloadRepairDiagnostics?: PayloadRepairDiagnostic[];
   hasDerivationStages?: boolean;
   parsePromptTokenCount?: number;
   parseOutputTokenCount?: number;

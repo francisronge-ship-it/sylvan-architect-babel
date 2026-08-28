@@ -283,6 +283,19 @@ export const createParseRoutes = ({
     analyses: (Array.isArray(bundle?.analyses) ? bundle.analyses : []).map(mapper)
   });
 
+  const attachPayloadRepairDiagnostics = (error, payloadRepairDiagnostics = []) => {
+    if (!(error instanceof ParseApiError) || payloadRepairDiagnostics.length === 0) return error;
+    return new ParseApiError(
+      error.code,
+      error.message,
+      error.status,
+      {
+        ...(error.details && typeof error.details === 'object' ? error.details : {}),
+        payloadRepairDiagnostics
+      }
+    );
+  };
+
   const createGenerationRecord = ({
     provider,
     framework,
@@ -321,7 +334,8 @@ export const createParseRoutes = ({
     model,
     generationMeta,
     payloadPreview,
-    debugPayloadPath
+    debugPayloadPath,
+    payloadRepairDiagnostics = []
   }) => {
     const commonDetails = {
       stage,
@@ -330,6 +344,7 @@ export const createParseRoutes = ({
       textLength: generationMeta.textLength,
       preview: generationMeta.preview || '',
       ...(typeof payloadPreview === 'string' ? { payloadPreview } : {}),
+      ...(payloadRepairDiagnostics.length > 0 ? { payloadRepairDiagnostics } : {}),
       debugPayloadPath
     };
     if (!(error instanceof ParseApiError)) {
@@ -427,6 +442,7 @@ export const createParseRoutes = ({
 
     let generationFailureEvidence = null;
     let generationStartedAt = null;
+    let payloadRepairDiagnostics = [];
     try {
       generationStartedAt = Date.now();
       const rawText = await generateLocal({
@@ -454,14 +470,22 @@ export const createParseRoutes = ({
         });
       }
 
-      const parsedPayload = parseModelJsonDetailed ? parseModelJsonDetailed(rawText) : { payload: parseModelJson(rawText), integrityFlags: [] };
+      const parsedPayload = parseModelJsonDetailed
+        ? parseModelJsonDetailed(rawText)
+        : { payload: parseModelJson(rawText), integrityFlags: [], repairDiagnostics: [] };
+      payloadRepairDiagnostics = Array.isArray(parsedPayload.repairDiagnostics)
+        ? parsedPayload.repairDiagnostics
+        : [];
       let normalized = normalizeParseBundle(
         parsedPayload.payload,
         framework,
         sentence,
         promptRoute,
         true,
-        { payloadIntegrityFlags: parsedPayload.integrityFlags }
+        {
+          payloadIntegrityFlags: parsedPayload.integrityFlags,
+          payloadRepairDiagnostics
+        }
       );
       if (normalized?.analyses?.[0]) {
         normalized = mapBundleAnalyses(normalized, (analysis) => ({
@@ -482,7 +506,7 @@ export const createParseRoutes = ({
     } catch (error) {
       if (error instanceof ParseApiError) {
         throw attachGenerationFailureEvidence({
-          error,
+          error: attachPayloadRepairDiagnostics(error, payloadRepairDiagnostics),
           ParseApiError,
           generationRecord: generationFailureEvidence?.generationRecord,
           rawText: generationFailureEvidence?.rawText
@@ -635,13 +659,17 @@ export const createParseRoutes = ({
 
       let payload;
       let payloadIntegrityFlags = [];
+      let payloadRepairDiagnostics = [];
       try {
         const parsedPayload = parseModelJsonDetailed
           ? parseModelJsonDetailed(generationMeta.rawText)
-          : { payload: parseModelJson(generationMeta.rawText), integrityFlags: [] };
+          : { payload: parseModelJson(generationMeta.rawText), integrityFlags: [], repairDiagnostics: [] };
         payload = parsedPayload.payload;
         payloadIntegrityFlags = Array.isArray(parsedPayload.integrityFlags)
           ? parsedPayload.integrityFlags
+          : [];
+        payloadRepairDiagnostics = Array.isArray(parsedPayload.repairDiagnostics)
+          ? parsedPayload.repairDiagnostics
           : [];
       } catch (error) {
         if (error instanceof ParseApiError && error.code === 'BAD_MODEL_RESPONSE') {
@@ -676,7 +704,7 @@ export const createParseRoutes = ({
           sentence,
           normalizedModelRoute,
           true,
-          { payloadIntegrityFlags }
+          { payloadIntegrityFlags, payloadRepairDiagnostics }
         );
         if (normalized?.analyses?.[0]) {
           normalized = mapBundleAnalyses(
@@ -708,7 +736,8 @@ export const createParseRoutes = ({
           model: selectedModel,
           generationMeta,
           payloadPreview,
-          debugPayloadPath
+          debugPayloadPath,
+          payloadRepairDiagnostics
         });
       }
 
@@ -861,14 +890,18 @@ export const createParseRoutes = ({
       });
       let payload;
       let payloadIntegrityFlags = [];
+      let payloadRepairDiagnostics = [];
 
       try {
         const parsedPayload = parseModelJsonDetailed
           ? parseModelJsonDetailed(generationMeta.rawText)
-          : { payload: parseModelJson(generationMeta.rawText), integrityFlags: [] };
+          : { payload: parseModelJson(generationMeta.rawText), integrityFlags: [], repairDiagnostics: [] };
         payload = parsedPayload.payload;
         payloadIntegrityFlags = Array.isArray(parsedPayload.integrityFlags)
           ? parsedPayload.integrityFlags
+          : [];
+        payloadRepairDiagnostics = Array.isArray(parsedPayload.repairDiagnostics)
+          ? parsedPayload.repairDiagnostics
           : [];
       } catch (error) {
         const debugPayloadPath = writeDebugModelPayload({
@@ -894,7 +927,7 @@ export const createParseRoutes = ({
           sentence,
           modelRoute,
           true,
-          { payloadIntegrityFlags }
+          { payloadIntegrityFlags, payloadRepairDiagnostics }
         );
         if (normalized?.analyses?.[0]) {
           normalized = mapBundleAnalyses(
@@ -926,7 +959,8 @@ export const createParseRoutes = ({
           model: selectedModel,
           generationMeta,
           payloadPreview,
-          debugPayloadPath
+          debugPayloadPath,
+          payloadRepairDiagnostics
         });
       }
 
