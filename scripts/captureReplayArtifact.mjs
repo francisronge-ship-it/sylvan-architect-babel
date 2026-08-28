@@ -416,7 +416,12 @@ const canonicalizePayloadVisibleIds = (payload) => {
         && metadata.bareStructuralLeaf !== true
       );
     });
-    if (resolved && !visibleIds.includes(resolved)) visibleIds.push(resolved);
+    const retained = resolved || (
+      strictHiddenAncestorFilter && /::__[^:]+$/.test(normalized)
+        ? normalized
+        : ''
+    );
+    if (retained && !visibleIds.includes(retained)) visibleIds.push(retained);
   });
   return {
     ...payload,
