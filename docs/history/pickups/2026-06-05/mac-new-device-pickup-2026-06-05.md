@@ -1,17 +1,17 @@
-# Babel Mac / New Device Pickup
+# Babel MacBook Pro Pickup
 
 Date: 2026-06-05
+Updated: 2026-06-17
 
-This file exists so Babel can be resumed on a Mac or new machine without relying on this Windows-only thread state.
+This file exists so Babel can be resumed on the current MacBook Pro without relying on the old Windows-only thread state.
 
 ## Source Of Truth
 
 - Repository: `https://github.com/francisronge/sylvan-architect-babel.git`
-- Current Windows branch: `codex/babel-cross-platform`
-- Current Windows root: `C:\Users\franc\Codex Imported Workspaces Full\Babel\sylvan-architect-babel`
-- Expected Mac root: `/Users/francisronge/Documents/Babel/sylvan-architect-babel`
+- Active branch: `codex/babel-cross-platform`
+- Current Mac root: `/Users/francisronge/Projects/Babel`
 
-Before changing devices, commit and push the intended source changes from `codex/babel-cross-platform`.
+This MacBook Pro is now the active development machine for Babel.
 
 Do not rely on ignored local folders to survive a device switch.
 
@@ -32,10 +32,10 @@ The ignored `.local-docs` copy is useful locally, but GitHub will not carry it.
 If the repo does not exist on the Mac:
 
 ```bash
-mkdir -p /Users/francisronge/Documents/Babel
-cd /Users/francisronge/Documents/Babel
-git clone https://github.com/francisronge/sylvan-architect-babel.git
-cd sylvan-architect-babel
+mkdir -p /Users/francisronge/Projects
+cd /Users/francisronge/Projects
+git clone https://github.com/francisronge/sylvan-architect-babel.git Babel
+cd Babel
 git fetch origin
 git checkout codex/babel-cross-platform
 npm ci
@@ -45,7 +45,7 @@ npm run build
 If the repo already exists on the Mac:
 
 ```bash
-cd /Users/francisronge/Documents/Babel/sylvan-architect-babel
+cd /Users/francisronge/Projects/Babel
 git fetch origin
 git checkout codex/babel-cross-platform
 git pull --ff-only origin codex/babel-cross-platform
@@ -97,16 +97,13 @@ Do not commit:
 
 Read these in order:
 
-1. `C:\Users\franc\.codex\project-context\projects\babel\handoff.md` on Windows, or the synced project-context equivalent on Mac.
-2. `docs/design/mac-new-device-pickup-2026-06-05.md`
-3. `docs/design/babel-visual-relations-research.md`
-4. `server/babelParser/systemInstruction.js`
-5. `server/babelParser/prompts.js`
-6. `components/TreeVisualizer.tsx`
-7. `derivationReplayPlan.js`
-8. `visualRelationLinks.ts`
-
-On Mac, replace the Windows project-context path with the current local project-context path if needed.
+1. `docs/design/mac-new-device-pickup-2026-06-05.md`
+2. `docs/design/babel-visual-relations-research.md`
+3. `server/babelParser/systemInstruction.js`
+4. `server/babelParser/prompts.js`
+5. `components/TreeVisualizer.tsx`
+6. `derivationReplayPlan.js`
+7. `visualRelationLinks.ts`
 
 ## New Thread Launch Prompt
 
@@ -114,7 +111,7 @@ Paste this into a new Codex thread:
 
 ```text
 Read project context for Babel.
-Work in /Users/francisronge/Documents/Babel/sylvan-architect-babel.
+Work in /Users/francisronge/Projects/Babel.
 Checkout branch codex/babel-cross-platform.
 Read docs/design/mac-new-device-pickup-2026-06-05.md.
 Read docs/design/babel-visual-relations-research.md.
@@ -138,4 +135,3 @@ If the dev server is needed:
 ```bash
 npm run dev
 ```
-

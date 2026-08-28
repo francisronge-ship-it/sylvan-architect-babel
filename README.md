@@ -5,7 +5,12 @@ Sylvan Architect Babel is a syntax tree generator built for research and learnin
 Production app: temporarily paused; deployment history and configuration are retained.
 Research site: [francisronge.github.io/sylvan-architect-babel/research](https://francisronge.github.io/sylvan-architect-babel/research/)
 
-Babel logo mark by Lona.
+Development status: the relation renderer is verified and closed. The active
+product, Tree Bank, derivational data, benchmark, and web-application work is organized
+in the single [Babel Master Roadmap](./ROADMAP.md). The documentation authority
+map is in [docs/README.md](./docs/README.md).
+
+Babel logo design by Lona Noury.
 
 It helps researchers test how large language models reason about syntax under explicit theoretical prompts, while also giving students a clean and practical way to generate, inspect, and compare syntactic trees.
 
@@ -15,31 +20,26 @@ Babel is generative syntax, implemented as an interactive derivation and structu
 
 Babel is the world's first AI syntax tree generator and the fastest syntax tree generator in its class.
 
+## License
+
+Babel-owned source code and documentation are licensed under the
+[Apache License 2.0](./LICENSE), except where a file or notice says otherwise.
+Bundled software, fonts, research material, and model-output records retain
+their own terms; see [Third-Party Notices](./THIRD_PARTY_NOTICES.md). The
+official names and logo are not licensed for use as fork branding; see
+[Names and Logo](./TRADEMARKS.md).
+
 ## Start Here
 
 1. For local use, install dependencies and run `npm run dev`; the former public Vercel app is temporarily paused.
-2. In the header, click the active `X-Bar Theory` / `Minimalist Program` pill to toggle theory, and click the active model pill to switch routes.
-3. Read the benchmark paper: [One Hundred Trees, One Hundred Public Syntactic Theories](https://francisronge.github.io/sylvan-architect-babel/research/one-hundred-trees-under-forced-commitment/).
-4. Browse the research site: [Babel Research](https://francisronge.github.io/sylvan-architect-babel/research/).
-5. If you are developing Babel itself, production-facing environment guidance lives in [.env.example](./.env.example).
-
-Recent public benchmark:
-
-- [One Hundred Trees, One Hundred Public Syntactic Theories](https://francisronge.github.io/sylvan-architect-babel/research/one-hundred-trees-under-forced-commitment/)
-  A 100-case multilingual Babel benchmark of public syntax across 22 languages, 15 phenomena, and two Gemini routes.
-
-## Public benchmark snapshot
-
-- `100` sentence-level evaluations under forced explicit syntactic commitment
-- `22` languages in native script where applicable
-- `15` syntactic phenomena
-- `1` public hosted model route in that benchmark release: `Gemini 3.1 Pro`
-
-| Benchmark model |
-| --- |
-| ![Gemini 3.1 Pro long-distance wh derivation](docs/research/assets/gauntlet100-v1/pro-en-longwh-growth.png) |
+2. For development status and dependencies, read [ROADMAP.md](./ROADMAP.md).
+3. For current documentation authority, read [docs/README.md](./docs/README.md).
+4. Browse the [Babel Relation Orchard](./docs/research/relation-orchard/orchard.html).
+5. Production-facing environment guidance lives in [.env.example](./.env.example).
 
 ## Why Babel exists
+
+This section will be rewritten for Babel's full public launch.
 
 Many tree tools either use rigid templates or return black-box output with little transparency.
 
@@ -208,6 +208,10 @@ These outputs are intended for both human reading and downstream inspection work
 
 `Tree Bank` is Babel's local save-and-reopen workspace.
 
+The current implementation is the legacy IndexedDB v1 workspace. It is
+functional, but the master roadmap replaces whole-bundle saves with immutable
+per-analysis durable records and a thin saved-work wrapper.
+
 It includes:
 
 - Save current parse state from the header (`Save to Tree Bank`)
@@ -235,9 +239,8 @@ It includes:
 
 Babel is being built as an open resource for linguistics and AI interpretability work.
 
-Current direction includes:
-
-- Comparing Gemini, GPT, and Claude inside the same syntax environment
-- Running large cross-model gauntlets (for example, 100+ tree/derivation suites) across many languages
-- Publishing comparable structural-reasoning results across frameworks, models, and sentence phenomena
-- Evolving Babel into a public benchmark standard for explicit syntactic derivation generation
+The current dependency order is maintained in [ROADMAP.md](./ROADMAP.md):
+contract qualification, durable Tree Bank integration, the new workbench,
+syntactician workspace features, benchmark releases, and a governed public
+derivational database. Provider tests are a separate empirical program from
+default renderer and engine verification.
