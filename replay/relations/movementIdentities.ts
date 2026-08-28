@@ -15,7 +15,7 @@
  * - the accepted registered trajectory relation names from the visual
  *   grammar (AbarMove, AMove, HeadMove, Lowering, Scrambling, Smuggling,
  *   RemnantMovement, RollUpMovement, AcrossTheBoardMovement,
- *   SidewardMovement, OperatorVariableBinding);
+ *   SidewardMovement);
  * - declared observed identities: exact, unambiguous standard movement terms
  *   that committed model-output fixtures author ('wh-movement',
  *   'auxiliary-head-movement', 'phrasal-movement'). These are declared
@@ -26,7 +26,23 @@ import {
   findRelationRegistryEntry,
   productionRelationRegistry
 } from '../relationDispatch/index.js';
-import { PRODUCTION_RENDER_FAMILIES } from './renderFamilies.ts';
+import {
+  PRODUCTION_RENDER_FAMILIES,
+  TRAJECTORY_SOURCE_ROLES,
+  TRAJECTORY_TARGET_ROLES,
+  TRAJECTORY_WITNESS_ROLES
+} from './renderFamilies.ts';
+
+type AuthoredTrajectoryAnchors =
+  | Record<string, unknown>
+  | readonly { role?: string }[];
+
+const authoredAnchorRoles = (anchors: AuthoredTrajectoryAnchors): Set<string> =>
+  new Set(
+    Array.isArray(anchors)
+      ? anchors.map((anchor) => String(anchor?.role || '').trim()).filter(Boolean)
+      : Object.keys(anchors || {})
+  );
 
 export const foldMovementIdentityKey = (value?: string): string =>
   String(value || '').trim().toLowerCase().replace(/[^a-z]/g, '');
@@ -49,7 +65,6 @@ export const MOVEMENT_OPERATION_IDENTITIES: ReadonlySet<string> = new Set([
   'amovement',
   'abarmove',
   'abarmovement',
-  'operatorvariablebinding',
   'lowering',
   'scrambling',
   'smuggling',
@@ -76,7 +91,8 @@ export const isMovementIdentity = (label?: string): boolean => {
  * Replay's own operation labels and folded legacy operation spellings.
  */
 export const registeredTrajectoryDisplayKind = (
-  label?: string
+  label?: string,
+  anchors?: AuthoredTrajectoryAnchors
 ): 'head' | 'phrasal' | '' => {
   const entry = findRelationRegistryEntry(
     productionRelationRegistry,
@@ -84,17 +100,36 @@ export const registeredTrajectoryDisplayKind = (
   );
   if (!entry) return '';
   const family = PRODUCTION_RENDER_FAMILIES[entry.id];
-  if (family?.family !== 'trajectory') return '';
+  if (!family?.trajectoryKind) return '';
+  if (anchors !== undefined) {
+    const roles = authoredAnchorRoles(anchors);
+    const hasSource = TRAJECTORY_SOURCE_ROLES.some((role) => roles.has(role));
+    const hasTarget = TRAJECTORY_TARGET_ROLES.some((role) => roles.has(role));
+    const hasWitness = TRAJECTORY_WITNESS_ROLES.some((role) => roles.has(role));
+    if (!hasSource || !hasTarget) return '';
+    if (entry.id === 'identity.occurrences' && !hasWitness) {
+      return roles.has('source') && roles.has('target') ? 'head' : '';
+    }
+    if (
+      family.trajectoryKind !== 'head'
+      && family.trajectoryKind !== 'lowering'
+      && !hasWitness
+    ) return '';
+  }
   return family.trajectoryKind === 'head' || family.trajectoryKind === 'lowering'
     ? 'head'
     : 'phrasal';
 };
 
-export const isRegisteredTrajectoryRelation = (label?: string): boolean =>
-  Boolean(registeredTrajectoryDisplayKind(label));
+export const isRegisteredTrajectoryRelation = (
+  label?: string,
+  anchors?: AuthoredTrajectoryAnchors
+): boolean => Boolean(registeredTrajectoryDisplayKind(label, anchors));
 
-export const isRegisteredFrontingTrajectoryRelation = (label?: string): boolean =>
-  isRegisteredTrajectoryRelation(label) && isFrontingMovementIdentity(label);
+export const isRegisteredFrontingTrajectoryRelation = (
+  label?: string,
+  anchors?: AuthoredTrajectoryAnchors
+): boolean => isRegisteredTrajectoryRelation(label, anchors) && isFrontingMovementIdentity(label);
 
 /**
  * Exact head/phrasal kind per movement identity. Generic labels (move,
@@ -116,7 +151,6 @@ export const MOVEMENT_IDENTITY_KINDS: Readonly<Record<string, 'head' | 'phrasal'
   whchain: 'phrasal',
   whmovement: 'phrasal',
   phrasalmovement: 'phrasal',
-  operatorvariablebinding: 'phrasal',
   scrambling: 'phrasal',
   smuggling: 'phrasal',
   remnantmovement: 'phrasal',
@@ -134,15 +168,19 @@ export const movementIdentityKind = (label?: string): 'head' | 'phrasal' | '' =>
  * landing-step synthesis exclusions).
  */
 export const FRONTING_MOVEMENT_IDENTITIES: ReadonlySet<string> = new Set([
+  'headmove',
   'abarmove',
   'abarmovement',
   'abarchain',
   'whchain',
   'whmovement',
   'phrasalmovement',
-  'operatorvariablebinding',
   'scrambling',
+  'partialcopydeletion',
+  'cycliclinearization',
+  'remnantmovement',
   'rollupmovement',
+  'acrosstheboardmovement',
   'sidewardmovement'
 ]);
 

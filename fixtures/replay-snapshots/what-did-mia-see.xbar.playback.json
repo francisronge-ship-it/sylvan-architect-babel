@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "sentence": "What did Mia see",
-  "stepCount": 21,
+  "stepCount": 18,
   "steps": [
     {
       "operation": "LexicalSelect",
@@ -233,55 +233,52 @@
     {
       "operation": "Project",
       "replayKind": "micro",
-      "targetNodeId": "c_question",
+      "targetNodeId": "cbar_question",
       "sourceNodeIds": [
-        "c_question::__lex_tok_1_did"
+        "tp_question"
       ],
-      "replayProgressLabel": "Stage 4/4 · Step 2/9",
+      "replayProgressLabel": "Stage 4/4 · Step 1/4",
       "replayVisibleNodeIds": [
         "tp_question",
         "np_mia_question",
         "np_mia_question::__lex_tok_2_mia",
         "tbar_question",
         "t_did",
-        "vp_see",
         "t_did::__lex_tok_1_did",
+        "vp_see",
         "v_see",
         "v_see::__lex_tok_3_see",
         "dp_what_low",
         "dp_what_low::__lex_tok_0_what",
-        "did_terminal",
-        "what_low",
-        "c_question::__lex_tok_1_did",
-        "c_question"
+        "c_question",
+        "cbar_question"
       ]
     },
     {
-      "operation": "ExternalMerge",
-      "replayKind": "micro",
-      "targetNodeId": "cbar_question",
+      "operation": "wh-movement",
+      "replayKind": "relation",
+      "targetNodeId": "dp_what_high",
       "sourceNodeIds": [
-        "c_question",
-        "tp_question"
+        "dp_what_low"
       ],
-      "replayProgressLabel": "Stage 4/4 · Step 3/9",
+      "replayProgressLabel": "Stage 4/4 · Step 2/4",
       "replayVisibleNodeIds": [
         "tp_question",
         "np_mia_question",
         "np_mia_question::__lex_tok_2_mia",
         "tbar_question",
         "t_did",
-        "vp_see",
         "t_did::__lex_tok_1_did",
+        "vp_see",
         "v_see",
         "v_see::__lex_tok_3_see",
         "dp_what_low",
-        "dp_what_low::__lex_tok_0_what",
-        "did_terminal",
-        "what_low",
-        "c_question::__lex_tok_1_did",
         "c_question",
-        "cbar_question"
+        "cbar_question",
+        "cp_question",
+        "dp_what_high",
+        "dp_what_high::__lex_tok_0_what",
+        "what_low"
       ]
     },
     {
@@ -291,7 +288,7 @@
       "sourceNodeIds": [
         "t_did"
       ],
-      "replayProgressLabel": "Stage 4/4 · Step 4/9",
+      "replayProgressLabel": "Stage 4/4 · Step 3/4",
       "replayVisibleNodeIds": [
         "tp_question",
         "np_mia_question",
@@ -299,115 +296,17 @@
         "tbar_question",
         "t_did",
         "vp_see",
-        "t_did::__lex_tok_1_did",
         "v_see",
         "v_see::__lex_tok_3_see",
         "dp_what_low",
-        "dp_what_low::__lex_tok_0_what",
-        "did_terminal",
-        "what_low",
-        "c_question::__lex_tok_1_did",
         "c_question",
-        "cbar_question",
-        "t_did::__leaf",
-        "c_question::__leaf"
-      ]
-    },
-    {
-      "operation": "Project",
-      "replayKind": "micro",
-      "targetNodeId": "dp_what_high",
-      "sourceNodeIds": [
-        "dp_what_high::__lex_tok_0_what"
-      ],
-      "replayProgressLabel": "Stage 4/4 · Step 6/9",
-      "replayVisibleNodeIds": [
-        "tp_question",
-        "np_mia_question",
-        "np_mia_question::__lex_tok_2_mia",
-        "tbar_question",
-        "t_did",
-        "vp_see",
-        "t_did::__lex_tok_1_did",
-        "v_see",
-        "v_see::__lex_tok_3_see",
-        "dp_what_low",
-        "dp_what_low::__lex_tok_0_what",
-        "did_terminal",
-        "what_low",
         "c_question::__lex_tok_1_did",
-        "c_question",
         "cbar_question",
-        "dp_what_high::__lex_tok_0_what",
-        "dp_what_high",
-        "t_did::__leaf",
-        "c_question::__leaf"
-      ]
-    },
-    {
-      "operation": "ExternalMerge",
-      "replayKind": "micro",
-      "targetNodeId": "cp_question",
-      "sourceNodeIds": [
-        "dp_what_high",
-        "cbar_question"
-      ],
-      "replayProgressLabel": "Stage 4/4 · Step 7/9",
-      "replayVisibleNodeIds": [
-        "tp_question",
-        "np_mia_question",
-        "np_mia_question::__lex_tok_2_mia",
-        "tbar_question",
-        "t_did",
-        "vp_see",
-        "t_did::__lex_tok_1_did",
-        "v_see",
-        "v_see::__lex_tok_3_see",
-        "dp_what_low",
-        "dp_what_low::__lex_tok_0_what",
-        "did_terminal",
-        "what_low",
-        "c_question::__lex_tok_1_did",
-        "c_question",
-        "cbar_question",
-        "dp_what_high::__lex_tok_0_what",
-        "dp_what_high",
         "cp_question",
-        "t_did::__leaf",
-        "c_question::__leaf"
-      ]
-    },
-    {
-      "operation": "wh-movement",
-      "replayKind": "relation",
-      "targetNodeId": "dp_what_high",
-      "sourceNodeIds": [
-        "dp_what_low",
-        "what_low"
-      ],
-      "replayProgressLabel": "Stage 4/4 · Step 8/9",
-      "replayVisibleNodeIds": [
-        "tp_question",
-        "np_mia_question",
-        "np_mia_question::__lex_tok_2_mia",
-        "tbar_question",
-        "t_did",
-        "vp_see",
-        "t_did::__lex_tok_1_did",
-        "v_see",
-        "v_see::__lex_tok_3_see",
-        "dp_what_low",
-        "dp_what_low::__lex_tok_0_what",
-        "did_terminal",
-        "what_low",
-        "c_question::__lex_tok_1_did",
-        "c_question",
-        "cbar_question",
-        "dp_what_high::__lex_tok_0_what",
         "dp_what_high",
-        "cp_question",
-        "t_did::__leaf",
-        "c_question::__leaf"
+        "dp_what_high::__lex_tok_0_what",
+        "what_low",
+        "did_terminal"
       ]
     },
     {
@@ -415,7 +314,7 @@
       "replayKind": "macro",
       "targetNodeId": "cp_question",
       "sourceNodeIds": [],
-      "replayProgressLabel": "Stage 4/4 · Step 9/9",
+      "replayProgressLabel": "Stage 4/4 · Step 4/4",
       "replayVisibleNodeIds": [
         "tp_question",
         "np_mia_question",
@@ -423,21 +322,17 @@
         "tbar_question",
         "t_did",
         "vp_see",
-        "t_did::__lex_tok_1_did",
         "v_see",
         "v_see::__lex_tok_3_see",
         "dp_what_low",
-        "dp_what_low::__lex_tok_0_what",
-        "did_terminal",
-        "what_low",
-        "c_question::__lex_tok_1_did",
         "c_question",
+        "c_question::__lex_tok_1_did",
         "cbar_question",
-        "dp_what_high::__lex_tok_0_what",
-        "dp_what_high",
         "cp_question",
-        "t_did::__leaf",
-        "c_question::__leaf"
+        "dp_what_high",
+        "dp_what_high::__lex_tok_0_what",
+        "what_low",
+        "did_terminal"
       ]
     }
   ]

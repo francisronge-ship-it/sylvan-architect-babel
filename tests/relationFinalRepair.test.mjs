@@ -3,11 +3,15 @@ import test from 'node:test';
 
 import {
   compileRelationRenderPlan,
+  planItemOwnsRelationMoment,
   visiblePlanFrameItems
 } from '../replay/relations/renderPlanCompiler.ts';
 import {
   adaptDerivationStagesForReplay,
-  buildPlaybackStepsFromDerivationFrames
+  buildPlaybackStepsFromDerivationFrames,
+  buildReplaySupportLines,
+  indexHierarchyNodesByIdAndAliases,
+  isDisplayTerminalSurface
 } from '../replay/replayCompiler.ts';
 import { bindRelationPlanFrame } from '../replay/relations/geometryBinding.ts';
 import { buildDerivationReplayPlan } from '../derivationReplayPlan.js';
@@ -28,22 +32,72 @@ const forest = () => [node('root_fr', 'TP', [
   node('site_fr', 'VP', [leaf('v_fr', 'V', 'read', { silent: true })])
 ])];
 
+test('trace t is display-terminal material even though T is a head category', () => {
+  assert.equal(isDisplayTerminalSurface('t'), true);
+  assert.equal(isDisplayTerminalSurface('t1'), true);
+  assert.equal(isDisplayTerminalSurface('T'), false);
+  assert.equal(isDisplayTerminalSurface('TP'), false);
+});
+
+test('hierarchy relation lookup accepts unique authored aliases and rejects ambiguous aliases', () => {
+  const first = { __vizId: 'stable_first', data: { aliasIds: ['authored_first', 'ambiguous'] } };
+  const second = { __vizId: 'stable_second', data: { aliasIds: ['ambiguous'] } };
+  const index = indexHierarchyNodesByIdAndAliases([first, second]);
+  assert.equal(index.get('stable_first'), first);
+  assert.equal(index.get('authored_first'), first);
+  assert.equal(index.has('ambiguous'), false, 'an ambiguous alias fails closed');
+});
+
+test('one PF plate remains focusable during every authored relation step it presents', () => {
+  const pfForest = [node('tp_pf_composed', 'TP', [
+    leaf('pro_pf_composed', 'D', 'pro')
+  ])];
+  const plan = compileRelationRenderPlan([
+    stage([
+      {
+        relation: 'PFRealization',
+        anchors: { root: 'pro_pf_composed', exponent: 'pro_pf_composed' }
+      },
+      {
+        relation: 'PFRealization',
+        anchors: { terminal: 'pro_pf_composed' },
+        values: { input: 'pro', output: 'zero' }
+      }
+    ], pfForest)
+  ]);
+  const plaques = plan.frames[0].items.filter((item) => item.kind === 'node-plaque');
+  assert.equal(plaques.length, 1);
+  assert.equal(planItemOwnsRelationMoment(plaques[0], 0, 0), true);
+  assert.equal(planItemOwnsRelationMoment(plaques[0], 0, 1), true);
+  assert.equal(visiblePlanFrameItems(plan, 0, new Set([1])).length, 1);
+});
+
 /* ------------------------------------------------------------------ *
  * Task 1: coalesce only the complete same claim.
  * ------------------------------------------------------------------ */
 
 test('coincident items from different render families both survive', () => {
-  // Recoverability and licensing both compile an ellipsis-site item at the
-  // same silent site; they are different families making different claims.
+  // A feature plaque and ellipsis ghosting may name the same domain while
+  // remaining independent authored claims.
   const plan = compileRelationRenderPlan([
     stage([
-      { relation: 'EllipsisRecoverability', anchors: { site: 'site_fr' } },
-      { relation: 'EllipsisLicensing', anchors: { licensor: 'a_fr', domain: 'site_fr' } }
+      { relation: 'EllipsisRecoverability', anchors: { antecedent: 'a_fr', site: 'site_fr' } },
+      {
+        relation: 'FeatureBundle',
+        anchors: { domain: 'site_fr' },
+        values: { feature: '[E]' }
+      }
     ], forest())
   ]);
-  const sites = plan.frames[0].items.filter((item) => item.kind === 'ellipsis-site');
-  assert.equal(sites.length, 2, 'sharing a site is not identity across families');
-  assert.notEqual(sites[0].familyId, sites[1].familyId);
+  assert.equal(plan.frames[0].items.length, 2, 'sharing a domain is not identity across families');
+  assert.deepEqual(
+    plan.frames[0].items.map((item) => item.kind).sort(),
+    ['ellipsis-site', 'node-plaque']
+  );
+  assert.deepEqual(
+    [...new Set(plan.frames[0].items.map((item) => item.familyId))].sort(),
+    ['ellipsis.ghosting', 'feature-bundle.plaque']
+  );
 });
 
 test('ellipsis claims at one site naming different antecedents both survive', () => {
@@ -55,7 +109,10 @@ test('ellipsis claims at one site naming different antecedents both survive', ()
   ]);
   const sites = plan.frames[0].items.filter((item) => item.kind === 'ellipsis-site');
   assert.equal(sites.length, 2, 'a different antecedent is a different authored claim');
-  assert.deepEqual(sites.map((item) => item.antecedentNodeId).sort(), ['a_fr', 'b_fr']);
+  assert.deepEqual(
+    sites.map((item) => item.antecedentNodeId).sort(),
+    ['a_fr', 'b_fr']
+  );
 });
 
 test('same geometry with different labels, values, or outcomes never merges', () => {
@@ -78,11 +135,11 @@ test('same geometry with different labels, values, or outcomes never merges', ()
   assert.deepEqual(paths.map((item) => item.outcome).sort(), ['blocked', 'licensed']);
 });
 
-test('unregistered relation names remain exact during coalescing', () => {
+test('Tier-3 relation names remain exact during coalescing', () => {
   const plan = compileRelationRenderPlan([
     stage([
-      { relation: 'OpenRelation', anchors: { source: 'a_fr', target: 'b_fr' } },
-      { relation: 'openrelation', anchors: { source: 'a_fr', target: 'b_fr' } }
+      { relation: 'OpenRelation', anchors: { first: 'a_fr', second: 'b_fr' } },
+      { relation: 'openrelation', anchors: { first: 'a_fr', second: 'b_fr' } }
     ], forest())
   ]);
 
@@ -119,13 +176,12 @@ test('genuinely identical claims paint once with every authored reference retain
 });
 
 /* ------------------------------------------------------------------ *
- * Task 2: exact identities, robust to placement reordering.
+ * Task 2: exact identities in authored relation order.
  * ------------------------------------------------------------------ */
 
-test('when playback placement order differs from authored order, identities stay exact', () => {
-  // Two workspace roots assembled in sequence: relation 0 anchors inside the
-  // SECOND root, relation 1 inside the first, so relation 1's anchors become
-  // visible at an earlier structural step and its moment places first.
+test('anchor availability never reorders authored relation moments', () => {
+  // Relation 0 anchors inside the second root and relation 1 inside the first.
+  // Both wait for structural construction; authored array order still wins.
   const rootA = node('root_a_ord', 'AP', [
     node('a1_ord', 'A1', [leaf('a1_l', 'A', 'alpha')]),
     node('a2_ord', 'A2', [leaf('a2_l', 'A', 'ann')])
@@ -152,16 +208,14 @@ test('when playback placement order differs from authored order, identities stay
   );
   assert.deepEqual(
     played.map((identity) => identity.relationIndex),
-    [1, 0],
-    'placement order differs from authored order, so a count would misidentify the moments'
+    [0, 1],
+    'relation moments follow authored array order, never anchor reveal order'
   );
 
-  // Revealing by the FIRST PLAYED identity shows relation 1's mark, not
-  // relation 0's — the exact behavior a count-based reveal gets wrong.
   const plan = compileRelationRenderPlan(stages);
   const afterFirstMoment = visiblePlanFrameItems(plan, 0, new Set([played[0].relationIndex]));
   assert.equal(afterFirstMoment.length, 1);
-  assert.equal(afterFirstMoment[0].relationRef.relationIndex, 1);
+  assert.equal(afterFirstMoment[0].relationRef.relationIndex, 0);
 });
 
 test('sequential relation entries get separate Replay frames while one multi-anchor entry stays together', () => {
@@ -216,6 +270,38 @@ test('sequential relation entries get separate Replay frames while one multi-anc
   const simultaneousBlock = simultaneousRelationFrames[0].detailBlocks
     ?.find((candidate) => candidate.title === 'Relations');
   assert.match(simultaneousBlock?.lines[0] || '', /Goals: b, C/i);
+});
+
+test('structural relation roles use authored node categories in Replay details', () => {
+  const improperForest = [node('cp_improper_detail', 'CP', [
+    node('source_improper_detail', 'CP', [leaf('source_c_improper_detail', 'C', 'That')]),
+    node('tp_improper_detail', 'TP', [
+      node('vp_improper_detail', 'vP', [
+        node('vbar_improper_detail', 'VP', [leaf('v_improper_detail', 'V', 'left')])
+      ])
+    ])
+  ])];
+  const stages = [stage([{
+    relation: 'ImproperMovement',
+    anchors: {
+      source: 'source_improper_detail',
+      rejectedLandingHosts: ['tp_improper_detail', 'vp_improper_detail', 'vbar_improper_detail'],
+      forbiddenRegion: ['tp_improper_detail', 'vp_improper_detail', 'vbar_improper_detail']
+    }
+  }], improperForest)];
+  const frames = adaptDerivationStagesForReplay(stages);
+  const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
+  const relationFrame = buildPlaybackStepsFromDerivationFrames(
+    frames,
+    undefined,
+    undefined,
+    replayPlan
+  ).find((step) => step.replayKind === 'relation');
+  const block = relationFrame?.detailBlocks?.find((candidate) => candidate.title === 'Relations');
+
+  assert.match(block?.lines[0] || '', /Rejected Landing Hosts: TP, vP, VP/);
+  assert.match(block?.lines[0] || '', /Forbidden Region: TP, vP, VP/);
+  assert.doesNotMatch(block?.lines[0] || '', /left, left, left/);
 });
 
 /* ------------------------------------------------------------------ *
@@ -286,7 +372,7 @@ test('identical surface strings are not treated as one chain without authored id
  * an unrelated positionally-aligned derivation step.
  * ------------------------------------------------------------------ */
 
-test('a synthesized SpellOut derivation step never reclassifies stage 1 or drops its relation moments', () => {
+test('retired generic SpellOut steps are ignored and cannot reclassify authored stages', () => {
   const shared = forest();
   const stages = [
     stage([
@@ -297,20 +383,18 @@ test('a synthesized SpellOut derivation step never reclassifies stage 1 or drops
   ];
   const frames = adaptDerivationStagesForReplay(stages);
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
-  // The app synthesizes a single SpellOut derivation step when the bundle
-  // authors none; positional alignment would land it on stage 1.
-  const synthesizedSteps = [{
-    stepId: 'synthesized-spellout',
+  const retiredSteps = [{
+    stepId: 'retired-spellout',
     operation: 'SpellOut',
     targetNodeId: 'root_fr',
     targetLabel: 'TP',
     sourceNodeIds: ['root_fr'],
     sourceLabels: ['TP'],
-    spelloutOrder: ['a', 'b', 'c'],
-    note: 'Committed surface order: a b c'
+    note: 'Retired generic terminal frame'
   }];
   const steps = buildPlaybackStepsFromDerivationFrames(
-    frames, synthesizedSteps, 'a b c', replayPlan);
+    frames, retiredSteps, 'a b c', replayPlan);
+  assert.equal(steps.some((step) => step.operation === 'SpellOut'), false);
   const moments = steps
     .filter((step) => step.replayKind === 'relation')
     .map((step) => step.replayRelationIdentity);
@@ -356,7 +440,7 @@ test('authored values distinguish claims even when the specialized primitive cop
   );
 });
 
-test('a vanished extra open role never suppresses the valid specialized core', () => {
+test('a closed registered relation with an extra role stays one malformed Tier-3 primary', () => {
   const early = [node('root_x', 'TP', [
     node('ctrl_x', 'DP', [leaf('ctrl_l', 'D', 'kai')]),
     node('ctee_x', 'DP', [leaf('ctee_l', 'D', 'PRO', { silent: true })]),
@@ -377,13 +461,11 @@ test('a vanished extra open role never suppresses the valid specialized core', (
     }], early),
     stage([], late)
   ]);
-  const frameOneKinds = plan.frames[1].items.map((item) => item.kind).sort();
-  assert.ok(frameOneKinds.includes('directed-path'), 'the Control path survives its own anchors');
-  assert.ok(frameOneKinds.includes('domain-mark'), 'the Control domain survives its own anchors');
+  assert.deepEqual(plan.frames[0].items.map((item) => item.kind), ['fallback']);
   assert.equal(
-    plan.frames[1].items.some((item) => item.kind === 'fallback'),
-    false,
-    'only the neutral mark depending on the vanished extra role stops drawing'
+    plan.frames[1].items.length,
+    0,
+    'the complete malformed claim stops when any of its authored witnesses vanishes'
   );
   const vanished = plan.diagnostics.filter((d) => d.kind === 'anchor-vanished');
   assert.equal(vanished.length, 1, 'one deduplicated diagnostic for one relation/stage/missing set');
@@ -465,7 +547,7 @@ test('unregistered open relations never collapse across different authored names
     'an open relation has no registered family; its authored name is its identity');
 });
 
-test('a large-array rail depends only on the roles it renders, not stored non-large provenance', () => {
+test('Tier-2 large-array organization preserves unrelated envelope evidence as Tier 3', () => {
   const members = ['ch_1', 'ch_2', 'ch_3', 'ch_4', 'ch_5'];
   const chorusForest = (withAnnotation) => [node('root_ch', 'TP', [
     ...members.map((id) => node(id, 'XP', [leaf(`${id}_l`, 'X', 'x')])),
@@ -479,11 +561,15 @@ test('a large-array rail depends only on the roles it renders, not stored non-la
     stage([], chorusForest(false))
   ]);
   const stageOneKinds = plan.frames[0].items.map((item) => item.kind).sort();
-  assert.deepEqual(stageOneKinds, ['anchor-set', 'fallback']);
+  assert.deepEqual(stageOneKinds, ['anchor-set', 'coindex', 'fallback']);
+  const residual = plan.frames[0].items.find((item) => item.kind === 'fallback');
+  assert.deepEqual(residual?.drawing.marks.map(({ witness }) => witness), ['anno_ch']);
   const stageTwoKinds = plan.frames[1].items.map((item) => item.kind);
-  assert.deepEqual(stageTwoKinds, ['anchor-set'],
-    'the rail survives its own five rendered members; only the fallback (whose witness set included the annotation) stops');
-  assert.ok(plan.diagnostics.some((d) => d.kind === 'anchor-vanished' && /anno_ch/.test(d.detail)));
+  assert.deepEqual(stageTwoKinds.sort(), ['anchor-set', 'coindex'],
+    'the complete member claim and its rail persist after the unrelated annotation vanishes');
+  assert.equal(plan.diagnostics.some((diagnostic) => (
+    diagnostic.kind === 'anchor-vanished' && /anno_ch/.test(diagnostic.detail)
+  )), true);
 });
 
 test('a vanished rendered large-role member stops the rail with one diagnostic', () => {
@@ -745,7 +831,8 @@ test('a partially resolved prior block is diagnosed and proves nothing — no su
       priorAnchors: { probe: 'dc_a', goal: 'dc_phantom' }
     }], dcForest(['a', 'b', 'c']))
   ]);
-  const stageTwo = plan.frames[1].items.filter((item) => item.pathStyle === 'dependent-case');
+  const stageTwo = visiblePlanFrameItems(plan, 1, null)
+    .filter((item) => item.pathStyle === 'dependent-case');
   assert.deepEqual(
     stageTwo.map((item) => `${item.fromNodeId}->${item.toNodeId}`).sort(),
     ['dc_a->dc_b', 'dc_a->dc_c'],
@@ -767,7 +854,8 @@ test('a complete resolving prior block still proves changed-participant replacem
       priorAnchors: { probe: 'dc_a', goal: 'dc_b' }
     }], dcForest(['a', 'b', 'c']))
   ]);
-  const stageTwo = plan.frames[1].items.filter((item) => item.pathStyle === 'dependent-case');
+  const stageTwo = visiblePlanFrameItems(plan, 1, null)
+    .filter((item) => item.pathStyle === 'dependent-case');
   assert.deepEqual(stageTwo.map((item) => `${item.fromNodeId}->${item.toNodeId}`), ['dc_a->dc_c'],
     'proven continuity replaces the earlier state');
   assert.equal(stageTwo[0].backward, true);
@@ -978,7 +1066,7 @@ test('a persistent Phase arc describes the CURRENT anchored domain, not the auth
   );
 });
 
-test('ellipsis ghost membership refreshes per frame: newly silent material under the site ghosts later', () => {
+test('ellipsis deletion remains attached to its authored site as that site grows', () => {
   const siteForest = (withNewSilent) => [node('root_el2', 'TP', [
     node('site_el2', 'VP', [
       leaf('v_el2', 'V', 'read', { silent: true }),
@@ -988,24 +1076,19 @@ test('ellipsis ghost membership refreshes per frame: newly silent material under
     ])
   ])];
   const plan = compileRelationRenderPlan([
-    stage([{ relation: 'EllipsisRecoverability', anchors: { site: 'site_el2' } }], siteForest(false)),
+    stage([{ relation: 'EllipsisDeletion', anchors: { site: 'site_el2' } }], siteForest(false)),
     stage([], siteForest(true))
   ]);
-  const authoring = plan.frames[0].items.find((item) => item.kind === 'ellipsis-site');
-  assert.deepEqual(authoring.ghostNodeIds, ['v_el2']);
-  const later = plan.frames[1].items.find((item) => item.kind === 'ellipsis-site');
-  assert.deepEqual(
-    [...later.ghostNodeIds].sort(),
-    ['obj_el2', 'obj_el2_l', 'v_el2'],
-    'authored-silent ghost membership is current-frame truth, still never covering overt material'
-  );
-  assert.ok(later.siteSubtreeNodeIds.includes('obj_el2'), 'the slash region also refreshes');
+  const authoring = plan.frames[0].items.find((item) => item.kind === 'strike-ghost');
+  assert.deepEqual(authoring.strikeNodeIds, ['site_el2']);
+  const later = plan.frames[1].items.find((item) => item.kind === 'strike-ghost');
+  assert.deepEqual(later.strikeNodeIds, ['site_el2']);
+  assert.deepEqual(later.ghostNodeIds, []);
 });
 
-test('the dependency law still spares extra open roles and never counts unresolved large members', () => {
-  // Extra open role: the specialized core persists when only the extra
-  // vanishes (same law as the earlier Control regression, re-proven under
-  // the declared-metadata dependency extractor).
+test('the dependency law fails malformed registered claims closed and never counts unresolved large members', () => {
+  // Control is closed: an unknown extra role makes the named primary
+  // malformed, so it never receives the specialized Tier-1 drawing.
   const controlForest = (withExtra) => [node('root_x2', 'TP', [
     node('ctrl_x2', 'DP', [leaf('ctrl_x2_l', 'D', 'kai')]),
     node('ctee_x2', 'DP', [leaf('ctee_x2_l', 'D', 'PRO', { silent: true })], { silent: true }),
@@ -1019,8 +1102,8 @@ test('the dependency law still spares extra open roles and never counts unresolv
     }], controlForest(true)),
     stage([], controlForest(false))
   ]);
-  assert.ok(controlPlan.frames[1].items.some((item) => item.kind === 'directed-path'));
-  assert.ok(controlPlan.frames[1].items.some((item) => item.kind === 'domain-mark'));
+  assert.deepEqual(controlPlan.frames[0].items.map((item) => item.kind), ['fallback']);
+  assert.deepEqual(controlPlan.frames[1].items, []);
 
   // Unresolved large member: the partial rail still persists unchanged.
   const present = ['lg_a', 'lg_b', 'lg_c', 'lg_d'];
@@ -1215,7 +1298,7 @@ test('a row-3 fan emits direct hub-to-spoke geometry and no counter-lane path', 
   ]);
   const bound = bindRelationPlanFrame(
     compileRelationRenderPlan([stage([
-      { relation: 'MysteryFan', anchors: { hub: 'a_fr', members: ['b_fr', 'c_fr'] } }
+      { relation: 'MysteryFan', anchors: { hub: 'a_fr', spokes: ['b_fr', 'c_fr'] } }
     ], forest())]),
     0,
     (nodeId) => positions.get(nodeId) || null
@@ -1332,7 +1415,7 @@ test('three overlapping links take three distinct lane Ys spaced by the lane gap
  * Complete overlay bounds: pure, four-sided, glyph extents included.
  * ------------------------------------------------------------------ */
 
-test('overlay bounds cover representative left/right/top/bottom-extending primitives', async () => {
+test('overlay bounds include only pre-fit organizational primitives', async () => {
   const { boundOverlayBounds } = await import('../replay/relations/geometryBinding.ts');
   const positions = new Map([
     ['a_fr', { x: 100, y: 100 }], ['b_fr', { x: 700, y: 100 }],
@@ -1354,13 +1437,26 @@ test('overlay bounds cover representative left/right/top/bottom-extending primit
     (nodeId) => positions.get(nodeId) || null,
     { labelHeight: 28, badgeGap: 22, laneGap: 24, connectorBaselineY: 400 }
   );
-  const bounds = boundOverlayBounds(bound, { markerScale: 1 });
+  const featurePlaque = bound.primitives.find((p) => p.type === 'plaque');
+  assert.ok(featurePlaque);
+  const genericPlaque = { ...featurePlaque, plaqueStyle: 'correspondence' };
+  const bounds = boundOverlayBounds({
+    ...bound,
+    primitives: [...bound.primitives, genericPlaque]
+  }, { markerScale: 1 });
   assert.ok(bounds);
   assert.ok(bounds.minX < 100, 'left glyph extent reaches past the leftmost node position');
-  const plaque = bound.primitives.find((p) => p.type === 'plaque');
-  assert.ok(bounds.maxX >= plaque.x + plaque.width, 'right side includes the plaque width');
+  assert.ok(bounds.maxX >= genericPlaque.x + genericPlaque.width,
+    'right side includes a non-post-fit plaque width');
   assert.ok(bounds.maxY >= 400, 'bottom includes the connector lane');
-  assert.ok(bounds.minY < 100, 'top includes glyph headroom above the node row');
+  assert.equal(
+    boundOverlayBounds({
+      ...bound,
+      primitives: bound.primitives.filter((primitive) => primitive.type === 'trajectory-path')
+    }, { markerScale: 1 }),
+    null,
+    'tree-first trajectories never resize the fitted tree'
+  );
 
   // Deep connector + rail case: the bounds bottom includes the rail set by
   // the binder's vertical law.
@@ -1389,7 +1485,7 @@ test('overlay bounds cover representative left/right/top/bottom-extending primit
 
 const aliasAnchorsFor = (low, witness, high) => ({ lowerCopy: low, traceWitness: witness, pronouncedCopy: high });
 
-test('bounds contain the exact rendered quadratic of a very wide trajectory and every fanned route', async () => {
+test('very wide and fanned trajectories remain exact post-fit paths without camera bounds', async () => {
   const { boundOverlayBounds } = await import('../replay/relations/geometryBinding.ts');
   const wideTree = node('cp_w', 'CP', [
     node('dp_hi_w', 'DP', [leaf('d_hi_w', 'D', 'what')]),
@@ -1413,22 +1509,19 @@ test('bounds contain the exact rendered quadratic of a very wide trajectory and 
   assert.ok(trajectories.length >= 2, 'coincident routes fan into distinct ordinals');
   assert.ok(new Set(trajectories.map((p) => p.ordinal)).size >= 2);
   const bounds = boundOverlayBounds(bound, { markerScale: 1 });
+  assert.equal(bounds, null, 'accepted trajectory geometry is measured after the ordinary tree fit');
   trajectories.forEach((trajectory) => {
     // The belly of a ~3900-wide route dips far beyond any fixed 90 pad; the
     // exact extremum must be inside the bounds for EVERY fanned ordinal.
     const bellyY = Math.max(trajectory.start.y, trajectory.end.y)
       + Math.max(42, Math.abs(trajectory.end.x - trajectory.start.x) * 0.2)
       + trajectory.ordinal * 20;
-    // Quadratic midpoint depth = (start+2*control+end)/4 >= endpoints; the
-    // true extremum is captured by the closed form — assert containment.
-    const midY = (trajectory.start.y + 2 * trajectory.control.y + trajectory.end.y) / 4;
-    assert.ok(bounds.maxY >= midY, `bounds must contain the curve depth (${bounds.maxY} < ${midY})`);
     assert.ok(bellyY > trajectory.start.y + 90, 'the fixture really exceeds the old fixed pad');
     assert.match(trajectory.d, /^M -?[\d.]+ -?[\d.]+ Q -?[\d.]+ -?[\d.]+, -?[\d.]+ -?[\d.]+$/);
   });
 });
 
-test('bounds grow monotonically with authored label length on both horizontal edges', async () => {
+test('authored path labels remain post-fit regardless of their length', async () => {
   const { boundOverlayBounds } = await import('../replay/relations/geometryBinding.ts');
   const positions = new Map([
     ['a_fr', { x: 0, y: 100 }], ['b_fr', { x: 100, y: 100 }],
@@ -1444,15 +1537,22 @@ test('bounds grow monotonically with authored label length on both horizontal ed
       ], forest())
     ]);
     const bound = bindRelationPlanFrame(plan, 0, (nodeId) => positions.get(nodeId) || null);
-    return boundOverlayBounds(bound, { markerScale: 1 });
+    return {
+      bounds: boundOverlayBounds(bound, { markerScale: 1 }),
+      labels: bound.primitives
+        .filter((primitive) => primitive.type === 'shape-path' && primitive.label)
+        .map((primitive) => primitive.label)
+    };
   };
   const short = boundsFor('F');
   const medium = boundsFor('FEATURE-VALUE');
   const long = boundsFor('AN-EXTREMELY-LONG-AUTHORED-GAPPING-LABEL-VALUE');
-  assert.ok(medium.maxX > short.maxX, 'right bound grows with label length');
-  assert.ok(long.maxX > medium.maxX);
-  assert.ok(medium.minX < short.minX, 'left bound grows with label length');
-  assert.ok(long.minX < medium.minX);
+  assert.equal(short.bounds, null);
+  assert.equal(medium.bounds, null);
+  assert.equal(long.bounds, null);
+  assert.ok(short.labels.includes('F'));
+  assert.ok(medium.labels.includes('FEATURE-VALUE'));
+  assert.ok(long.labels.includes('AN-EXTREMELY-LONG-AUTHORED-GAPPING-LABEL-VALUE'));
 });
 
 /* ------------------------------------------------------------------ *
@@ -1463,7 +1563,7 @@ test('every overlay text branch in TreeVisualizer is known to the bounds law', a
   const { readFile } = await import('node:fs/promises');
   const source = await readFile(new URL('../components/TreeVisualizer.tsx', import.meta.url), 'utf8');
   const overlayBlock = source.slice(
-    source.indexOf('boundFrame.primitives.forEach'),
+    source.indexOf('orderedPrimitives.forEach'),
     source.indexOf('Resolve ghost lens states')
   );
   const textSites = overlayBlock.match(/\.append\('text'\)/g) || [];
@@ -1471,6 +1571,12 @@ test('every overlay text branch in TreeVisualizer is known to the bounds law', a
   // for in boundOverlayBounds (geometryBinding.ts). Adding a new text
   // branch MUST extend the bounds law AND this count/list.
   const coveredMarkers = [
+    'babel-binding-index',     // post-fit binding and QR occurrence indices
+    'babel-operator-variable-index', // post-fit operator/variable indices; semantic composition is tree-first
+    'babel-pg-gap-label',      // post-fit parasitic-gap relation annotation beside the authored terminal
+    'babel-analysis-judgment', // post-fit whole-analysis judgment beside the authored final root
+    'babel-gapping-index',     // post-fit gapping indices; the whole plate is tree-first
+    'babel-analysis-verdict-label', // post-fit optional label owned by the anchored verdict
     'vr-path-label',          // shape label — middle 11px
     'vr-index-badge',         // index — start-anchored at +8, 13px
     'vr-fallback-instance',   // instance — middle 11px inside the frame
@@ -1482,11 +1588,8 @@ test('every overlay text branch in TreeVisualizer is known to the bounds law', a
   });
   assert.equal(
     textSites.length,
-    12,
-    'overlay text call-site count changed: update boundOverlayBounds and this parity ledger '
-      + '(sites: shape tip glyph, shape label, shape badge, domain-region label/blocked, plaque '
-      + 'title, plaque rows, text-badge, index-badge, fallback instance/position/backward cue, '
-      + 'anchor-set badge numeral)'
+    32,
+    'overlay text call-site count changed: classify every new branch as pre-fit or accepted post-fit text'
   );
 });
 
@@ -1500,7 +1603,10 @@ test('a left-edge TransferDomain label and a long index are fully inside the bou
     stage([
       // The transfer edge box sits at the far left; its accepted
       // end-anchored "Phase edge" label extends further LEFT of it.
-      { relation: 'TransferDomain', anchors: { phase: 'root_fr', edge: 'a_fr' } },
+      {
+        relation: 'TransferDomain',
+        anchors: { phase: 'root_fr', edge: 'a_fr', spellOutDomain: 'b_fr' }
+      },
       // A long composite index extends RIGHT from its start anchor.
       { relation: 'Coreference', anchors: { antecedent: 'b_fr', pronoun: 'c_fr' } }
     ], forest())
@@ -1522,7 +1628,7 @@ test('a left-edge TransferDomain label and a long index are fully inside the bou
     'right bound contains origin + 8 + full index text width');
 });
 
-test('bounds grow monotonically with composite index length', async () => {
+test('composite indices stay post-fit and never resize the tree', async () => {
   const { boundOverlayBounds } = await import('../replay/relations/geometryBinding.ts');
   // Long lineage keys produce long composite display indices only through
   // authored data; simulate by binding frames whose chain index strings
@@ -1553,7 +1659,8 @@ test('bounds grow monotonically with composite index length', async () => {
   // grow once the numeral gains a digit.
   const nine = boundsWithChains(9);
   const twelve = boundsWithChains(12);
-  assert.ok(twelve.maxX > nine.maxX, 'a longer composite index pushes the right bound out');
+  assert.equal(nine, null);
+  assert.equal(twelve, null);
 });
 
 /* ------------------------------------------------------------------ *

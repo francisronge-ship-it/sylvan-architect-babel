@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { compileRelationRenderPlan } from '../replay/relations/renderPlanCompiler.ts';
+import {
+  compileRelationRenderPlan,
+  visiblePlanFrameItems
+} from '../replay/relations/renderPlanCompiler.ts';
 import { bindRelationPlanFrame } from '../replay/relations/geometryBinding.ts';
+import { splitAntecedenceLinkPath } from '../replay/relations/markGeometry.ts';
+import {
+  placeRectBelowCollisions,
+  placeStackedRect
+} from '../replay/relations/overlayGeometry.ts';
 
 const leaf = (id, label, word, extra = {}) => ({ id, label, ...(word ? { word } : {}), ...extra });
 const node = (id, label, children, extra = {}) => ({ id, label, children, ...extra });
@@ -46,6 +54,17 @@ const bindSingle = (relation) => {
   return bindRelationPlanFrame(plan, 0, provider);
 };
 
+test('Split Antecedence curves leave separate square points and point from dependent to antecedent', () => {
+  assert.equal(
+    splitAntecedenceLinkPath({ x: 798, y: 562 }, { x: 257, y: 384 }, 0, 2),
+    'M 794.0 564.0 C 650.0 626.0, 312.0 612.0, 257.0 384.0'
+  );
+  assert.equal(
+    splitAntecedenceLinkPath({ x: 798, y: 562 }, { x: 583, y: 522 }, 1, 2),
+    'M 802.0 564.0 C 724.0 590.0, 611.0 584.0, 583.0 522.0'
+  );
+});
+
 test('the phase mark binds as the accepted arc, never a rectangle', () => {
   const bound = bindSingle({ relation: 'Phase', anchors: { phase: 'dom_ms', edge: 'in_a_ms' } });
   const arc = bound.primitives.find((p) => p.type === 'shape-path' && p.shapeStyle === 'phase-arc');
@@ -54,15 +73,36 @@ test('the phase mark binds as the accepted arc, never a rectangle', () => {
   assert.equal(arc.arrowhead, false);
   assert.equal(bound.primitives.filter((p) => p.type === 'domain-region').length, 0,
     'no rectangle stands in for the phase arc');
+  assert.equal(bound.primitives.some((p) => p.type === 'text-badge'), false,
+    'the authored edge shapes the phase arc; it is not a visible badge');
 });
 
-test('Pair Merge binds as the curved, unheaded open arc', () => {
+test('multiple Phase relations preserve the accepted primary/secondary order and authored edges', () => {
+  const plan = compileRelationRenderPlan([stage([
+    { relation: 'Phase', anchors: { phase: 'dom_ms', edge: 'in_a_ms' } },
+    { relation: 'Phase', anchors: { phase: 'in_b_ms', edge: 'in_b_leaf_ms' } }
+  ], forest())]);
+  const phaseItems = plan.frames[0].items.filter((item) =>
+    item.kind === 'domain-mark' && item.domainStyle === 'phase');
+  assert.deepEqual(phaseItems.map((item) => ({
+    edge: item.phaseEdgeNodeId,
+    primary: item.phasePrimary
+  })), [
+    { edge: 'in_a_ms', primary: true },
+    { edge: 'in_b_leaf_ms', primary: false }
+  ]);
+});
+
+test('Pair Merge binds both members of one shared-parent native branch overlay', () => {
   const bound = bindSingle({ relation: 'PairMerge', anchors: { pairMember: 'a_ms', host: 'b_ms' } });
-  const arc = bound.primitives.find((p) => p.type === 'shape-path' && p.shapeStyle === 'pair-merge');
-  assert.ok(arc);
-  assert.match(arc.d, /Q /, 'the pair-merge mark is curved');
-  assert.equal(arc.arrowhead, false, 'the pair-merge arc is unheaded');
-  assert.equal(arc.arrowheadBoth ?? false, false);
+  const overlay = bound.primitives.find((p) => p.type === 'native-branch-overlay');
+  assert.deepEqual(overlay, {
+    type: 'native-branch-overlay',
+    targetNodeIds: ['a_ms', 'b_ms'],
+    requireSharedParent: true,
+    variant: 'pair-merge',
+    itemIndex: 0
+  });
 });
 
 test('Dependent Case binds as the orthogonal elbow with filled circular endpoints and no arrowhead', () => {
@@ -165,7 +205,7 @@ test('the unknown fallback stays neutral: undirected, arrowless, and unchanged b
   assert.ok(!rendered.includes('CompletelyOpenThing'));
 });
 
-test('Cooper storage keeps two simultaneous stage-0 scopes and replaces per scope thereafter', () => {
+test('Cooper storage keeps simultaneous ledgers within a stage and replaces the prior stage atomically', () => {
   const twoScopeForest = forest();
   const plan = compileRelationRenderPlan([
     stage([
@@ -178,10 +218,9 @@ test('Cooper storage keeps two simultaneous stage-0 scopes and replaces per scop
   ]);
   const frameZero = plan.frames[0].items.filter((item) => item.kind === 'node-plaque');
   assert.equal(frameZero.length, 2, 'distinct VP and S scopes coexist in the earlier frame');
-  const frameOne = plan.frames[1].items.filter((item) => item.kind === 'node-plaque');
-  // The S-scope plaque is replaced by its later state; the VP-scope plaque,
-  // never re-authored, persists untouched.
-  assert.equal(frameOne.length, 2);
+  const frameOne = visiblePlanFrameItems(plan, 1, null)
+    .filter((item) => item.kind === 'node-plaque');
+  assert.equal(frameOne.length, 1);
   const sPlaques = frameOne.filter((item) => item.anchorNodeIds[0] === 'root_ms');
   assert.equal(sPlaques.length, 1);
   assert.deepEqual(
@@ -189,7 +228,8 @@ test('Cooper storage keeps two simultaneous stage-0 scopes and replaces per scop
     ['⟨every book⟩', '⟨a student⟩'],
     'the surviving S plaque is the later state'
   );
-  assert.ok(frameOne.some((item) => item.anchorNodeIds[0] === 'dom_ms'), 'the VP scope persists');
+  assert.equal(frameOne.some((item) => item.anchorNodeIds[0] === 'dom_ms'), false,
+    'the later Cooper-storage state replaces the prior stage as one semantic ledger');
 });
 
 test('plates sharing one anchor stack without overlapping', () => {
@@ -203,31 +243,49 @@ test('plates sharing one anchor stack without overlapping', () => {
   assert.notEqual(plaques[0].y, plaques[1].y, 'same-anchor plates stack instead of overlapping');
 });
 
-test('the ellipsis licensing domain carries its tall slash alongside the ghosting', () => {
-  const bound = bindSingle({
-    relation: 'EllipsisLicensing',
-    anchors: { checker: 'a_ms', licensor: 'b_ms', domain: 'dom_ms' },
-    values: { checkerFeature: '[CAT[T]]', licensorFeature: '[E[INFL[uT]]]' }
-  });
-  assert.ok(bound.primitives.some((p) => p.type === 'ghost-set'));
-  assert.ok(bound.primitives.some((p) => p.type === 'shape-path' && p.shapeStyle === 'ellipsis-slash'));
-  const elbow = bound.primitives.find((p) => p.type === 'shape-path' && p.shapeStyle === 'ellipsis-checking');
-  assert.ok(elbow, 'the checking elbow draws');
-  assert.equal(elbow.stroke, 'dotted');
-  assert.equal(elbow.endpointDots?.length, 2, 'Aelbrecht filled dots terminate the elbow');
+test('measured feature plaques preserve the first placement and stack later collisions downward', () => {
+  const first = { x: 120, y: 120, width: 360, height: 138 };
+  assert.deepEqual(placeRectBelowCollisions(first, []), first);
+  assert.deepEqual(
+    placeRectBelowCollisions(first, [first]),
+    { ...first, y: 272 }
+  );
 });
 
-test('the right-roof outline stays compact around the roof label, not the whole subtree', () => {
-  const bound = bindSingle({
-    relation: 'RightRoof',
-    anchors: { roof: 'dom_ms', source: 'src_ms', traceWitness: 'w_ms', landing: 'tgt_ms' },
-    values: { outcome: 'blocked' }
+test('measured PF plates keep the first placement and allocate later same-anchor plates', () => {
+  const preferred = { x: 120, y: 120, width: 180, height: 80 };
+  const viewport = { x: 0, y: 0, width: 640, height: 480 };
+  assert.deepEqual(
+    placeStackedRect(preferred, [], viewport),
+    preferred,
+    'the canonical single-plate placement is unchanged'
+  );
+
+  const second = placeStackedRect(preferred, [preferred], viewport);
+  assert.deepEqual(second, { x: 120, y: 218, width: 180, height: 80 });
+
+  const third = placeStackedRect(preferred, [preferred, second], viewport);
+  assert.deepEqual(third, { x: 120, y: 316, width: 180, height: 80 });
+});
+
+test('a licensing feature and ellipsis domain use the ordinary plaque and ghost primitives', () => {
+  const plaque = bindSingle({
+    relation: 'FeatureBundle',
+    anchors: { licensor: 'b_ms' },
+    values: { feature: '[E]' }
   });
-  const region = bound.primitives.find((p) => p.type === 'domain-region' && p.domainStyle === 'right-roof');
-  assert.ok(region);
-  // One member node: the region spans a single label box, not the subtree.
-  assert.ok(region.width <= 200, `compact roof outline expected, got width ${region.width}`);
-  assert.equal(region.outcome, 'blocked');
+  assert.ok(plaque.primitives.some(
+    (primitive) => primitive.type === 'plaque'
+      && primitive.plaqueStyle === 'feature'
+      && primitive.rows.some((row) => row.value === '[E]')
+  ));
+
+  const ellipsis = bindSingle({
+    relation: 'Ellipsis',
+    anchors: { domain: 'dom_ms' }
+  });
+  assert.ok(ellipsis.primitives.some((primitive) => primitive.type === 'ghost-set'));
+  assert.equal(ellipsis.primitives.some((primitive) => primitive.type === 'shape-path'), false);
 });
 
 test('Transfer/PIC binds as the Fong plate: two tilted component arcs, the Phase-edge outline, no shading', () => {

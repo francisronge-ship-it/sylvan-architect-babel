@@ -29,7 +29,6 @@ export interface DerivationStep {
   sourceLabels?: string[];
   recipe?: string;
   workspaceAfter?: string[];
-  spelloutOrder?: string[];
   detailBlocks?: ReplayDetailBlock[];
   note?: string;
 }
@@ -152,7 +151,6 @@ export interface Provenance {
 
 export interface ParseResult {
   tree: SyntaxNode;
-  surfaceOrder?: string[];
   derivationStages?: DerivationStage[];
   derivationSteps?: DerivationStep[];
   provenance?: Provenance;

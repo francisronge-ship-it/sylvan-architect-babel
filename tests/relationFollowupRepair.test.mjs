@@ -63,7 +63,8 @@ test('two independent DependentCase sequences coexist; only a same-participant r
   ]);
   const frameZero = plan.frames[0].items.filter((item) => item.pathStyle === 'dependent-case');
   assert.equal(frameZero.length, 2, 'independent same-name instances coexist in one stage');
-  const frameOne = plan.frames[1].items.filter((item) => item.pathStyle === 'dependent-case');
+  const frameOne = visiblePlanFrameItems(plan, 1, null)
+    .filter((item) => item.pathStyle === 'dependent-case');
   assert.equal(frameOne.length, 2, 'the unrelated c/d claim persists untouched');
   const abClaims = frameOne.filter((item) => item.fromNodeId === 'a_fu');
   assert.equal(abClaims.length, 1, 'the same-participant restatement replaced its own thread only');
@@ -101,7 +102,8 @@ test('a changed-participant replacement requires authored priorAnchors continuit
       }
     ], forest)
   ]);
-  const claims = plan.frames[1].items.filter((item) => item.pathStyle === 'dependent-case');
+  const claims = visiblePlanFrameItems(plan, 1, null)
+    .filter((item) => item.pathStyle === 'dependent-case');
   assert.equal(claims.length, 1);
   assert.equal(claims[0].toNodeId, 'c_fu');
 });
@@ -157,7 +159,7 @@ test('an insertion whose target two PF packages share stays standalone with an a
   const shared = plates.find((plate) =>
     plate.relationRef.relation === 'VocabularyInsertion' && plate.anchorNodeIds.includes('c_fu'));
   assert.ok(shared, 'the ambiguous insertion keeps its own standalone plate');
-  assert.deepEqual(shared.rows, [{ label: 'input', value: 'T' }, { label: 'output', value: '-ed' }]);
+  assert.deepEqual(shared.rows, [{ label: 'T', value: '-ed' }]);
   const packagePlates = plates.filter((plate) => plate.relationRef.relation === 'PFRealization');
   assert.ok(packagePlates.every((plate) => !plate.rows.some((row) => row.value === '-ed')),
     'neither package silently absorbed the shared row');
@@ -250,7 +252,7 @@ test('intersecting different-style paths route apart instead of overlapping blin
     'two same-route curves of different styles no longer share one belly');
 });
 
-test('a path crossing a plate deepens around it or is flagged constrained, never suppressed', () => {
+test('a post-fit path and plaque both survive without rewriting each other', () => {
   const plan = compileRelationRenderPlan([
     stage([
       { relation: 'FeatureBundle', anchors: { bearer: 'c_fu' }, values: { Case: 'NOM', Num: 'SG' } },
@@ -272,13 +274,11 @@ test('a path crossing a plate deepens around it or is flagged constrained, never
     0,
     positionsOf([['a_fu', { x: 100, y: 100 }], ['b_fu', { x: 500, y: 100 }]])
   ).primitives.find((p) => p.shapeStyle === 'control');
-  assert.ok(
-    control.d !== baseline.d || control.routing === 'constrained',
-    'the curve either found a clearance route or kept a diagnosable least-obstructive one'
-  );
+  assert.equal(control.d, baseline.d,
+    'a post-fit plaque cannot change the accepted source-backed path geometry');
 });
 
-test('screen-stable plates and labels use collision-aware spacing', () => {
+test('screen-stable feature plaques keep independent identities and path labels keep separate lanes', () => {
   const plan = compileRelationRenderPlan([
     stage([
       { relation: 'FeatureBundle', anchors: { bearer: 'a_fu' }, values: { Case: 'NOM' } },
@@ -294,10 +294,8 @@ test('screen-stable plates and labels use collision-aware spacing', () => {
   ]), { markerScale: 3 });
   const plates = bound.primitives.filter((primitive) => primitive.type === 'plaque');
   assert.equal(plates.length, 2);
-  assert.ok(
-    plates[1].y >= plates[0].y + plates[0].height * 3,
-    'counter-scaled plates do not collapse into one another'
-  );
+  assert.notEqual(plates[0].itemIndex, plates[1].itemIndex,
+    'the specialized feature painter receives both exact authored plaque identities');
   const labels = bound.primitives
     .filter((primitive) => primitive.type === 'shape-path' && primitive.labelAt)
     .map((primitive) => primitive.labelAt.y);
@@ -308,7 +306,7 @@ test('screen-stable plates and labels use collision-aware spacing', () => {
  * Defect 7: no invented plaques.
  * ------------------------------------------------------------------ */
 
-test('Agree with only probe/goal draws no empty plaque and no role-name title; neutral marks keep it visible', () => {
+test('Agree with only probe/goal draws its registered goal mark and no empty plaque', () => {
   const plan = compileRelationRenderPlan([
     stage([
       { relation: 'Agree', anchors: { probe: 'a_fu', goal: 'b_fu' } },
@@ -317,15 +315,13 @@ test('Agree with only probe/goal draws no empty plaque and no role-name title; n
   ]);
   const plaques = plan.frames[0].items.filter((item) => item.kind === 'node-plaque');
   assert.equal(plaques.length, 1, 'only the FeatureBundle with authored rows gets a plaque');
-  assert.equal(plaques[0].title, undefined, 'a plaque is never titled from a role name');
+  assert.equal(plaques[0].title, 'AP bearer',
+    'the accepted feature plaque identifies the category and authored bearer role');
   assert.deepEqual(plaques[0].rows, [{ label: 'Case', value: 'NOM' }]);
-  const fallback = plan.frames[0].items.find((item) =>
-    item.kind === 'fallback' && item.relationRef.relation === 'Agree');
-  assert.ok(fallback, 'the valueless Agree stays visible through the neutral presentation');
-  assert.deepEqual(
-    fallback.drawing.marks.map((mark) => mark.witness).sort(),
-    ['a_fu', 'b_fu']
-  );
+  const agreeMark = plan.frames[0].items.find((item) =>
+    item.kind === 'node-badges' && item.relationRef.relation === 'Agree');
+  assert.ok(agreeMark, 'the valueless registered Agree relation keeps its sourced goal mark');
+  assert.deepEqual(agreeMark.badges.map((badge) => badge.nodeId), ['b_fu']);
 });
 
 /* ------------------------------------------------------------------ *

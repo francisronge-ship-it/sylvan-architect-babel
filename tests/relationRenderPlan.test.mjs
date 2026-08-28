@@ -7,6 +7,7 @@ import {
   compileRelationRenderPlan,
   planItemOwnsRelationMoment
 } from '../replay/relations/renderPlanCompiler.ts';
+import { dispatchRelationClaims } from '../replay/relations/tier2RelationDispatch.ts';
 import { bindRelationPlanFrame } from '../replay/relations/geometryBinding.ts';
 import { fallbackDrawing } from '../replay/relations/fallbackTopology.ts';
 import {
@@ -59,7 +60,7 @@ test('registered phrasal movement compiles with witness endpoints and authored p
     }], [whTree])
   ]);
 
-  assert.equal(plan.registryVersion, '2');
+  assert.equal(plan.registryVersion, '11');
   assert.equal(plan.frames.length, 1);
   const [item] = plan.frames[0].items;
   assert.equal(item.kind, 'trajectory');
@@ -73,6 +74,443 @@ test('registered phrasal movement compiles with witness endpoints and authored p
     lowerCopy: 'dp_low', traceWitness: 'd_low', pronouncedCopy: 'dp_high'
   });
   assert.deepEqual(plan.unregistered, []);
+  assert.equal(item.tier2FacetId, undefined, 'registered Orchard relations stay entirely Tier 1');
+});
+
+const tier2MovementTree = node('tier2_cp', 'CP', [
+  node('tier2_landing', 'DP', [leaf('tier2_landing_d', 'D', 'What')], { lineageId: 'tier2_chain' }),
+  node('tier2_source', 'DP', [
+    leaf('tier2_witness', 'D', 't', { silent: true, lineageId: 'tier2_chain' })
+  ], { silent: true, lineageId: 'tier2_chain' })
+]);
+
+test('Task 8 lowers a complete unknown movement to Tier 2 and never also draws fallback', () => {
+  const relation = {
+    relation: 'UnknownMovementShape',
+    anchors: {
+      source: 'tier2_source',
+      'trace witness': 'tier2_witness',
+      landing: 'tier2_landing'
+    }
+  };
+  const dispatch = dispatchRelationClaims({
+    relation,
+    stageIndex: 0,
+    relationIndex: 0,
+    currentForest: [tier2MovementTree]
+  });
+  assert.deepEqual(dispatch.claims.map(({ tier }) => tier), [2]);
+
+  const plan = compileRelationRenderPlan([stage([relation], [tier2MovementTree])]);
+  const [trajectory] = plan.frames[0].items.filter((item) => item.kind === 'trajectory');
+  assert.ok(trajectory);
+  assert.equal(trajectory.tier2FacetId, 'movement.path');
+  assert.deepEqual(
+    trajectory.tier2OutputIdentities,
+    dispatch.facets[0].outputIdentities.map(({ key }) => key),
+    'production consumes the identities attached by dispatch'
+  );
+  assert.equal(plan.frames[0].items.some((item) => item.kind === 'fallback'), false);
+});
+
+test('Task 8 coalesces identical Tier-2 outputs but keeps every authored relation reference', () => {
+  const anchors = {
+    source: 'tier2_source',
+    'trace witness': 'tier2_witness',
+    landing: 'tier2_landing'
+  };
+  const plan = compileRelationRenderPlan([
+    stage([
+      { relation: 'UnknownMovementOne', anchors },
+      { relation: 'UnknownMovementTwo', anchors }
+    ], [tier2MovementTree])
+  ]);
+  const trajectories = plan.frames[0].items.filter((item) => item.kind === 'trajectory');
+  assert.equal(trajectories.length, 1);
+  assert.equal(trajectories[0].coalescedRefs?.length, 1);
+  assert.equal(planItemOwnsRelationMoment(trajectories[0], 0, 0), true);
+  assert.equal(planItemOwnsRelationMoment(trajectories[0], 0, 1), true);
+});
+
+test('Task 8 renders a complete Tier-2 claim and only the unconsumed residue through Tier 3', () => {
+  const plan = compileRelationRenderPlan([
+    stage([{
+      relation: 'UnknownMovementWithResidual',
+      anchors: {
+        source: 'tier2_source',
+        'trace witness': 'tier2_witness',
+        landing: 'tier2_landing',
+        mystery: 'tier2_landing_d'
+      }
+    }], [tier2MovementTree])
+  ]);
+  const [trajectory] = plan.frames[0].items.filter((item) => item.kind === 'trajectory');
+  const [fallback] = plan.frames[0].items.filter((item) => item.kind === 'fallback');
+
+  assert.equal(trajectory?.claimTier, 2);
+  assert.equal(fallback?.claimTier, 3);
+  assert.deepEqual(fallback?.drawing.marks.map(({ witness }) => witness), ['tier2_landing_d']);
+  assert.deepEqual(fallback?.relationRef.anchors, { mystery: 'tier2_landing_d' });
+});
+
+test('Task 8 keeps Tier-2 outputs separate when authored values differ', () => {
+  const anchors = {
+    source: 'tier2_source',
+    'trace witness': 'tier2_witness',
+    landing: 'tier2_landing'
+  };
+  const plan = compileRelationRenderPlan([
+    stage([
+      { relation: 'UnknownMovementOne', anchors },
+      { relation: 'UnknownMovementTwo', anchors, values: { outcome: 'blocked' } }
+    ], [tier2MovementTree])
+  ]);
+  assert.equal(
+    plan.frames[0].items.filter((item) => item.kind === 'trajectory').length,
+    2
+  );
+});
+
+test('OperatorVariableBinding compiles semantic scope, binding, and index evidence without movement', () => {
+  const semanticTree = node('scope_root', 'TP', [
+    node('operator_qp', 'QP', [leaf('operator_q', 'Q', 'every')]),
+    node('scope_body', 'TP', [
+      node('variable_dp', 'DP', [leaf('variable_trace', 't', undefined, { silent: true })], { silent: true }),
+      node('predicate_vp', 'VP', [leaf('predicate_v', 'V', 'left')])
+    ])
+  ]);
+  const plan = compileRelationRenderPlan([
+    stage([{
+      relation: 'OperatorVariableBinding',
+      anchors: {
+        operator: 'operator_qp',
+        variable: 'variable_dp',
+        traceWitness: 'variable_trace',
+        scopeDomain: 'scope_body'
+      }
+    }], [semanticTree])
+  ]);
+
+  assert.deepEqual(plan.diagnostics, []);
+  const [item] = plan.frames[0].items;
+  assert.equal(item.kind, 'operator-variable-binding');
+  assert.equal(item.familyId, 'scope.operator-variable');
+  assert.equal(item.operatorNodeId, 'operator_qp');
+  assert.equal(item.variableNodeId, 'variable_dp');
+  assert.equal(item.traceWitnessNodeId, 'variable_trace');
+  assert.equal(item.scopeDomainNodeId, 'scope_body');
+  assert.ok(item.scopeMemberNodeIds.includes('variable_trace'));
+  assert.equal(item.index, '1');
+
+  const positions = new Map([
+    ['operator_qp', { x: 0, y: 0 }],
+    ['variable_dp', { x: 100, y: 100 }],
+    ['variable_trace', { x: 100, y: 120 }],
+    ['scope_body', { x: 50, y: 50 }]
+  ]);
+  const bound = bindRelationPlanFrame(plan, 0, (nodeId) => positions.get(nodeId) || null);
+  assert.deepEqual(bound.failed, []);
+  assert.deepEqual(bound.primitives.map((primitive) => primitive.type), ['operator-variable-binding']);
+});
+
+test('sluicing composes movement, an ordinary feature plaque, and ellipsis ghosting', () => {
+  const sluicingTree = node('coord_sluice_test', 'CoordP', [
+    node('tp_ante_sluice_test', 'TP', [
+      leaf('v_ante_sluice_test', 'V', 'left')
+    ]),
+    node('cp_site_sluice_test', 'CP', [
+      node('adv_high_sluice_test', 'AdvP', [
+        leaf('adv_high_leaf_sluice_test', 'Adv', 'why')
+      ]),
+      node('tp_site_sluice_test', 'TP', [
+        node('adv_low_sluice_test', 'AdvP', [
+          leaf('adv_low_leaf_sluice_test', 'Adv', 'why', { silent: true })
+        ], { silent: true })
+      ], { silent: true })
+    ])
+  ]);
+  const plan = compileRelationRenderPlan([
+    stage([
+      {
+        relation: 'AbarMove',
+        anchors: {
+          lowerCopy: 'adv_low_sluice_test',
+          traceWitness: 'adv_low_leaf_sluice_test',
+          pronouncedCopy: 'adv_high_sluice_test'
+        }
+      },
+      {
+        relation: 'FeatureBundle',
+        anchors: { licensor: 'cp_site_sluice_test' },
+        values: { feature: '[E]' }
+      },
+      { relation: 'Ellipsis', anchors: { domain: 'tp_site_sluice_test' } }
+    ], [sluicingTree])
+  ]);
+
+  assert.deepEqual(plan.unregistered, []);
+  assert.deepEqual(plan.diagnostics, []);
+  assert.equal(plan.frames[0].items.length, 3);
+  const trajectory = plan.frames[0].items.find((item) => item.kind === 'trajectory');
+  const licensingPlaque = plan.frames[0].items.find(
+    (item) => item.kind === 'node-plaque'
+      && item.plaqueStyle === 'feature'
+  );
+  const ghosting = plan.frames[0].items.find(
+    (item) => item.kind === 'ellipsis-site'
+      && item.relationRef.relation === 'Ellipsis'
+  );
+  assert.deepEqual({
+    relation: trajectory?.relationRef.relation,
+    familyId: trajectory?.familyId,
+    source: trajectory?.sourceNodeId,
+    target: trajectory?.targetNodeId,
+    witness: trajectory?.witnessNodeId
+  }, {
+    relation: 'AbarMove',
+    familyId: 'trajectory.phrasal',
+    source: 'adv_low_sluice_test',
+    target: 'adv_high_sluice_test',
+    witness: 'adv_low_leaf_sluice_test'
+  });
+  assert.deepEqual(licensingPlaque?.rows, [{ label: 'feature', value: '[E]' }]);
+  assert.equal(ghosting?.relationRef.relation, 'Ellipsis');
+  assert.equal(plan.frames[0].items.filter((item) => item.kind === 'ellipsis-site').length, 1);
+  assert.equal(plan.frames[0].items.some((item) => item.kind === 'strike-ghost'), false);
+  assert.equal(plan.frames[0].items.some((item) => item.kind === 'undirected-link'), false);
+
+  const bundled = compileRelationRenderPlan([
+    stage([{ relation: 'Sluicing', anchors: { site: 'tp_site_sluice_test' } }], [sluicingTree])
+  ]);
+  assert.deepEqual(bundled.unregistered, [{ relation: 'Sluicing', count: 1 }]);
+  assert.equal(bundled.frames[0].items.some((item) => item.kind === 'ellipsis-site'), true);
+  assert.equal(bundled.frames[0].items.some((item) => item.kind === 'trajectory'), false);
+});
+
+test('IllicitAnalysis renders one anchored verdict with its optional authored label', () => {
+  const plan = compileRelationRenderPlan([
+    stage([{
+      relation: 'IllicitAnalysis',
+      anchors: { analysis: 'cp' },
+      values: { judgment: '*', label: 'extraction' }
+    }], [whTree])
+  ]);
+
+  assert.deepEqual(plan.unregistered, []);
+  assert.deepEqual(plan.diagnostics, []);
+  const [item] = plan.frames[0].items;
+  assert.equal(item.familyId, 'analysis.illicit');
+  assert.equal(item.kind, 'analysis-verdict');
+  assert.equal(item.analysisNodeId, 'cp');
+  assert.equal(item.judgment, '*');
+  assert.equal(item.label, 'extraction');
+  assert.equal(item.claimTier, 1);
+  assert.deepEqual(item.relationRef, {
+    stageIndex: 0,
+    relationIndex: 0,
+    relation: 'IllicitAnalysis',
+    anchors: { analysis: 'cp' },
+    values: { judgment: '*', label: 'extraction' }
+  });
+
+  const bound = bindRelationPlanFrame(plan, 0, (nodeId) => (
+    nodeId === 'cp' ? { x: 120, y: 40 } : null
+  ));
+  assert.deepEqual(bound.failed, []);
+  assert.equal(bound.primitives.length, 1);
+  assert.deepEqual(
+    (({ type, analysisNodeId, x, y, judgment, label }) => (
+      { type, analysisNodeId, x, y, judgment, label }
+    ))(bound.primitives[0]),
+    {
+      type: 'analysis-verdict',
+      analysisNodeId: 'cp',
+      x: 120,
+      y: 40,
+      judgment: '*',
+      label: 'extraction'
+    }
+  );
+});
+
+test('a registered blocked extraction may carry an independent Tier-2 verdict in one envelope', () => {
+  const source = node('mixed_source', 'DP', [leaf('mixed_gap', 'D', 'gap')]);
+  const adjunct = node('mixed_adjunct', 'CP', [source]);
+  const target = node('mixed_target', 'DP', [leaf('mixed_word', 'D', 'Who')]);
+  const analysis = node('mixed_analysis', 'CP', [target, adjunct]);
+  const relation = {
+    relation: 'BlockedExtraction',
+    anchors: {
+      source: 'mixed_source',
+      target: 'mixed_target',
+      adjunctDomain: 'mixed_adjunct',
+      analysis: 'mixed_analysis'
+    },
+    values: { outcome: 'blocked', judgment: '*', label: 'extraction' }
+  };
+  const dispatch = dispatchRelationClaims({
+    relation,
+    stageIndex: 0,
+    relationIndex: 0,
+    currentForest: [analysis]
+  });
+  assert.deepEqual(dispatch.claims.map(({ tier }) => tier), [1, 2]);
+
+  const plan = compileRelationRenderPlan([stage([relation], [analysis])]);
+  assert.deepEqual(
+    plan.frames[0].items.map(({ kind, claimTier }) => ({ kind, claimTier })),
+    [
+      { kind: 'domain-mark', claimTier: 1 },
+      { kind: 'directed-path', claimTier: 1 },
+      { kind: 'analysis-verdict', claimTier: 2 }
+    ]
+  );
+  const verdict = plan.frames[0].items.find((item) => item.kind === 'analysis-verdict');
+  assert.deepEqual({
+    analysisNodeId: verdict?.analysisNodeId,
+    judgment: verdict?.judgment,
+    label: verdict?.label
+  }, {
+    analysisNodeId: 'mixed_analysis',
+    judgment: '*',
+    label: 'extraction'
+  });
+});
+
+test('a malformed named primary stays Tier 3 while its disjoint verdict remains Tier 2', () => {
+  const adjunct = node('mixed_bad_adjunct', 'CP', []);
+  const target = node('mixed_bad_target', 'DP', []);
+  const analysis = node('mixed_bad_analysis', 'CP', [target, adjunct]);
+  const relation = {
+    relation: 'BlockedExtraction',
+    anchors: {
+      target: 'mixed_bad_target',
+      adjunctDomain: 'mixed_bad_adjunct',
+      analysis: 'mixed_bad_analysis'
+    },
+    values: { outcome: 'blocked', judgment: '*', label: 'extraction' }
+  };
+  const plan = compileRelationRenderPlan([stage([relation], [analysis])]);
+  const fallback = plan.frames[0].items.find((item) => item.kind === 'fallback');
+  const verdict = plan.frames[0].items.find((item) => item.kind === 'analysis-verdict');
+
+  assert.ok(fallback, 'the malformed registered primary must remain Tier 3');
+  assert.equal(fallback.claimTier, 3);
+  assert.deepEqual(
+    fallback.drawing.marks.map(({ witness }) => witness),
+    ['mixed_bad_target', 'mixed_bad_adjunct'],
+    'the fallback must not consume the independent verdict anchor'
+  );
+  assert.equal(verdict?.claimTier, 2);
+  assert.equal(verdict?.analysisNodeId, 'mixed_bad_analysis');
+});
+
+test('Tier-1 and Tier-2 routes to the same verdict coalesce with Tier 1 owning the pixels', () => {
+  const relations = [
+    {
+      relation: 'IllicitAnalysis',
+      anchors: { analysis: 'cp' },
+      values: { judgment: '*', label: 'extraction' }
+    },
+    {
+      relation: 'UnknownVerdict',
+      anchors: { analysis: 'cp' },
+      values: { verdict: '*', label: 'extraction' }
+    }
+  ];
+  const plan = compileRelationRenderPlan([stage(relations, [whTree])]);
+  const verdicts = plan.frames[0].items.filter((item) => item.kind === 'analysis-verdict');
+
+  assert.equal(verdicts.length, 1);
+  assert.equal(verdicts[0].claimTier, 1);
+  assert.equal(verdicts[0].coalescedRefs?.length, 1);
+  assert.equal(planItemOwnsRelationMoment(verdicts[0], 0, 0), true);
+  assert.equal(planItemOwnsRelationMoment(verdicts[0], 0, 1), true);
+});
+
+test('Tier precedence survives an unrelated plan item interposed between equivalent verdicts', () => {
+  const relations = [
+    {
+      relation: 'UnknownVerdict',
+      anchors: { analysis: 'cp' },
+      values: { verdict: '*', label: 'extraction' }
+    },
+    {
+      relation: 'UnknownLocalJudgment',
+      anchors: { candidate: 'dp_high' },
+      values: { outcome: 'blocked' }
+    },
+    {
+      relation: 'IllicitAnalysis',
+      anchors: { analysis: 'cp' },
+      values: { judgment: '*', label: 'extraction' }
+    }
+  ];
+  const plan = compileRelationRenderPlan([stage(relations, [whTree])]);
+  const verdicts = plan.frames[0].items.filter((item) => item.kind === 'analysis-verdict');
+  const localJudgments = plan.frames[0].items.filter((item) => (
+    item.kind === 'node-badges' && item.badgeStyle === 'local-judgment'
+  ));
+
+  assert.equal(verdicts.length, 1);
+  assert.equal(verdicts[0].claimTier, 1);
+  assert.equal(verdicts[0].relationRef.relationIndex, 2);
+  assert.equal(verdicts[0].coalescedRefs?.length, 1);
+  assert.equal(planItemOwnsRelationMoment(verdicts[0], 0, 0), true);
+  assert.equal(planItemOwnsRelationMoment(verdicts[0], 0, 2), true);
+  assert.equal(localJudgments.length, 1);
+});
+
+test('multiple verdicts retain distinct analysis anchors through geometry binding', () => {
+  const nested = node('outer_analysis', 'CP', [node('inner_analysis', 'TP', [])]);
+  const plan = compileRelationRenderPlan([
+    stage([
+      {
+        relation: 'IllicitAnalysis',
+        anchors: { analysis: 'outer_analysis' },
+        values: { judgment: '*', label: 'derivation' }
+      },
+      {
+        relation: 'IllicitAnalysis',
+        anchors: { analysis: 'inner_analysis' },
+        values: { judgment: '!', label: 'agreement' }
+      }
+    ], [nested])
+  ]);
+  const positions = new Map([
+    ['outer_analysis', { x: 50, y: 20 }],
+    ['inner_analysis', { x: 80, y: 90 }]
+  ]);
+  const bound = bindRelationPlanFrame(plan, 0, (nodeId) => positions.get(nodeId) ?? null);
+
+  assert.deepEqual(bound.failed, []);
+  assert.deepEqual(
+    bound.primitives
+      .filter((primitive) => primitive.type === 'analysis-verdict')
+      .map(({ analysisNodeId, x, y, judgment, label }) => ({
+        analysisNodeId,
+        x,
+        y,
+        judgment,
+        label
+      })),
+    [
+      {
+        analysisNodeId: 'outer_analysis',
+        x: 50,
+        y: 20,
+        judgment: '*',
+        label: 'derivation'
+      },
+      {
+        analysisNodeId: 'inner_analysis',
+        x: 80,
+        y: 90,
+        judgment: '!',
+        label: 'agreement'
+      }
+    ]
+  );
 });
 
 test('coalesced geometry remains focusable from every authored relation moment', () => {
@@ -99,8 +537,8 @@ test('a phrasal trajectory without a witness fails closed with a diagnostic, nev
       anchors: { lowerCopy: 'dp_low', pronouncedCopy: 'dp_high' }
     }], [whTree])
   ]);
-  assert.equal(plan.frames[0].items.length, 0);
-  assert.ok(plan.diagnostics.some((d) => d.kind === 'witness-missing'));
+  assert.equal(plan.frames[0].items.some((item) => item.kind === 'trajectory'), false);
+  assert.ok(plan.diagnostics.some((d) => d.kind === 'signature-incomplete'));
 });
 
 test('a witness outside the source occurrence fails closed', () => {
@@ -110,7 +548,7 @@ test('a witness outside the source occurrence fails closed', () => {
       anchors: { lowerCopy: 'dp_low', traceWitness: 'd_high', pronouncedCopy: 'dp_high' }
     }], [whTree])
   ]);
-  assert.equal(plan.frames[0].items.length, 0);
+  assert.deepEqual(plan.frames[0].items.map((item) => item.kind), ['fallback']);
   assert.ok(plan.diagnostics.some((d) => d.kind === 'witness-outside-source'));
 });
 
@@ -324,19 +762,21 @@ test('large anchor arrays compile additively and inherit the parent persistence'
     stage([{ relation: 'OpenChorus', anchors: { members } }], [bigTree]),
     stage([], [bigTree])
   ]);
-  const fallback = plan.frames[0].items.find((item) => item.kind === 'fallback');
+  const identity = plan.frames[0].items.find((item) => item.tier2FacetId === 'identity.occurrences');
   const anchorSet = plan.frames[0].items.find((item) => item.kind === 'anchor-set');
-  assert.ok(fallback && anchorSet);
+  assert.ok(identity && anchorSet);
+  assert.equal(plan.frames[0].items.some((item) => item.kind === 'fallback'), false,
+    'a complete Tier-2 claim excludes Tier 3');
   assert.ok(members.length >= LARGE_ANCHOR_ARRAY_THRESHOLD);
   // Every participant, in authored order, no truncation.
   assert.deepEqual(
     anchorSet.set.roles[0].anchors.map((anchor) => anchor.nodeId),
     members
   );
-  // Organization inherits the unregistered parent's conservative persistence.
-  assert.equal(anchorSet.persistence, 'from-stage-onward');
+  // Organization inherits the Tier-2 parent's witness-bounded persistence.
+  assert.equal(anchorSet.persistence, 'replace-previous-instance');
   assert.equal(plan.frames[1].items.length, 2,
-    'both the fallback marks and their organizational rail persist');
+    'both the identity mark and its organizational rail persist while witnesses resolve');
 });
 
 test('a registered parent with a large array keeps its semantic marks and its persistence on the rail', () => {
@@ -401,7 +841,7 @@ test('repeated large-array instances in one stage each keep their own ordered se
   assert.deepEqual(sets[1].roles[0].anchors.map((anchor) => anchor.nodeId), second);
 });
 
-test('an unknown large array reuses fallback badges and adds only its organizational rail', () => {
+test('an unknown large array uses Tier-2 identity and its inherited organization only', () => {
   const members = ['u1', 'u2', 'u3', 'u4', 'u5', 'u6'];
   const forest = [node('root_unknown_large', 'TP', members.map((id) => node(id, 'DP', [leaf(`${id}_d`, 'D', id)])))];
   const plan = compileRelationRenderPlan([
@@ -414,8 +854,8 @@ test('an unknown large array reuses fallback badges and adds only its organizati
       ? { x: (members.indexOf(nodeId) + 1) * 100, y: 50 }
       : null
   );
-  assert.equal(bound.primitives.filter((p) => p.type === 'fallback-mark').length, 6);
-  assert.equal(bound.primitives.filter((p) => p.type === 'anchor-set-badge').length, 0);
+  assert.equal(bound.primitives.filter((p) => p.type === 'fallback-mark').length, 0);
+  assert.equal(bound.primitives.filter((p) => p.type === 'anchor-set-badge').length, 6);
   assert.equal(bound.primitives.filter((p) => p.type === 'anchor-set-rail').length, 1);
 });
 
@@ -432,7 +872,7 @@ test('unresolved large-array entries stay diagnostics and get no geometry', () =
     (nodeId) => (nodeId.startsWith('ok_') || nodeId.startsWith('root') ? { x: Number(nodeId.slice(-1)) * 100, y: 50 } : null)
   );
   const fallbackMarks = bound.primitives.filter((p) => p.type === 'fallback-mark');
-  assert.equal(fallbackMarks.length, 4, 'every resolved participant renders once');
+  assert.equal(fallbackMarks.length, 4, 'incomplete Tier-2 evidence fails closed to Tier 3');
   assert.ok(fallbackMarks.every((mark) => mark.nodeId !== 'missing_3'));
   assert.equal(bound.primitives.filter((p) => p.type === 'anchor-set-badge').length, 0);
   assert.equal(bound.primitives.filter((p) => p.type === 'anchor-set-rail').length, 1);
@@ -533,7 +973,7 @@ test('bound HeadMove endpoints are pronounced-terminal positions, never pretermi
   assert.ok(refused.failed.some((f) => /materialized terminal/.test(f.reason)));
 });
 
-test('bound AbarMove departs from the witness terminal and lands on the phrase-shell position', () => {
+test('bound AbarMove departs from the witness terminal and lands on the phrase-shell bottom edge', () => {
   const plan = compileRelationRenderPlan([
     stage([{
       relation: 'AbarMove',
@@ -542,11 +982,11 @@ test('bound AbarMove departs from the witness terminal and lands on the phrase-s
   ]);
   const [item] = plan.frames[0].items;
   assert.equal(item.sourceAttachment, 'terminal');
-  assert.equal(item.targetAttachment, 'shell');
+  assert.equal(item.targetAttachment, 'shell-bottom');
 
   const provider = (nodeId, attachment = 'position') => {
     if (nodeId === 'd_low' && attachment === 'terminal') return { x: 5, y: 300 };
-    if (nodeId === 'dp_high' && attachment === 'shell') return { x: 200, y: 20 };
+    if (nodeId === 'dp_high' && attachment === 'shell-bottom') return { x: 200, y: 20 };
     if (nodeId === 'dp_high' && attachment === 'terminal') return { x: 999, y: 999 };
     return null;
   };
@@ -554,7 +994,7 @@ test('bound AbarMove departs from the witness terminal and lands on the phrase-s
   const path = bound.primitives.find((p) => p.type === 'trajectory-path');
   assert.ok(path);
   assert.deepEqual(path.from, { x: 5, y: 300 }, 'departure is the witness trace terminal');
-  assert.deepEqual(path.to, { x: 200, y: 20 }, 'landing is the phrase shell, not a terminal');
+  assert.deepEqual(path.to, { x: 200, y: 20 }, 'landing is the phrase-shell edge, not a terminal');
 });
 
 test('every production-wired identity compiles its real accepted anchor shape without signature failure', () => {
@@ -681,11 +1121,55 @@ test('every production-wired identity compiles its real accepted anchor shape wi
   });
 });
 
+test('ACD is not a dedicated Tier-1 identity', () => {
+  const forest = [node('tp_acd_shape', 'TP', [
+    node('qp_low_acd_shape', 'QP', [
+      leaf('q_low_acd_shape', 'Q', 'every', { lineageId: 'acd-qp' })
+    ], { lineageId: 'acd-qp' }),
+    node('qp_high_acd_shape', 'QP', [
+      leaf('q_high_acd_shape', 'Q', 'every', { silent: true, lineageId: 'acd-qp' })
+    ], { silent: true, lineageId: 'acd-qp' }),
+    node('vp_site_acd_shape', 'VP', [
+      leaf('v_site_acd_shape', 'V', 'read', { silent: true })
+    ], { silent: true })
+  ])];
+  const relation = {
+    relation: 'AntecedentContainedDeletion',
+    anchors: {
+      'pronounced qp': 'qp_low_acd_shape',
+      'lf qp': 'qp_high_acd_shape',
+      'scope domain': 'tp_acd_shape',
+      'ellipsis site': 'vp_site_acd_shape'
+    }
+  };
+  const dispatch = dispatchRelationClaims({
+    relation,
+    stageIndex: 0,
+    relationIndex: 0,
+    currentForest: forest
+  });
+  assert.equal(dispatch.tier1Dispatch.outcome, 'unregistered');
+  assert.deepEqual(
+    dispatch.facets.map(({ recipe }) => recipe.id).sort(),
+    ['ellipsis.site', 'scope.movement']
+  );
+  assert.deepEqual(dispatch.claims.map(({ tier }) => tier), [2, 2]);
+});
+
 test('the wired ParasiticGap composition renders every large path-array node itself', () => {
   const pathIds = ['pgn_1', 'pgn_2', 'pgn_3', 'pgn_4', 'pgn_5', 'pgn_6'];
   const forest = [node('root_pg', 'CP', pathIds.map((id) => node(id, 'XP', [leaf(`${id}_h`, 'X', 'x')])))];
   const plan = compileRelationRenderPlan([
-    stage([{ relation: 'ParasiticGap', anchors: { primaryPath: pathIds } }], forest)
+    stage([{
+      relation: 'ParasiticGap',
+      anchors: {
+        filler: 'pgn_1',
+        realGap: 'pgn_2',
+        traceWitness: 'pgn_2',
+        parasiticGap: 'pgn_3',
+        primaryPath: pathIds
+      }
+    }], forest)
   ]);
   // ParasiticGap is production-wired and owns its path arrays: the sourced
   // composition marks every path node, so the organizational rail must not
@@ -695,6 +1179,22 @@ test('the wired ParasiticGap composition renders every large path-array node its
   assert.ok(pathStatus, 'the island composition renders its path nodes');
   assert.deepEqual(pathStatus.primaryNodeIds, pathIds);
   assert.equal(plan.frames[0].items.filter((item) => item.kind === 'anchor-set').length, 0);
+});
+
+test('PhrasalSpellOut anchors a complete phrase and its compact exponent label', () => {
+  const phrase = node('datp_spellout', 'DatP', [leaf('mira_spellout', 'N', 'Mira')]);
+  const plan = compileRelationRenderPlan([
+    stage([{
+      relation: 'PhrasalSpellOut',
+      anchors: { phrase: 'datp_spellout' },
+      values: { exponent: '-nak' }
+    }], [phrase])
+  ]);
+
+  assert.deepEqual(plan.diagnostics, []);
+  const item = plan.frames[0].items.find((candidate) => candidate.familyId === 'pf.phrasal-spellout');
+  assert.equal(item?.kind, 'node-plaque');
+  assert.deepEqual(item?.anchorNodeIds, ['datp_spellout']);
 });
 
 test('only an exact registered family declaring full-array ownership suppresses the organization', () => {

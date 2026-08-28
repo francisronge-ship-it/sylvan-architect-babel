@@ -10,7 +10,11 @@
  * numerals and neutral frames only.
  */
 import type { Point, Rect } from './overlayGeometry.ts';
-import { allocateSpanLanes, planAnchorSetLayout } from './overlayGeometry.ts';
+import {
+  allocateSpanLanes,
+  placeRectBelowCollisions,
+  planAnchorSetLayout
+} from './overlayGeometry.ts';
 import {
   ELBOW_ENDPOINT_RADIUS,
   barCapPath,
@@ -20,14 +24,13 @@ import {
   domainBracketPath,
   dottedCollectionControls,
   dottedCollectionPath,
-  ellipsisSlashPath,
   featureSharingVinePath,
   fongComponentArcPath,
   fongComponentLabelPoint,
   fongEdgeOutlineRect,
   nestedUnderArcPath,
   orthogonalElbowPath,
-  pairMergeArcPath,
+  orthogonalTrajectoryPath,
   pathNodeEllipse,
   pathNodeSquare,
   phaseArcPath,
@@ -35,12 +38,14 @@ import {
   routedAgreementPath,
   sampleCubic,
   sampleQuadratic,
+  splitAntecedenceLinkPath,
   sweepingCurveControl,
   sweepingCurvePath,
   transferAccessLanePath,
   vineConvergence
 } from './markGeometry.ts';
 import type {
+  PlanRelationRef,
   RelationPlanItem,
   RelationRenderPlan
 } from './renderPlanCompiler.ts';
@@ -48,6 +53,9 @@ import type {
 export type BoundTrajectory = {
   type: 'trajectory-path';
   trajectoryKind: string;
+  route: 'quadratic' | 'cubic' | 'orthogonal';
+  /** Accepted plates that fit the ordinary tree before adding this path. */
+  fitPolicy?: 'tree-first';
   from: Point;
   to: Point;
   /** Deterministic ordinal among trajectories sharing this route. */
@@ -56,6 +64,8 @@ export type BoundTrajectory = {
   d: string;
   /** The quadratic's control point, for exact bounds computation. */
   control: Point;
+  /** Second control point for the accepted sideward cubic arch. */
+  control2?: Point;
   /** Inset start/end points actually used by the path. */
   start: Point;
   end: Point;
@@ -64,6 +74,8 @@ export type BoundTrajectory = {
 
 export type BoundIndexBadge = {
   type: 'index-badge';
+  /** Accepted coindices annotate the already-fitted tree. */
+  fitPolicy?: 'tree-first';
   nodeId: string;
   x: number;
   y: number;
@@ -72,8 +84,20 @@ export type BoundIndexBadge = {
   itemIndex: number;
 };
 
+/**
+ * Identity is shown by lighting the rendered occurrence terminals. It owns
+ * no free-standing numeral and therefore contributes no camera bounds.
+ */
+export type BoundIdentityLens = {
+  type: 'identity-lens';
+  nodeIds: string[];
+  itemIndex: number;
+};
+
 export type BoundDomainEllipse = {
   type: 'domain-ellipse';
+  /** Accepted binding/domain ellipses annotate the already-fitted tree. */
+  fitPolicy?: 'tree-first';
   cx: number;
   cy: number;
   rx: number;
@@ -157,6 +181,8 @@ export type BoundAnchorSetRail = {
  */
 export type BoundShapePath = {
   type: 'shape-path';
+  /** Accepted label-measured paths annotate the already-fitted tree. */
+  fitPolicy?: 'tree-first';
   shapeStyle: string;
   d: string;
   stroke: 'solid' | 'dashed' | 'dotted';
@@ -182,6 +208,8 @@ export type BoundShapePath = {
 
 export type BoundDomainRegion = {
   type: 'domain-region';
+  /** Accepted label-measured domains annotate the already-fitted tree. */
+  fitPolicy?: 'tree-first';
   domainStyle: string;
   x: number;
   y: number;
@@ -203,6 +231,7 @@ export type BoundPlaque = {
   anchorPoints: Point[];
   title?: string;
   rows: Array<{ label: string; value: string }>;
+  rowRefs?: Array<PlanRelationRef | null>;
   itemIndex: number;
 };
 
@@ -216,6 +245,78 @@ export type BoundTextBadge = {
   shape: 'circle' | 'square' | 'plain';
   stackIndex: number;
   outcome?: 'licensed' | 'blocked';
+  itemIndex: number;
+};
+
+export type BoundAnalysisVerdict = {
+  type: 'analysis-verdict';
+  analysisNodeId: string;
+  x: number;
+  y: number;
+  judgment: string;
+  label?: string;
+  itemIndex: number;
+};
+
+/** Source-backed gapping correspondence data. TreeVisualizer measures the
+ * rendered shell labels after the ordinary tree fit, then applies the
+ * accepted three-lane geometry without letting those lanes refit the tree. */
+export type BoundGappingAlignment = {
+  type: 'gapping-alignment';
+  antecedentNodeId: string;
+  gapNodeId: string;
+  antecedent: Point;
+  gap: Point;
+  pairs: Array<{
+    correlateNodeId: string;
+    remnantNodeId: string;
+    correlate: Point;
+    remnant: Point;
+    label: string;
+  }>;
+  itemIndex: number;
+};
+
+export type BoundQuantifierRaising = {
+  type: 'quantifier-raising';
+  pronouncedNodeId: string;
+  lfNodeId: string;
+  scopeDomainNodeId?: string;
+  index: string;
+  itemIndex: number;
+};
+
+/** TreeVisualizer measures the fitted labels and derives the seasonal scope
+ * hull and binding curve without letting either refit the syntax tree. */
+export type BoundOperatorVariableBinding = {
+  type: 'operator-variable-binding';
+  operatorNodeId: string;
+  variableNodeId: string;
+  traceWitnessNodeId?: string;
+  scopeDomainNodeId?: string;
+  index: string;
+  itemIndex: number;
+};
+
+export type BoundParasiticGapCopy = {
+  type: 'parasitic-gap-copy';
+  contentNodeId: string;
+  ordinaryGapNodeId: string;
+  parasiticGapNodeIds: string[];
+  itemIndex: number;
+};
+
+export type BoundSplitAntecedence = {
+  type: 'split-antecedence';
+  fitPolicy: 'tree-first';
+  dependentNodeId: string;
+  antecedentNodeIds: string[];
+  origin: Point;
+  links: Array<{
+    antecedentNodeId: string;
+    target: Point;
+    d: string;
+  }>;
   itemIndex: number;
 };
 
@@ -245,6 +346,15 @@ export type BoundBranchEmphasis = {
   itemIndex: number;
 };
 
+/** A post-fit overlay that follows one or more native tree branches. */
+export type BoundNativeBranchOverlay = {
+  type: 'native-branch-overlay';
+  targetNodeIds: string[];
+  requireSharedParent: boolean;
+  variant: 'pair-merge' | 'adjunct-domain';
+  itemIndex: number;
+};
+
 export type BoundSharedBranch = {
   type: 'shared-branch';
   from: Point;
@@ -268,6 +378,7 @@ export type BoundPathNodeRing = {
 export type BoundPrimitive =
   | BoundTrajectory
   | BoundIndexBadge
+  | BoundIdentityLens
   | BoundDomainEllipse
   | BoundGhostSet
   | BoundFallbackMark
@@ -279,9 +390,16 @@ export type BoundPrimitive =
   | BoundDomainRegion
   | BoundPlaque
   | BoundTextBadge
+  | BoundAnalysisVerdict
+  | BoundGappingAlignment
+  | BoundQuantifierRaising
+  | BoundOperatorVariableBinding
+  | BoundParasiticGapCopy
+  | BoundSplitAntecedence
   | BoundStrike
   | BoundEnclosure
   | BoundBranchEmphasis
+  | BoundNativeBranchOverlay
   | BoundSharedBranch;
 
 export type BoundFrame = {
@@ -401,9 +519,20 @@ export const boundOverlayBounds = (
   frame.primitives.forEach((primitive) => {
     switch (primitive.type) {
       case 'trajectory-path': {
-        // Exact quadratic extrema of the rendered path, plus conservative
-        // arrowhead/stroke/glow clearance.
-        const clearance = 18;
+        /*
+         * The accepted ATB plate fits the complete coordinated tree, then
+         * lays its convergent trajectories into the reserved lower canvas.
+         * Letting their deliberately deep fan control points refit the camera
+         * would shrink and lift the whole tree when a third conjunct is added.
+         */
+        if (primitive.trajectoryKind === 'atb'
+          || primitive.trajectoryKind === 'sideward'
+          || primitive.fitPolicy === 'tree-first') return;
+        // Exact quadratic extrema plus the accepted 7-unit arrowhead and
+        // stroke clearance. The path already insets its endpoints by eight
+        // tree units, so this covers the glyph without shifting a tree whose
+        // path remains inside its ordinary extent.
+        const clearance = 8;
         const [loX, hiX] = quadraticExtreme(primitive.start.x, primitive.control.x, primitive.end.x);
         const [loY, hiY] = quadraticExtreme(primitive.start.y, primitive.control.y, primitive.end.y);
         point(loX, loY, clearance);
@@ -411,12 +540,39 @@ export const boundOverlayBounds = (
         return;
       }
       case 'index-badge':
+        if (primitive.fitPolicy === 'tree-first') return;
         // Renderer: start-anchored 13px text at local x=8.
         point(primitive.x, primitive.y, 10 * k);
         anchoredText(primitive.x, primitive.y, primitive.index, 13, 'start', 8);
         return;
+      case 'identity-lens':
+        return;
       case 'text-badge':
+        if (primitive.badgeStyle === 'gap-notation'
+          || primitive.badgeStyle === 'agreement-goal'
+          || primitive.badgeStyle === 'idiom-chunk'
+          || primitive.badgeStyle === 'split-antecedence') {
+          return;
+        }
         point(primitive.x, primitive.y, Math.max(18, textHalfWidth(primitive.text, 12) + 10) * k);
+        return;
+      case 'analysis-verdict':
+        // Verdicts live in a post-fit gutter and never change the tree camera.
+        return;
+      case 'gapping-alignment':
+        // The accepted plate fits the complete ordinary tree first and lays
+        // all correspondence lanes beneath it afterward.
+        return;
+      case 'quantifier-raising':
+        // The accepted scope box, coindices and elbow path are measured from
+        // the fitted tree's rendered labels, then added without refitting it.
+        return;
+      case 'operator-variable-binding':
+        // The accepted nested domains, coindices and binding paths are
+        // measured from the fitted tree and never participate in camera fit.
+        return;
+      case 'split-antecedence':
+        // The square and terminal-to-terminal links annotate the fitted tree.
         return;
       case 'fallback-mark':
         // Frame glyph (r=10/18-box) with the centered instance numeral,
@@ -442,7 +598,16 @@ export const boundOverlayBounds = (
       case 'segment':
         pathPoints(primitive.d, 8);
         return;
+      case 'native-branch-overlay':
+        // Native branch geometry is sampled from the fitted D3 tree.
+        return;
       case 'shape-path':
+        // These accepted annotations are measured after the ordinary tree fit.
+        if (primitive.fitPolicy === 'tree-first'
+          || primitive.shapeStyle === 'phase-arc'
+          || primitive.shapeStyle === 'blocked-extraction'
+          || primitive.shapeStyle === 'idiom-bracket'
+          || primitive.shapeStyle === 'blocked-edge-slash') return;
         pathPoints(primitive.d, 10);
         if (primitive.labelAt) {
           point(
@@ -461,10 +626,21 @@ export const boundOverlayBounds = (
         if (primitive.tip) point(primitive.tip.at.x, primitive.tip.at.y, 16 * k);
         return;
       case 'plaque':
+        // Accepted PF and feature plates are positioned after the ordinary
+        // tree fit. They annotate the fitted tree; they never shrink or
+        // recenter it.
+        if (
+          primitive.plaqueStyle === 'realization'
+          || primitive.plaqueStyle === 'feature'
+        ) return;
         point(primitive.x, primitive.y);
         point(primitive.x + primitive.width * k, primitive.y + primitive.height * k);
         return;
       case 'domain-region': {
+        // The accepted adjunct-extraction diagnostic replaces the native
+        // attachment branch after fit; it never boxes or refits the adjunct.
+        if (primitive.fitPolicy === 'tree-first'
+          || primitive.domainStyle === 'adjunct-domain') return;
         point(primitive.x, primitive.y, 12);
         point(primitive.x + primitive.width, primitive.y + primitive.height, 12);
         // Renderer text: transfer-edge draws end-anchored 12px at
@@ -481,6 +657,7 @@ export const boundOverlayBounds = (
         return;
       }
       case 'domain-ellipse':
+        if (primitive.fitPolicy === 'tree-first') return;
         point(primitive.cx - primitive.rx, primitive.cy - primitive.ry, 8);
         point(primitive.cx + primitive.rx, primitive.cy + primitive.ry, 8);
         return;
@@ -503,14 +680,11 @@ export const boundOverlayBounds = (
         point(primitive.to.x, primitive.to.y, 4);
         return;
       case 'path-node-ring':
-        if (primitive.ellipse) {
-          point(primitive.ellipse.cx - primitive.ellipse.rx, primitive.ellipse.cy - primitive.ellipse.ry, 4);
-          point(primitive.ellipse.cx + primitive.ellipse.rx, primitive.ellipse.cy + primitive.ellipse.ry, 4);
-        }
-        if (primitive.rect) {
-          point(primitive.rect.x, primitive.rect.y, 4);
-          point(primitive.rect.x + primitive.rect.width, primitive.rect.y + primitive.rect.height, 4);
-        }
+        // Phillips path marks enclose the actual rendered category labels
+        // after the ordinary tree fit. Placeholder label dimensions must not
+        // shrink or recenter the tree before those labels can be measured.
+        return;
+      case 'parasitic-gap-copy':
         return;
       case 'ghost-set':
         return;
@@ -573,6 +747,10 @@ export type BindGeometryOptions = {
    */
   railBaseY?: number;
   railLaneGap?: number;
+  /** Measured clear ceiling for cross-workspace sideward arches. */
+  trajectoryCeilingY?: number;
+  /** Measured clear floor for drop-first orthogonal movement routes. */
+  trajectoryFloorY?: number;
 };
 
 /**
@@ -581,6 +759,10 @@ export type BindGeometryOptions = {
  * - `'terminal'` — the visible materialized terminal inside the exact
  *   anchored preterminal/witness subtree (never an unrelated descendant);
  * - `'shell'` — the anchored node itself;
+ * - `'shell-top'` — the measured top-centre of the anchored shell, including
+ *   the accepted eight-unit cross-workspace clearance;
+ * - `'shell-bottom'` — the measured bottom-centre of the anchored shell
+ *   label, including the accepted six-unit path clearance;
  * - `'position'` (default) — the anchored node's own laid-out position, for
  *   badges and organizational marks.
  * Returning null fails the requesting mark closed; the binder never invents
@@ -588,7 +770,7 @@ export type BindGeometryOptions = {
  */
 export type PlanPositionProvider = (
   nodeId: string,
-  attachment?: 'terminal' | 'shell' | 'position' | 'parent'
+  attachment?: 'terminal' | 'shell' | 'shell-top' | 'shell-bottom' | 'position' | 'parent'
 ) => Point | null;
 
 export const bindRelationPlanFrame = (
@@ -629,7 +811,7 @@ export const bindRelationPlanFrame = (
   const requirePoint = (
     itemIndex: number,
     nodeId: string,
-    attachment: 'terminal' | 'shell' | 'position' = 'position'
+    attachment: 'terminal' | 'shell' | 'shell-top' | 'shell-bottom' | 'position' = 'position'
   ): Point | null => {
     const point = positionFor(nodeId, attachment);
     if (!point) {
@@ -708,11 +890,16 @@ export const bindRelationPlanFrame = (
       // the witness (or source) resolved per sourceAttachment, the landing is
       // the target resolved per targetAttachment. A head target therefore
       // binds to its pronounced terminal, never the preterminal shell.
-      const from = requirePoint(
-        itemIndex,
-        item.witnessNodeId || item.sourceNodeId,
-        item.sourceAttachment
-      );
+      const departureNodeId = item.trajectoryKind === 'parasitic-gap'
+        ? item.sourceAttachment === 'terminal'
+          ? item.witnessNodeId || item.sourceNodeId
+          : item.sourceNodeId
+        : item.trajectoryKind === 'sideward'
+          ? item.sourceNodeId
+          : item.sourceAttachment === 'terminal'
+            ? item.witnessNodeId || item.sourceNodeId
+            : item.sourceNodeId;
+      const from = requirePoint(itemIndex, departureNodeId, item.sourceAttachment);
       const to = requirePoint(itemIndex, item.targetNodeId, item.targetAttachment);
       if (!from || !to) return;
       /*
@@ -724,6 +911,54 @@ export const bindRelationPlanFrame = (
        */
       const ordinal = nextStyleOrdinal(`trajectory:${item.sourceNodeId}->${item.targetNodeId}`);
       const fanOffset = ordinal * 20;
+      if (item.trajectoryKind === 'sideward') {
+        const crestY = options.trajectoryCeilingY
+          ?? Math.min(from.y - 70, to.y - 70);
+        const control = { x: from.x, y: crestY };
+        const control2 = { x: to.x, y: crestY };
+        primitives.push({
+          type: 'trajectory-path',
+          trajectoryKind: item.trajectoryKind,
+          route: 'cubic',
+          fitPolicy: 'tree-first',
+          from,
+          to,
+          ordinal,
+          d: `M ${from.x.toFixed(1)} ${from.y.toFixed(1)} C ${control.x.toFixed(1)} ${control.y.toFixed(1)}, ${control2.x.toFixed(1)} ${control2.y.toFixed(1)}, ${to.x.toFixed(1)} ${to.y.toFixed(1)}`,
+          control,
+          control2,
+          start: from,
+          end: to,
+          itemIndex
+        });
+        return;
+      }
+      if (
+        item.trajectoryKind === 'remnant'
+        || item.trajectoryKind === 'roll-up'
+        || item.trajectoryKind === 'smuggling'
+      ) {
+        const laneY = item.trajectoryKind === 'roll-up'
+          ? Math.max(from.y, to.y) + 46 + ordinal * 12
+          : options.trajectoryFloorY
+            ?? Math.max(from.y, to.y) + 90 * (ordinal + 1);
+        const control = { x: from.x, y: laneY };
+        primitives.push({
+          type: 'trajectory-path',
+          trajectoryKind: item.trajectoryKind,
+          route: 'orthogonal',
+          fitPolicy: 'tree-first',
+          from,
+          to,
+          ordinal,
+          d: orthogonalTrajectoryPath(from, to, laneY),
+          control,
+          start: from,
+          end: to,
+          itemIndex
+        });
+        return;
+      }
       const direction = Math.sign(to.x - from.x) || 1;
       const start = { x: from.x + 8 * direction, y: from.y + fanOffset };
       const end = { x: to.x - 8 * direction, y: to.y + fanOffset };
@@ -734,6 +969,8 @@ export const bindRelationPlanFrame = (
       primitives.push({
         type: 'trajectory-path',
         trajectoryKind: item.trajectoryKind,
+        route: 'quadratic',
+        fitPolicy: 'tree-first',
         from,
         to,
         ordinal,
@@ -747,19 +984,73 @@ export const bindRelationPlanFrame = (
     }
 
     if (item.kind === 'coindex') {
+      if (item.familyId === 'identity.occurrences') {
+        primitives.push({
+          type: 'identity-lens',
+          nodeIds: item.nodeIds,
+          itemIndex
+        });
+        return;
+      }
       item.nodeIds.forEach((nodeId) => {
         const point = requirePoint(itemIndex, nodeId);
         if (!point) return;
         const stackIndex = nextStackIndex(nodeId);
+        const isParasiticGap = item.familyId === 'parasitic-gap.composition';
         primitives.push({
           type: 'index-badge',
+          fitPolicy: 'tree-first',
           nodeId,
-          x: point.x + labelWidth / 2,
+          x: isParasiticGap ? point.x + 32 : point.x + labelWidth / 2,
           y: point.y + stackIndex * badgeGap * markerScale,
           index: item.index,
           stackIndex,
           itemIndex
         });
+      });
+      return;
+    }
+
+    if (item.kind === 'parasitic-gap-copy') {
+      const content = requirePoint(itemIndex, item.contentNodeId, 'shell-bottom');
+      const ordinaryGap = requirePoint(itemIndex, item.ordinaryGapNodeId, 'shell-top');
+      const parasiticGaps = item.parasiticGapNodeIds.map((nodeId) =>
+        requirePoint(itemIndex, nodeId, 'shell-top'));
+      if (!content || !ordinaryGap || parasiticGaps.some((point) => !point)) return;
+      primitives.push({
+        type: 'parasitic-gap-copy',
+        contentNodeId: item.contentNodeId,
+        ordinaryGapNodeId: item.ordinaryGapNodeId,
+        parasiticGapNodeIds: item.parasiticGapNodeIds,
+        itemIndex
+      });
+      return;
+    }
+
+    if (item.kind === 'split-antecedence') {
+      const origin = requirePoint(itemIndex, item.dependentNodeId, 'terminal');
+      const targets = item.antecedentNodeIds.map((nodeId) => ({
+        nodeId,
+        point: requirePoint(itemIndex, nodeId, 'terminal')
+      }));
+      if (!origin || targets.some((target) => !target.point)) return;
+      primitives.push({
+        type: 'split-antecedence',
+        fitPolicy: 'tree-first',
+        dependentNodeId: item.dependentNodeId,
+        antecedentNodeIds: item.antecedentNodeIds,
+        origin,
+        links: targets.map((target, linkIndex) => ({
+          antecedentNodeId: target.nodeId,
+          target: target.point as Point,
+          d: splitAntecedenceLinkPath(
+            origin,
+            target.point as Point,
+            linkIndex,
+            targets.length
+          )
+        })),
+        itemIndex
       });
       return;
     }
@@ -786,6 +1077,7 @@ export const bindRelationPlanFrame = (
       const halfHeight = (maxY - minY) / 2;
       primitives.push({
         type: 'domain-ellipse',
+        fitPolicy: 'tree-first',
         cx: (minX + maxX) / 2,
         cy: (minY + maxY) / 2,
         rx: halfWidth * Math.SQRT2,
@@ -799,6 +1091,7 @@ export const bindRelationPlanFrame = (
         const stackIndex = nextStackIndex(nodeId);
         primitives.push({
           type: 'index-badge',
+          fitPolicy: 'tree-first',
           nodeId,
           x: point.x + labelWidth / 2,
           y: point.y + stackIndex * badgeGap,
@@ -812,31 +1105,6 @@ export const bindRelationPlanFrame = (
 
     if (item.kind === 'ellipsis-site') {
       primitives.push({ type: 'ghost-set', nodeIds: item.ghostNodeIds, itemIndex });
-      if (item.familyId === 'ellipsis.licensing') {
-        // The licensing composition's separate tall slash spans the authored
-        // domain subtree, alongside (not replacing) the authored-silent
-        // ghosting.
-        const ghostPoints = item.siteSubtreeNodeIds
-          .map((nodeId) => positionFor(nodeId))
-          .filter((point): point is Point => Boolean(point));
-        if (ghostPoints.length > 0) {
-          const xs = ghostPoints.map((point) => point.x);
-          const ys = ghostPoints.map((point) => point.y);
-          primitives.push({
-            type: 'shape-path',
-            shapeStyle: 'ellipsis-slash',
-            d: ellipsisSlashPath({
-              x: Math.min(...xs),
-              y: Math.min(...ys),
-              width: Math.max(...xs) - Math.min(...xs),
-              height: Math.max(...ys) - Math.min(...ys)
-            }),
-            stroke: 'solid',
-            arrowhead: false,
-            itemIndex
-          });
-        }
-      }
       return;
     }
 
@@ -868,25 +1136,9 @@ export const bindRelationPlanFrame = (
           const lower = { x: to.x - 14, y: to.y };
           push({
             shapeStyle: 'dependent-case',
+            fitPolicy: 'tree-first',
             d: orthogonalElbowPath(upper, lower),
             stroke: 'solid',
-            arrowhead: false,
-            endpointDots: [upper, lower],
-            ...(item.label ? { label: item.label, labelAt: below(upper, 18) } : {}),
-            ...(item.secondaryLabel
-              ? { badge: { text: item.secondaryLabel, at: below(lower, 24) } }
-              : {})
-          });
-          return;
-        }
-        case 'ellipsis-checking': {
-          // Aelbrecht's dotted checking elbow with filled dots at both ends.
-          const upper = below(from, labelHeight);
-          const lower = { x: to.x - 14, y: to.y };
-          push({
-            shapeStyle: 'ellipsis-checking',
-            d: orthogonalElbowPath(upper, lower),
-            stroke: 'dotted',
             arrowhead: false,
             endpointDots: [upper, lower],
             ...(item.label ? { label: item.label, labelAt: below(upper, 18) } : {}),
@@ -911,13 +1163,36 @@ export const bindRelationPlanFrame = (
           return;
         }
         case 'anti-locality': {
-          // The dashed comparison curve; blocked movement ends in the source
-          // bar cap, licensed movement carries the check.
-          const start = below(from, 24);
-          const end = below(to, 24);
-          registerSweep(start, end, (ordinal) => ({
+          // AntiLocality judges an independently authored DP chain. Its
+          // source-backed dotted path and verdict restyle that chain without
+          // owning the syntax transition that created its occurrences.
+          const sourceShell = requirePoint(itemIndex, item.fromNodeId, 'shell-bottom');
+          const landingShell = requirePoint(itemIndex, item.toNodeId, 'shell-bottom');
+          if (!sourceShell || !landingShell) return;
+          const direction = Math.sign(landingShell.x - sourceShell.x) || 1;
+          const start = { x: sourceShell.x + 8 * direction, y: sourceShell.y };
+          const insetEnd = { x: landingShell.x - 8 * direction, y: landingShell.y };
+          const end = item.outcome === 'blocked'
+            ? { x: landingShell.x, y: insetEnd.y }
+            : insetEnd;
+          const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+          registerSweep(start, end, (ordinal) => {
+            const control = item.outcome === 'blocked'
+              ? {
+                  x: end.x,
+                  y: Math.max(start.y, end.y)
+                    + Math.max(180, Math.abs(start.x - end.x) * 0.2)
+                }
+              : {
+                  x: (start.x + end.x) / 2,
+                  y: Math.max(start.y, end.y)
+                    + Math.max(42, Math.abs(end.x - start.x) * 0.2)
+                    + ordinal * 20
+                };
+            return {
             shapeStyle: 'anti-locality',
-            d: sweepingCurvePath(start, end, ordinal * 26),
+            fitPolicy: 'tree-first',
+            d: `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} Q ${control.x.toFixed(1)} ${control.y.toFixed(1)}, ${end.x.toFixed(1)} ${end.y.toFixed(1)}`,
             stroke: 'dashed',
             arrowhead: false,
             blocked: item.outcome === 'blocked',
@@ -929,7 +1204,8 @@ export const bindRelationPlanFrame = (
               : item.outcome === 'licensed'
                 ? { tip: { kind: 'check' as const, d: checkMarkPath(below(midpoint, 30)), at: below(midpoint, 30) } }
                 : {})
-          }));
+            };
+          });
           return;
         }
         case 'agree-multiple':
@@ -944,6 +1220,7 @@ export const bindRelationPlanFrame = (
             },
             (ordinal) => ({
               shapeStyle: item.pathStyle,
+              fitPolicy: 'tree-first',
               d: routedAgreementPath(start, end, ordinal),
               stroke: 'solid',
               arrowhead: true,
@@ -963,6 +1240,7 @@ export const bindRelationPlanFrame = (
         case 'case-assignment': {
           push({
             shapeStyle: 'case-assignment',
+            fitPolicy: 'tree-first',
             d: caseAssignmentPath(below(from, 8), to),
             stroke: 'solid',
             arrowhead: true,
@@ -982,6 +1260,7 @@ export const bindRelationPlanFrame = (
             },
             (ordinal) => ({
               shapeStyle: 'case-agree',
+              fitPolicy: 'tree-first',
               d: dottedCollectionPath(start, end, ordinal),
               stroke: 'dotted',
               arrowhead: false,
@@ -1045,24 +1324,6 @@ export const bindRelationPlanFrame = (
           }));
           return;
         }
-        case 'right-roof': {
-          // The extraposition path with the accepted midpoint check or X,
-          // drawn only from the authored judgment.
-          const start = below(from, 24);
-          const end = below(to, 24);
-          registerSweep(start, end, (ordinal) => ({
-            shapeStyle: 'right-roof',
-            d: sweepingCurvePath(start, end, ordinal * 26),
-            stroke: 'solid',
-            arrowhead: true,
-            ...(item.outcome === 'blocked'
-              ? { blocked: true, tip: { kind: 'cross' as const, at: below(midpoint, 30) } }
-              : item.outcome === 'licensed'
-                ? { tip: { kind: 'check' as const, d: checkMarkPath(below(midpoint, 30)), at: below(midpoint, 30) } }
-                : {})
-          }));
-          return;
-        }
         case 'improper-candidate': {
           // A rejected landing candidate: dashed, into the forbidden region,
           // with the blocking X.
@@ -1070,6 +1331,7 @@ export const bindRelationPlanFrame = (
           const end = below(to, 24);
           registerSweep(start, end, (ordinal) => ({
             shapeStyle: 'improper-candidate',
+            fitPolicy: 'tree-first',
             d: sweepingCurvePath(start, end, ordinal * 26),
             stroke: 'dashed',
             arrowhead: true,
@@ -1084,6 +1346,7 @@ export const bindRelationPlanFrame = (
           const end = below(to, 24);
           registerSweep(start, end, (ordinal) => ({
             shapeStyle: item.pathStyle,
+            ...(item.pathStyle === 'control' ? { fitPolicy: 'tree-first' as const } : {}),
             d: sweepingCurvePath(start, end, ordinal * 26),
             stroke: 'solid',
             arrowhead: true,
@@ -1097,26 +1360,13 @@ export const bindRelationPlanFrame = (
 
     if (item.kind === 'undirected-link') {
       if (item.linkStyle === 'pair-merge') {
-        // The unheaded Pair-Merge arc over both anchored labels.
-        item.pairs.forEach((pair) => {
-          const memberRect = rectFor(pair.fromNodeId);
-          const hostRect = rectFor(pair.toNodeId);
-          if (!memberRect || !hostRect) {
-            failed.push({
-              itemIndex,
-              nodeId: !memberRect ? pair.fromNodeId : pair.toNodeId,
-              reason: 'no measured position for the anchored node; mark fails closed'
-            });
-            return;
-          }
-          primitives.push({
-            type: 'shape-path',
-            shapeStyle: 'pair-merge',
-            d: pairMergeArcPath(memberRect, hostRect),
-            stroke: 'solid',
-            arrowhead: false,
-            itemIndex
-          });
+        const targetNodeIds = item.pairs.flatMap((pair) => [pair.fromNodeId, pair.toNodeId]);
+        primitives.push({
+          type: 'native-branch-overlay',
+          targetNodeIds: [...new Set(targetNodeIds)],
+          requireSharedParent: true,
+          variant: 'pair-merge',
+          itemIndex
         });
         return;
       }
@@ -1147,6 +1397,7 @@ export const bindRelationPlanFrame = (
           primitives.push({
             type: 'shape-path',
             shapeStyle: 'feature-sharing-vine',
+            fitPolicy: 'tree-first',
             d: featureSharingVinePath(start, convergence),
             stroke: 'solid',
             arrowhead: false,
@@ -1157,6 +1408,7 @@ export const bindRelationPlanFrame = (
           primitives.push({
             type: 'shape-path',
             shapeStyle: 'feature-sharing-label',
+            fitPolicy: 'tree-first',
             d: `M ${convergence.x} ${convergence.y} L ${convergence.x} ${convergence.y}`,
             stroke: 'solid',
             arrowhead: false,
@@ -1197,6 +1449,7 @@ export const bindRelationPlanFrame = (
         primitives.push({
           type: 'shape-path',
           shapeStyle: item.linkStyle,
+          ...(item.linkStyle === 'predication' ? { fitPolicy: 'tree-first' as const } : {}),
           d: `M ${from.x} ${from.y + 30} L ${to.x} ${to.y + 30}`,
           stroke: 'dotted',
           arrowhead: false,
@@ -1250,6 +1503,7 @@ export const bindRelationPlanFrame = (
       const lane = transferAccessLanePath(start, end, domainBottom);
       primitives.push({
         type: 'shape-path',
+        fitPolicy: 'tree-first',
         shapeStyle: 'transfer-access',
         d: lane.d,
         stroke: 'dashed',
@@ -1340,6 +1594,25 @@ export const bindRelationPlanFrame = (
         });
         return;
       }
+      if (item.domainStyle === 'adjunct-domain') {
+        const targetNodeId = item.rootNodeId || item.memberNodeIds[0] || '';
+        if (!targetNodeId) {
+          failed.push({
+            itemIndex,
+            nodeId: '(none)',
+            reason: 'no authored adjunct branch target; mark fails closed'
+          });
+          return;
+        }
+        primitives.push({
+          type: 'native-branch-overlay',
+          targetNodeIds: [targetNodeId],
+          requireSharedParent: false,
+          variant: 'adjunct-domain',
+          itemIndex
+        });
+        return;
+      }
       /*
        * Members declared subtree-derived are presentational and may shrink
        * to the currently measurable subset (mid-assembly reality). Members
@@ -1373,10 +1646,11 @@ export const bindRelationPlanFrame = (
         // The accepted phase arc, apexed above the phase head — never a
         // rectangle.
         const headRect = (item.rootNodeId ? rectFor(item.rootNodeId) : null) || domainRect;
+        const edgeRect = item.phaseEdgeNodeId ? rectFor(item.phaseEdgeNodeId) : null;
         primitives.push({
           type: 'shape-path',
           shapeStyle: 'phase-arc',
-          d: phaseArcPath(headRect, domainRect, null, true),
+          d: phaseArcPath(headRect, domainRect, edgeRect, item.phasePrimary === true),
           stroke: 'solid',
           arrowhead: false,
           itemIndex
@@ -1411,6 +1685,7 @@ export const bindRelationPlanFrame = (
       primitives.push({
         type: 'domain-region',
         domainStyle: item.domainStyle,
+        ...(item.domainStyle === 'control-domain' ? { fitPolicy: 'tree-first' as const } : {}),
         x: domainRect.x,
         y: domainRect.y,
         width: domainRect.width,
@@ -1427,6 +1702,69 @@ export const bindRelationPlanFrame = (
         .map((nodeId) => requirePoint(itemIndex, nodeId))
         .filter((point): point is Point => Boolean(point));
       if (anchorPoints.length === 0) return;
+      if (item.plaqueStyle === 'feature') {
+        const positionIds = item.positionNodeIds?.length
+          ? item.positionNodeIds
+          : item.anchorNodeIds;
+        const derivedPositionPoints = positionIds
+          .map((nodeId) => positionFor(nodeId))
+          .filter((point): point is Point => Boolean(point));
+        const positionPoints = derivedPositionPoints.length > 0
+          ? derivedPositionPoints
+          : anchorPoints;
+        const rows = item.rows.slice(0, 8);
+        const wrappedLineCount = (text: string) => {
+          const words = text.split(/(\s+)/).filter(Boolean);
+          let lines = 1;
+          let current = '';
+          words.forEach((word) => {
+            const chunks = word.trim().length > 22
+              ? Array.from({ length: Math.ceil(word.length / 22) }, (_unused, index) =>
+                  word.slice(index * 22, (index + 1) * 22))
+              : [word];
+            chunks.forEach((chunk) => {
+              const candidate = `${current}${chunk}`;
+              if (candidate.trim().length > 22 && current.trim()) {
+                lines += 1;
+                current = chunk.trimStart();
+              } else {
+                current = candidate;
+              }
+            });
+          });
+          return lines;
+        };
+        const width = 360;
+        const height = 46 + rows.reduce((total, row) =>
+          total + wrappedLineCount(`[${row.label}: ${row.value}]`) * 32 + 12, 0) + 16;
+        const centerX = (Math.min(...positionPoints.map((point) => point.x))
+          + Math.max(...positionPoints.map((point) => point.x))) / 2;
+        const x = centerX - width / 2 - 18;
+        // The renderer replaces this font-metric estimate with the measured
+        // terminal rectangle before painting. It reserves the accepted plate
+        // footprint so Replay does not refit when the relation is revealed.
+        const preferredY = Math.max(...positionPoints.map((point) => point.y)) + labelHeight + 87.2;
+        const worldRect = placeRectBelowCollisions({
+          x,
+          y: preferredY,
+          width: width * markerScale,
+          height: height * markerScale
+        }, plaqueRects, 14 * markerScale, 10 * markerScale);
+        primitives.push({
+          type: 'plaque',
+          plaqueStyle: item.plaqueStyle,
+          x,
+          y: worldRect.y,
+          width,
+          height,
+          anchorPoints,
+          ...(item.title ? { title: item.title } : {}),
+          rows,
+          itemIndex
+        });
+        plaqueRects.push(worldRect);
+        return;
+      }
       const anchor = anchorPoints[0];
       const rows = item.rows.slice(0, 8);
       const width = Math.max(
@@ -1435,32 +1773,27 @@ export const bindRelationPlanFrame = (
         ...rows.map((row) => (`${row.label}: ${row.value}`).length * 6.4 + 24)
       );
       const height = 20 + rows.length * 15;
-      let x = anchor.x + labelWidth / 2;
-      let y = anchor.y + labelHeight;
-      let worldRect: Rect = {
+      const x = anchor.x + labelWidth / 2;
+      const preferredY = anchor.y + labelHeight;
+      const worldRect = placeRectBelowCollisions({
         x,
-        y,
+        y: preferredY,
         width: width * markerScale,
         height: height * markerScale
-      };
+      }, plaqueRects, 14 * markerScale, 10 * markerScale);
       // Nearby plates, not only plates with the same exact anchor, stack
       // below one another. This uses their actual screen-stable footprint.
-      for (let attempt = 0; attempt < plaqueRects.length + 1; attempt += 1) {
-        const blockers = plaqueRects.filter((rect) => intersects(worldRect, rect, 10 * markerScale));
-        if (blockers.length === 0) break;
-        y = Math.max(...blockers.map((rect) => rect.y + rect.height)) + 14 * markerScale;
-        worldRect = { ...worldRect, y };
-      }
       primitives.push({
         type: 'plaque',
         plaqueStyle: item.plaqueStyle,
         x,
-        y,
+        y: worldRect.y,
         width,
         height,
         anchorPoints,
         ...(item.title ? { title: item.title } : {}),
         rows: item.rows,
+        ...(item.rowRefs ? { rowRefs: item.rowRefs } : {}),
         itemIndex
       });
       plaqueRects.push(worldRect);
@@ -1484,6 +1817,90 @@ export const bindRelationPlanFrame = (
           ...(item.outcome ? { outcome: item.outcome } : {}),
           itemIndex
         });
+      });
+      return;
+    }
+
+    if (item.kind === 'analysis-verdict') {
+      const point = requirePoint(itemIndex, item.analysisNodeId);
+      if (!point) return;
+      primitives.push({
+        type: 'analysis-verdict',
+        analysisNodeId: item.analysisNodeId,
+        x: point.x,
+        y: point.y,
+        judgment: item.judgment,
+        ...(item.label ? { label: item.label } : {}),
+        itemIndex
+      });
+      return;
+    }
+
+    if (item.kind === 'gapping-alignment') {
+      const antecedent = requirePoint(itemIndex, item.antecedentNodeId);
+      const gap = requirePoint(itemIndex, item.gapNodeId);
+      const pairs = item.pairs.map((pair) => ({
+        ...pair,
+        correlate: requirePoint(itemIndex, pair.correlateNodeId),
+        remnant: requirePoint(itemIndex, pair.remnantNodeId)
+      }));
+      if (!antecedent || !gap || pairs.some((pair) => !pair.correlate || !pair.remnant)) return;
+      primitives.push({
+        type: 'gapping-alignment',
+        antecedentNodeId: item.antecedentNodeId,
+        gapNodeId: item.gapNodeId,
+        antecedent,
+        gap,
+        pairs: pairs.map((pair) => ({
+          correlateNodeId: pair.correlateNodeId,
+          remnantNodeId: pair.remnantNodeId,
+          correlate: pair.correlate!,
+          remnant: pair.remnant!,
+          label: pair.label
+        })),
+        itemIndex
+      });
+      return;
+    }
+
+    if (item.kind === 'quantifier-raising') {
+      const pronounced = requirePoint(itemIndex, item.pronouncedNodeId, 'shell');
+      const lf = requirePoint(itemIndex, item.lfNodeId, 'shell');
+      const domain = item.scopeDomainNodeId
+        ? requirePoint(itemIndex, item.scopeDomainNodeId, 'shell')
+        : null;
+      if (!pronounced || !lf || (item.scopeDomainNodeId && !domain)) return;
+      primitives.push({
+        type: 'quantifier-raising',
+        pronouncedNodeId: item.pronouncedNodeId,
+        lfNodeId: item.lfNodeId,
+        ...(item.scopeDomainNodeId ? { scopeDomainNodeId: item.scopeDomainNodeId } : {}),
+        index: item.index,
+        itemIndex
+      });
+      return;
+    }
+
+    if (item.kind === 'operator-variable-binding') {
+      const operator = requirePoint(itemIndex, item.operatorNodeId, 'shell');
+      const variable = requirePoint(itemIndex, item.variableNodeId, 'shell');
+      const witness = item.traceWitnessNodeId
+        ? requirePoint(itemIndex, item.traceWitnessNodeId)
+        : null;
+      const domain = item.scopeDomainNodeId
+        ? requirePoint(itemIndex, item.scopeDomainNodeId, 'shell')
+        : null;
+      if (!operator || !variable
+        || (item.traceWitnessNodeId && !witness)
+        || (item.scopeDomainNodeId && !domain)) return;
+      primitives.push({
+        type: 'operator-variable-binding',
+        operatorNodeId: item.operatorNodeId,
+        variableNodeId: item.variableNodeId,
+        ...(item.traceWitnessNodeId ? { traceWitnessNodeId: item.traceWitnessNodeId } : {}),
+        ...(item.scopeDomainNodeId ? { scopeDomainNodeId: item.scopeDomainNodeId } : {}),
+        index: item.index,
+        itemIndex
       });
       return;
     }

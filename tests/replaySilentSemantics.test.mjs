@@ -6,6 +6,8 @@ import {
   __TEST_ONLY__,
   buildAuthoredRelationLinksForFrames,
   buildDerivationReplaySnapshot,
+  buildReplaySupportLines,
+  buildResolvedLinkOperatorVariableIndexMap,
   buildResolvedLinkTraceIndexMap
 } from '../replay/replayCompiler.ts';
 
@@ -61,6 +63,19 @@ test('silent lexical material is muted without being rewritten as a trace', () =
   assert.equal(result.children?.[0]?.silent, true);
 });
 
+test('synthetic replay terminals preserve authored lineage identity', () => {
+  const materialized = __TEST_ONLY__.materializeReplayPreterminals({
+    id: 'd-copy',
+    label: 'D',
+    word: 'who',
+    silent: true,
+    lineageId: 'who-chain'
+  });
+
+  assert.equal(materialized.children?.[0]?.lineageId, 'who-chain');
+  assert.equal(materialized.children?.[0]?.silent, true);
+});
+
 test('authored traces and authored nulls retain their own surfaces', () => {
   const trace = materializeReplayPreterminals({
     id: 'trace_d',
@@ -96,7 +111,7 @@ test('a nonmovement relation cannot turn its silent head anchor into a trace', (
   }];
   const traceIndices = buildResolvedLinkTraceIndexMap(forest, [{
     relationIndex: '2',
-    relation: 'EllipsisLicensing',
+    relation: 'Agree',
     sourceNodeId: 'c_ellipsis',
     targetNodeId: 'tp_silent',
     renderFamily: 'authored-anchor-link',
@@ -127,8 +142,8 @@ test('a nonmovement relation cannot enter the movement-arrow builder', () => {
     change: {
       details: {
         derivationStageRelations: [{
-          relation: 'EllipsisLicensing',
-          anchors: { licensor: 'c_ellipsis', domain: 'tp_silent' }
+          relation: 'Agree',
+          anchors: { probe: 'c_ellipsis', goal: 'tp_silent' }
         }]
       }
     }
@@ -146,7 +161,7 @@ test('a nonmovement relation cannot enter the movement-arrow builder', () => {
   assert.deepEqual(arrows, []);
 });
 
-test('ellipsis licensing survives replay without becoming a second movement chain', () => {
+test('a feature dependency survives replay without becoming a second movement chain', () => {
   const forest = [{
     id: 'cp',
     label: 'CP',
@@ -201,8 +216,8 @@ test('ellipsis licensing survives replay without becoming a second movement chai
       change: {
         details: {
           derivationStageRelations: [{
-            relation: 'EllipsisLicensing',
-            anchors: { licensor: 'c_ellipsis', domain: 'tp_silent' }
+            relation: 'Agree',
+            anchors: { probe: 'c_ellipsis', goal: 'tp_silent' }
           }]
         }
       }
@@ -218,7 +233,7 @@ test('ellipsis licensing survives replay without becoming a second movement chai
     frames
   );
   const movement = snapshot.relationLinks.find((link) => link.relation === 'AbarMove');
-  const licensing = snapshot.relationLinks.find((link) => link.relation === 'EllipsisLicensing');
+  const licensing = snapshot.relationLinks.find((link) => link.relation === 'Agree');
   const traceIndices = buildResolvedLinkTraceIndexMap(forest, snapshot.relationLinks, 1);
 
   assert.equal(movement?.sourceNodeId, 'low_dp');
@@ -398,6 +413,44 @@ test('successive movement links preserve one authored index across the chain', (
   }
 });
 
+test('successive movement links share one fallback index without authored trace numerals', () => {
+  const forest = [{
+    id: 'cp',
+    label: 'CP',
+    children: [
+      { id: 'high_dp', label: 'DP', children: [] },
+      { id: 'mid_dp', label: 'DP', silent: true, children: [{ id: 'mid_d', label: 'D', word: 'Which', silent: true }] },
+      { id: 'base_dp', label: 'DP', silent: true, children: [{ id: 'base_d', label: 'D', word: 'Which', silent: true }] }
+    ]
+  }];
+  const traceIndices = buildResolvedLinkTraceIndexMap(forest, [
+    {
+      relationIndex: '2',
+      relation: 'AbarMove',
+      sourceNodeId: 'base_dp',
+      targetNodeId: 'mid_dp',
+      witnessNodeId: 'base_d',
+      renderFamily: 'trajectory',
+      trajectoryKind: 'phrasal',
+      stepIndex: 0
+    },
+    {
+      relationIndex: '1',
+      relation: 'AbarMove',
+      sourceNodeId: 'mid_dp',
+      targetNodeId: 'high_dp',
+      witnessNodeId: 'mid_d',
+      renderFamily: 'trajectory',
+      trajectoryKind: 'phrasal',
+      stepIndex: 0
+    }
+  ], 0);
+
+  for (const nodeId of ['base_dp', 'base_d', 'mid_dp', 'mid_d']) {
+    assert.equal(traceIndices.get(nodeId), '1');
+  }
+});
+
 test('authored relation links preserve literal anchor roles and use shared lineage only as identity', () => {
   const forest = [{
     id: 'cp',
@@ -529,4 +582,38 @@ test('authored relation display indices are derived without prescribing index sy
   assert.match(links[0].identityKey, /who-chain/);
   assert.match(links[1].identityKey, /what-chain/);
   assert.notEqual(links[0].identityKey, links[1].identityKey);
+});
+
+test('operator-variable shared indices cover the operator and authored trace witness', () => {
+  const forest = [{
+    id: 'cp',
+    label: 'CP',
+    children: [
+      {
+        id: 'operator_dp',
+        label: 'DP',
+        children: [{ id: 'operator_d', label: 'D', word: 'Who' }]
+      },
+      {
+        id: 'variable_dp',
+        label: 'DP',
+        silent: true,
+        children: [{ id: 'variable_trace', label: 't', silent: true }]
+      }
+    ]
+  }];
+  const indices = buildResolvedLinkOperatorVariableIndexMap(forest, [{
+    relationIndex: '1',
+    relation: 'OperatorVariableBinding',
+    sourceNodeId: 'variable_dp',
+    targetNodeId: 'operator_dp',
+    witnessNodeId: 'variable_trace',
+    renderFamily: 'operator-variable-binding',
+    stepIndex: 0
+  }], 0);
+
+  assert.equal(indices.get('operator_dp'), '1');
+  assert.equal(indices.get('operator_d'), '1');
+  assert.equal(indices.get('variable_trace'), '1');
+  assert.equal(indices.has('variable_dp'), false);
 });

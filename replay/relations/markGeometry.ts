@@ -5,7 +5,7 @@
  * accepted shapes can be tested exactly and drawn by any renderer.
  *
  * Nothing here invents a convention: each builder carries the constants the
- * accepted drawing uses — the pair-merge/phase open arc, the dependent-Case
+ * accepted drawing uses — the phase open arc, the dependent-Case
  * orthogonal elbow with filled circular endpoints, the anti-locality bar cap
  * and licensed check, the feature-sharing vine control points, the solid
  * Case path with its quieter dotted collection curves, and the routed
@@ -15,7 +15,7 @@ import type { Point, Rect } from './overlayGeometry.ts';
 
 const fixed = (value: number): string => value.toFixed(1);
 
-/** The accepted open arc: a quadratic bow between two baseline points. */
+/** The accepted domain arc: a quadratic bow between two baseline points. */
 export const openArcPath = (
   startX: number,
   endX: number,
@@ -29,23 +29,6 @@ export const openArcPath = (
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
-
-/**
- * Pair Merge's unheaded arc: an open arc spanning the two anchored labels'
- * centres, rising above the higher of the two, with no arrowhead ever.
- */
-export const pairMergeArcPath = (member: Rect, host: Rect): string => {
-  const memberCenter = member.x + member.width / 2;
-  const hostCenter = host.x + host.width / 2;
-  const left = memberCenter <= hostCenter ? member : host;
-  const right = memberCenter <= hostCenter ? host : member;
-  const startX = left.x + left.width / 2;
-  const endX = right.x + right.width / 2;
-  const baseY = Math.min(left.y, right.y) - 10;
-  const span = Math.abs(endX - startX);
-  const controlRise = Math.max(104, Math.min(220, span * 0.32));
-  return openArcPath(startX, endX, baseY, controlRise);
-};
 
 /**
  * The phase arc: an open arc whose visible apex sits immediately above the
@@ -84,6 +67,57 @@ export const orthogonalElbowPath = (upper: Point, lower: Point): string => [
   `L ${fixed(upper.x)} ${fixed(lower.y)}`,
   `L ${fixed(lower.x)} ${fixed(lower.y)}`
 ].join(' ');
+
+/** Source-backed remnant, roll-up, and smuggling trajectory. */
+export const orthogonalTrajectoryPath = (
+  start: Point,
+  end: Point,
+  laneY: number
+): string => [
+  `M ${start.x.toFixed(1)} ${start.y.toFixed(1)}`,
+  `L ${start.x.toFixed(1)} ${laneY.toFixed(1)}`,
+  `L ${end.x.toFixed(1)} ${laneY.toFixed(1)}`,
+  `L ${end.x.toFixed(1)} ${end.y.toFixed(1)}`
+].join(' ');
+
+/**
+ * Split antecedence keeps the source's anaphor-to-antecedent direction. The
+ * links leave separate points on one hollow square and run below the terminal
+ * row so they remain distinct from shell-to-shell Agree curves.
+ */
+export const splitAntecedenceLinkPath = (
+  origin: Point,
+  target: Point,
+  linkIndex: number,
+  linkCount: number,
+  screenScale = 1
+): string => {
+  const safeScale = Number.isFinite(screenScale) && screenScale > 0 ? screenScale : 1;
+  const localPx = (pixels: number) => pixels / safeScale;
+  const startOffset = (linkIndex - (linkCount - 1) / 2) * localPx(8);
+  const start = { x: origin.x + startOffset, y: origin.y + localPx(2) };
+  const deltaX = target.x - start.x;
+  const horizontalSpan = Math.abs(deltaX) * safeScale;
+  const verticalSpan = Math.abs(target.y - start.y) * safeScale;
+  const firstProgress = clamp(0.383 - verticalSpan * 0.000638, 0.268, 0.356);
+  const secondProgress = clamp(0.1356 - verticalSpan * 0.000184, 0.102, 0.128);
+  const bellyY = Math.max(start.y, target.y)
+    + localPx(clamp(horizontalSpan * 0.11322 + 1.2, 26, 62));
+  const firstControl = {
+    x: start.x + deltaX * firstProgress,
+    y: bellyY
+  };
+  const secondControl = {
+    x: target.x - deltaX * secondProgress,
+    y: bellyY - localPx(clamp(horizontalSpan * 0.02514 + 0.5, 6, 14))
+  };
+  return [
+    `M ${fixed(start.x)} ${fixed(start.y)}`,
+    `C ${fixed(firstControl.x)} ${fixed(firstControl.y)},`,
+    `${fixed(secondControl.x)} ${fixed(secondControl.y)},`,
+    `${fixed(target.x)} ${fixed(target.y)}`
+  ].join(' ');
+};
 
 export const ELBOW_ENDPOINT_RADIUS = 9;
 
@@ -265,12 +299,6 @@ export const domainBracketPath = (x1: number, x2: number, y: number, lip = 12): 
   `L ${fixed(x1)} ${fixed(y)}`,
   `L ${fixed(x2)} ${fixed(y)}`,
   `L ${fixed(x2)} ${fixed(y - lip)}`
-].join(' ');
-
-/** The tall ellipsis-domain slash from the licensing composition. */
-export const ellipsisSlashPath = (rect: Rect): string => [
-  `M ${fixed(rect.x - 18)} ${fixed(rect.y + rect.height + 24)}`,
-  `L ${fixed(rect.x + 26)} ${fixed(rect.y - 24)}`
 ].join(' ');
 
 /**

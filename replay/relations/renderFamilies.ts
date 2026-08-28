@@ -22,14 +22,26 @@
  *   persistence; they never own an independent policy.
  */
 
+import type { OutcomeConcept } from './outcomeResolver.ts';
+
 export type RenderPersistence =
   | 'from-stage-onward'
   | 'stage-only'
+  | 'replace-prior-stage'
   | 'replace-previous-instance';
+
+export type ProductionTransitionKind =
+  | 'movement'
+  | 'pronunciation'
+  | 'deletion'
+  | 'rewrite'
+  | 'fission'
+  | 'rebracketing';
 
 /** Finite compiler branches. Grouped identities share a branch and a style. */
 export type ProductionFamilyKind =
   | 'trajectory'
+  | 'operator-variable-binding'
   | 'occurrence-identity'
   | 'coindex'
   | 'control'
@@ -53,11 +65,10 @@ export type ProductionFamilyKind =
   | 'blocked-access'
   | 'anti-locality'
   | 'improper-movement'
-  | 'right-roof'
   | 'blocked-extraction'
   | 'intervention'
+  | 'analysis-judgment'
   | 'ellipsis-site'
-  | 'ellipsis-licensing'
   | 'copy-pronunciation'
   | 'partial-copy-deletion'
   | 'realization-plate'
@@ -79,30 +90,33 @@ export type ProductionFamilyKind =
 
 export type ProductionRenderFamily = {
   family: ProductionFamilyKind;
-  /** Trajectory drawing kind, for the trajectory family only. */
+  /** Authored outcome concepts this exact registered design may style. */
+  acceptedOutcomeConcepts: readonly OutcomeConcept[];
+  /**
+   * Trajectory capability owned by this production entry. Most entries whose
+   * value is present are trajectory families; a source-backed composite may
+   * also own one trajectory alongside its other marks.
+   */
   trajectoryKind?:
     | 'phrasal'
     | 'head'
     | 'lowering'
-    | 'operator-variable'
     | 'remnant'
     | 'roll-up'
     | 'smuggling'
     | 'atb'
-    | 'sideward';
+    | 'sideward'
+    | 'parasitic-gap';
   persistence: RenderPersistence;
+  /** Replay tree changes this exact registered design may sequence. */
+  transitionKinds?: readonly ProductionTransitionKind[];
   /** Agreement path mode, for the agreement-paths family only. */
   agreementMode?: 'multiple' | 'cyclic';
-  /**
-   * For replace-previous-instance families whose replacement is scoped to an
-   * authored anchor (Cooper storage per-scope ledgers): the anchor role whose
-   * first id joins the replacement group key.
-   */
-  replacementScopeRole?: string;
 };
 
 const persistent = (family: ProductionFamilyKind, extra: Partial<ProductionRenderFamily> = {}): ProductionRenderFamily => ({
   family,
+  acceptedOutcomeConcepts: [],
   persistence: 'from-stage-onward',
   ...extra
 });
@@ -113,7 +127,7 @@ export const PRODUCTION_RENDER_FAMILIES: Record<string, ProductionRenderFamily> 
   'trajectory.scrambling': persistent('trajectory', { trajectoryKind: 'phrasal' }),
   'trajectory.head': persistent('trajectory', { trajectoryKind: 'head' }),
   'trajectory.lowering': persistent('trajectory', { trajectoryKind: 'lowering' }),
-  'trajectory.operator-variable': persistent('trajectory', { trajectoryKind: 'operator-variable' }),
+  'scope.operator-variable': persistent('operator-variable-binding'),
   'trajectory.remnant': persistent('trajectory', { trajectoryKind: 'remnant' }),
   'trajectory.roll-up': persistent('trajectory', { trajectoryKind: 'roll-up' }),
   'trajectory.smuggling': persistent('trajectory', { trajectoryKind: 'smuggling' }),
@@ -124,62 +138,97 @@ export const PRODUCTION_RENDER_FAMILIES: Record<string, ProductionRenderFamily> 
   'coreference.coindex': persistent('coindex'),
   'control.dependency': persistent('control'),
   'predication.paths': persistent('predication'),
-  'binding.domain': persistent('binding-domain'),
+  'binding.domain': persistent('binding-domain', {
+    acceptedOutcomeConcepts: [
+      'licensed', 'successful', 'allowed', 'accepted', 'valid',
+      'blocked', 'failed', 'illicit', 'rejected', 'unlicensed', 'impossible', 'violation'
+    ]
+  }),
   'split-antecedence.indices': persistent('split-antecedence'),
-  'parasitic-gap.composition': persistent('parasitic-gap'),
+  'parasitic-gap.composition': persistent('parasitic-gap', {
+    trajectoryKind: 'parasitic-gap',
+    acceptedOutcomeConcepts: [
+      'licensed', 'successful', 'allowed', 'accepted', 'valid',
+      'blocked', 'failed', 'illicit', 'rejected', 'unlicensed', 'impossible', 'violation'
+    ]
+  }),
 
-  'pair-merge.arc': persistent('pair-merge'),
+  'pair-merge.fork': persistent('pair-merge'),
   'multidominance.shared-node': persistent('shared-node'),
   'argument-sharing.domains': persistent('argument-sharing'),
   'idiom-chunks.domain': persistent('idiom-chunks'),
 
   'agree.plaque': persistent('feature-plaque'),
-  'feature-bundle.plaque': persistent('feature-plaque'),
+  'feature-bundle.plaque': {
+    family: 'feature-plaque',
+    acceptedOutcomeConcepts: [],
+    persistence: 'replace-previous-instance'
+  },
   'multiple-agree.fanout': persistent('agreement-paths', { agreementMode: 'multiple' }),
   'cyclic-agree.paths': persistent('agreement-paths', { agreementMode: 'cyclic' }),
   'feature-sharing.vines': persistent('feature-sharing'),
   'case-assignment.path': persistent('case-assignment'),
-  'dependent-case.elbow': { family: 'dependent-case', persistence: 'replace-previous-instance' },
+  'dependent-case.elbow': {
+    family: 'dependent-case',
+    acceptedOutcomeConcepts: [],
+    persistence: 'replace-previous-instance'
+  },
   'accord.link': persistent('accord'),
 
-  'bounding-node.cuts': persistent('boundary-cuts'),
+  'bounding-node.cuts': persistent('boundary-cuts', {
+    acceptedOutcomeConcepts: [
+      'blocked', 'failed', 'illicit', 'rejected', 'unlicensed', 'impossible', 'violation'
+    ]
+  }),
   'phase.arc': persistent('phase-arc'),
   'transfer.domain': persistent('transfer-domain'),
-  'transfer.blocked-access': persistent('blocked-access'),
-  'anti-locality.paths': persistent('anti-locality'),
+  'transfer.blocked-access': persistent('blocked-access', {
+    acceptedOutcomeConcepts: [
+      'blocked', 'failed', 'illicit', 'rejected', 'unlicensed', 'impossible', 'violation'
+    ]
+  }),
+  'anti-locality.paths': persistent('anti-locality', {
+    acceptedOutcomeConcepts: [
+      'licensed', 'successful', 'allowed', 'accepted', 'valid',
+      'blocked', 'failed', 'illicit', 'rejected', 'unlicensed', 'impossible', 'violation'
+    ]
+  }),
   'improper-movement.landing': persistent('improper-movement'),
-  'right-roof.boundary': persistent('right-roof'),
-  'blocked-extraction.diagnostic': persistent('blocked-extraction'),
-  'intervention.blocked-path': persistent('intervention'),
+  'blocked-extraction.diagnostic': persistent('blocked-extraction', {
+    acceptedOutcomeConcepts: [
+      'blocked', 'failed', 'illicit', 'rejected', 'unlicensed', 'impossible', 'violation'
+    ]
+  }),
+  'intervention.blocked-path': persistent('intervention', {
+    acceptedOutcomeConcepts: [
+      'blocked', 'failed', 'illicit', 'rejected', 'unlicensed', 'impossible', 'violation'
+    ]
+  }),
+  'analysis.illicit': persistent('analysis-judgment', {
+    acceptedOutcomeConcepts: ['illicit']
+  }),
 
-  'ellipsis.recoverability': persistent('ellipsis-site'),
-  'ellipsis.licensing': persistent('ellipsis-licensing'),
-  'ellipsis.deletion': persistent('ellipsis-site'),
+  'ellipsis.ghosting': persistent('ellipsis-site', { transitionKinds: ['deletion'] }),
+  'ellipsis.deletion': persistent('ellipsis-site', { transitionKinds: ['deletion'] }),
   'copy.multiple-pronunciation': persistent('copy-pronunciation'),
-  'copy.partial-deletion': persistent('partial-copy-deletion'),
+  'copy.partial-deletion': persistent('partial-copy-deletion', { transitionKinds: ['deletion'] }),
 
-  'pf.realization': persistent('realization-plate'),
-  'pf.vocabulary-insertion': persistent('vocabulary-insertion'),
-  'pf.phrasal-spellout': persistent('phrasal-spellout'),
+  'pf.realization': persistent('realization-plate', { transitionKinds: ['pronunciation'] }),
+  'pf.vocabulary-insertion': persistent('vocabulary-insertion', { transitionKinds: ['pronunciation'] }),
+  'pf.phrasal-spellout': persistent('phrasal-spellout', { transitionKinds: ['pronunciation'] }),
   'pf.correspondence': persistent('pf-correspondence'),
-  'pf.fission': persistent('fission'),
-  'pf.impoverishment': persistent('impoverishment'),
-  'pf.local-dislocation': persistent('local-dislocation'),
-  'pf.cyclic-linearization': { family: 'cyclic-linearization', persistence: 'replace-previous-instance' },
+  'pf.fission': persistent('fission', { transitionKinds: ['fission'] }),
+  'pf.impoverishment': persistent('impoverishment', { transitionKinds: ['rewrite'] }),
+  'pf.local-dislocation': persistent('local-dislocation', { transitionKinds: ['rebracketing'] }),
+  'pf.cyclic-linearization': persistent('cyclic-linearization'),
 
   'qr.covert': persistent('qr'),
   'lf.reconstruction': persistent('lf-reconstruction'),
-  /*
-   * Cooper storage plaques are current-state ledgers per authored scope: a
-   * later plaque for the SAME scope anchor replaces the earlier one, while
-   * distinct scopes (a VP plaque and an S plaque) coexist in one frame. The
-   * replacement group is therefore keyed by the scope anchor, not the family
-   * alone.
-   */
+  /* Cooper storage is one authored ledger state per derivation stage. */
   'cooper-storage.ledger': {
     family: 'cooper-storage',
-    persistence: 'replace-previous-instance',
-    replacementScopeRole: 'scope'
+    acceptedOutcomeConcepts: [],
+    persistence: 'replace-prior-stage'
   },
   'accord.strong-npi': persistent('strong-npi'),
 
@@ -195,15 +244,15 @@ export const PRODUCTION_RENDER_FAMILIES: Record<string, ProductionRenderFamily> 
  * head-sized kinds relate terminals directly.
  */
 export const TRAJECTORY_SOURCE_ROLES = [
-  'lowerCopy', 'source', 'from', 'variable', 'realGap', 'lower-occurrence'
+  'lowerCopy', 'source', 'sources', 'from', 'variable', 'realGap', 'lower-occurrence'
 ] as const;
 export const TRAJECTORY_TARGET_ROLES = [
-  'pronouncedCopy', 'higherCopy', 'target', 'operator', 'filler', 'landing', 'to', 'landing-site'
+  'pronouncedCopy', 'higherCopy', 'target', 'operator', 'filler', 'remnant', 'landing', 'to', 'landing-site'
 ] as const;
-export const TRAJECTORY_WITNESS_ROLES = ['traceWitness', 'lowerWitness'] as const;
+export const TRAJECTORY_WITNESS_ROLES = ['traceWitness', 'traceWitnesses', 'lowerWitness'] as const;
 
 export const WITNESS_REQUIRED_TRAJECTORY_KINDS: ReadonlySet<string> = new Set([
-  'phrasal', 'remnant', 'roll-up', 'smuggling', 'atb', 'sideward'
+  'phrasal', 'remnant', 'roll-up', 'smuggling', 'atb', 'sideward', 'parasitic-gap'
 ]);
 
 /**

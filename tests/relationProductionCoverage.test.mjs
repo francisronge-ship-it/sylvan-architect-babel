@@ -5,7 +5,10 @@ import {
   findRelationRegistryEntry,
   productionRelationRegistry
 } from '../replay/relationDispatch/index.js';
-import { compileRelationRenderPlan } from '../replay/relations/renderPlanCompiler.ts';
+import {
+  compileRelationRenderPlan,
+  visiblePlanFrameItems
+} from '../replay/relations/renderPlanCompiler.ts';
 import {
   EXCLUDED_RELATION_IDENTITIES,
   PRODUCTION_RENDER_FAMILIES
@@ -32,12 +35,12 @@ const ACCEPTED_RELATION_IDENTITIES = [
   'CaseAssignment',
   'Control',
   'CooperStorage',
+  'CopyOccurrence',
   'Coreference',
   'CyclicAgree',
   'CyclicLinearization',
   'DependentCase',
   'EllipsisDeletion',
-  'EllipsisLicensing',
   'EllipsisRecoverability',
   'FProjection',
   'FeatureBundle',
@@ -50,6 +53,7 @@ const ACCEPTED_RELATION_IDENTITIES = [
   'IdiomChunkCointerpretation',
   'Impoverishment',
   'ImproperMovement',
+  'IllicitAnalysis',
   'Intervention',
   'LFReconstruction',
   'LocalDislocation',
@@ -69,7 +73,6 @@ const ACCEPTED_RELATION_IDENTITIES = [
   'Predication',
   'QuantifierRaising',
   'RemnantMovement',
-  'RightRoof',
   'RollUpMovement',
   'Scrambling',
   'SidewardMovement',
@@ -113,6 +116,11 @@ test('every accepted relation identity is production-wired or explicitly exclude
       `${name} exclusion carries no reason`
     );
   });
+});
+
+test('RightRoof is retired as a production relation; rightward movement remains AbarMove', () => {
+  assert.equal(findRelationRegistryEntry(productionRelationRegistry, 'RightRoof'), null);
+  assert.ok(findRelationRegistryEntry(productionRelationRegistry, 'AbarMove'));
 });
 
 /**
@@ -209,11 +217,6 @@ const CASES = [
     }
   },
   {
-    relation: 'RightRoof',
-    anchors: { roof: 'dom_fx', source: 'src_fx', traceWitness: 'w_fx', landing: 'tgt_fx' },
-    values: { outcome: 'licensed' }
-  },
-  {
     relation: 'BlockedExtraction',
     anchors: { source: 'in_a_fx', target: 'a_fx', adjunctDomain: 'dom_fx' },
     values: { label: '* extraction' }
@@ -223,15 +226,10 @@ const CASES = [
     anchors: { source: 'in_a_fx', target: 'a_fx', adjunctDomain: 'dom_fx' }
   },
   { relation: 'Intervention', anchors: { landing: 'a_fx', intervener: 'b_fx', target: 'c_fx' } },
-  {
-    relation: 'EllipsisLicensing',
-    anchors: { checker: 'a_fx', licensor: 'b_fx', domain: 'dom_fx' },
-    values: { checkerFeature: '[CAT[T]]', licensorFeature: '[E[INFL[uT]]]', valuedFeature: 'uT', domainLabel: 'ellipsis' }
-  },
-  { relation: 'EllipsisLicensing', anchors: { licensor: 'b_fx', domain: 'dom_fx' } },
   { relation: 'EllipsisDeletion', anchors: { domain: 'dom_fx' } },
   { relation: 'MultiplePronunciation', anchors: { higherCopy: 'a_fx', lowerCopy: 'b_fx' } },
-  { relation: 'PartialCopyDeletion', anchors: { lowerCopy: 'dom_fx', deletedSubconstituent: 'in_a_fx' } },
+  { relation: 'CopyOccurrence', anchors: { occurrences: ['a_fx', 'b_fx'] } },
+  { relation: 'PartialCopyDeletion', anchors: { deletedSubconstituent: 'in_a_fx' } },
   { relation: 'PhrasalSpellOut', anchors: { phrase: 'dom_fx' }, values: { exponent: '-nak' } },
   {
     relation: 'ManyToManyCorrespondence',
@@ -252,7 +250,7 @@ const CASES = [
   },
   {
     relation: 'StrongNPILicensing',
-    anchors: { exhaustifier: 'a_fx', npi: 'b_fx', focusOperator: 'c_fx', focusAssociate: 'd_fx' },
+    anchors: { licensor: 'a_fx', npi: 'b_fx', focusOperator: 'c_fx', focusAssociate: 'd_fx' },
     values: { feature: 'D' }
   },
   { relation: 'FocusMarking', anchors: { focus: 'in_a_fx', background: 'in_b_fx', domain: 'dom_fx' } },
@@ -260,7 +258,7 @@ const CASES = [
   { relation: 'ThetaAssignment', anchors: { predicate: 'a_fx', agent: 'b_fx', theme: 'c_fx' } },
   {
     relation: 'GappingAlignment',
-    anchors: { antecedent: 'a_fx', gap: 'b_fx', correlates: ['c_fx', 'd_fx'], remnants: ['in_a_fx', 'in_b_fx'] },
+    anchors: { correlates: ['c_fx', 'd_fx'], remnants: ['in_a_fx', 'in_b_fx'] },
     values: { labels: ['1', '2'] }
   }
 ];
@@ -279,6 +277,307 @@ test('every remaining wired identity compiles its real accepted anchor shape int
       semanticItems.length >= 1,
       `${relation} compiled no semantic item; diagnostics: ${JSON.stringify(plan.diagnostics)}`
     );
+    assert.equal(
+      semanticItems.every((item) => item.tier2FacetId === undefined),
+      true,
+      `${relation} is canonical production evidence and must remain entirely Tier 1`
+    );
+  });
+});
+
+test('ParasiticGap owns exactly one ordinary movement path from real gap to filler', () => {
+  const plan = compileRelationRenderPlan([
+    stage([{
+      relation: 'ParasiticGap',
+      anchors: {
+        filler: 'tgt_fx',
+        realGap: 'src_fx',
+        traceWitness: 'w_fx',
+        parasiticGaps: ['b_fx', 'c_fx']
+      }
+    }], fixtureForest())
+  ]);
+  const items = plan.frames[0].items;
+  const trajectories = items.filter((item) => item.kind === 'trajectory');
+  assert.deepEqual(trajectories.map((item) => ({
+    kind: item.trajectoryKind,
+    source: item.sourceNodeId,
+    target: item.targetNodeId,
+    witness: item.witnessNodeId,
+    sourceAttachment: item.sourceAttachment,
+    targetAttachment: item.targetAttachment
+  })), [{
+    kind: 'parasitic-gap',
+    source: 'src_fx',
+    target: 'tgt_fx',
+    witness: 'w_fx',
+    sourceAttachment: 'shell-bottom',
+    targetAttachment: 'shell-bottom'
+  }]);
+  assert.equal(
+    trajectories.some((item) => ['b_fx', 'c_fx'].includes(item.sourceNodeId)),
+    false,
+    'a parasitic gap is never a movement source'
+  );
+  const copyFork = items.find((item) => item.kind === 'parasitic-gap-copy');
+  assert.deepEqual(copyFork && {
+    content: copyFork.contentNodeId,
+    ordinaryGap: copyFork.ordinaryGapNodeId,
+    parasiticGaps: copyFork.parasiticGapNodeIds
+  }, {
+    content: 'tgt_fx',
+    ordinaryGap: 'src_fx',
+    parasiticGaps: ['b_fx', 'c_fx']
+  });
+  assert.equal(items.some((item) => item.kind === 'coindex'), false);
+  assert.equal(
+    items.some((item) => item.kind === 'node-badges' && item.badgeStyle === 'gap-notation'),
+    false,
+    'the reusable copy fork, not a pg subscript, is the generic relation mark'
+  );
+});
+
+test('ParasiticGap gap-only authorship compiles specialized gap notation without movement', () => {
+  const plan = compileRelationRenderPlan([
+    stage([{
+      relation: 'ParasiticGap',
+      anchors: { parasiticGaps: ['b_fx', 'c_fx'] }
+    }], fixtureForest())
+  ]);
+  const items = plan.frames[0].items;
+  const gapBadges = items
+    .filter((item) => item.kind === 'node-badges' && item.badgeStyle === 'gap-notation')
+    .flatMap((item) => item.badges);
+
+  assert.deepEqual(plan.unregistered, []);
+  assert.deepEqual(plan.diagnostics, []);
+  assert.deepEqual(gapBadges, [
+    { nodeId: 'b_fx', text: 'pgᵢ', shape: 'plain' },
+    { nodeId: 'c_fx', text: 'pgᵢ', shape: 'plain' }
+  ]);
+  assert.equal(items.some((item) => item.kind === 'trajectory'), false);
+  assert.equal(items.some((item) => item.kind === 'parasitic-gap-copy'), false);
+  assert.equal(items.some((item) => item.kind === 'fallback'), false);
+});
+
+test('ParasiticGap paths-only authorship compiles path status without movement or gap notation', () => {
+  const plan = compileRelationRenderPlan([
+    stage([{
+      relation: 'ParasiticGap',
+      anchors: {
+        primaryPath: ['root_fx', 'a_fx'],
+        secondaryPath: ['b_fx', 'c_fx'],
+        blockedEdge: 'd_fx'
+      },
+      values: { outcome: 'blocked' }
+    }], fixtureForest())
+  ]);
+  const items = plan.frames[0].items;
+  const pathStatus = items.find((item) => item.kind === 'path-status');
+
+  assert.deepEqual(plan.unregistered, []);
+  assert.deepEqual(plan.diagnostics, []);
+  assert.deepEqual(pathStatus && {
+    primary: pathStatus.primaryNodeIds,
+    secondary: pathStatus.secondaryNodeIds,
+    blockedEdge: pathStatus.blockedEdgeNodeId,
+    outcome: pathStatus.outcome
+  }, {
+    primary: ['root_fx', 'a_fx'],
+    secondary: ['b_fx', 'c_fx'],
+    blockedEdge: 'd_fx',
+    outcome: 'blocked'
+  });
+  assert.equal(items.some((item) => item.kind === 'trajectory'), false);
+  assert.equal(
+    items.some((item) => item.kind === 'node-badges' && item.badgeStyle === 'gap-notation'),
+    false
+  );
+  assert.equal(items.some((item) => item.kind === 'fallback'), false);
+});
+
+test('ParasiticGap complete movement authorship compiles its trajectory without requiring gap facets', () => {
+  const plan = compileRelationRenderPlan([
+    stage([{
+      relation: 'ParasiticGap',
+      anchors: {
+        filler: 'tgt_fx',
+        realGap: 'src_fx',
+        lowerWitness: 'w_fx'
+      }
+    }], fixtureForest())
+  ]);
+  const items = plan.frames[0].items;
+  const trajectories = items.filter((item) => item.kind === 'trajectory');
+
+  assert.deepEqual(plan.unregistered, []);
+  assert.deepEqual(plan.diagnostics, []);
+  assert.deepEqual(trajectories.map((item) => ({
+    family: item.familyId,
+    kind: item.trajectoryKind,
+    source: item.sourceNodeId,
+    target: item.targetNodeId,
+    witness: item.witnessNodeId
+  })), [{
+    family: 'parasitic-gap.composition',
+    kind: 'parasitic-gap',
+    source: 'src_fx',
+    target: 'tgt_fx',
+    witness: 'w_fx'
+  }]);
+  assert.equal(items.some((item) => item.kind === 'parasitic-gap-copy'), false);
+  assert.equal(items.some((item) => item.kind === 'fallback'), false);
+});
+
+test('AbarMove plus gap-only ParasiticGap keeps movement and parasitic notation separate', () => {
+  const plan = compileRelationRenderPlan([
+    stage([
+      {
+        relation: 'AbarMove',
+        anchors: {
+          lowerCopy: 'src_fx',
+          traceWitness: 'w_fx',
+          pronouncedCopy: 'tgt_fx'
+        }
+      },
+      {
+        relation: 'ParasiticGap',
+        anchors: { parasiticGap: 'b_fx' }
+      }
+    ], fixtureForest())
+  ]);
+  const items = plan.frames[0].items;
+  const trajectories = items.filter((item) => item.kind === 'trajectory');
+  const gapBadges = items
+    .filter((item) => item.kind === 'node-badges' && item.badgeStyle === 'gap-notation')
+    .flatMap((item) => item.badges);
+
+  assert.deepEqual(plan.unregistered, []);
+  assert.deepEqual(plan.diagnostics, []);
+  assert.deepEqual(trajectories.map((item) => ({
+    family: item.familyId,
+    relationIndex: item.relationRef.relationIndex,
+    kind: item.trajectoryKind
+  })), [{
+    family: 'trajectory.phrasal',
+    relationIndex: 0,
+    kind: 'phrasal'
+  }]);
+  assert.deepEqual(gapBadges, [
+    { nodeId: 'b_fx', text: 'pgᵢ', shape: 'plain' }
+  ]);
+  assert.equal(items.some((item) => item.kind === 'fallback'), false);
+});
+
+test('a failed ParasiticGap movement facet does not abort valid gap and path facets', () => {
+  const plan = compileRelationRenderPlan([
+    stage([{
+      relation: 'ParasiticGap',
+      anchors: {
+        filler: 'missing_filler',
+        realGap: 'src_fx',
+        traceWitness: 'w_fx',
+        parasiticGap: 'b_fx',
+        primaryPath: ['root_fx', 'a_fx']
+      }
+    }], fixtureForest())
+  ]);
+  const items = plan.frames[0].items;
+
+  assert.ok(plan.diagnostics.some((diagnostic) => (
+    diagnostic.kind === 'anchor-unresolved'
+    && diagnostic.detail.includes('missing_filler')
+  )));
+  assert.equal(items.some((item) => item.kind === 'trajectory'), false);
+  assert.equal(items.some((item) => item.kind === 'path-status'), true);
+  assert.equal(
+    items.some((item) => item.kind === 'node-badges' && item.badgeStyle === 'gap-notation'),
+    true
+  );
+  assert.equal(items.some((item) => item.kind === 'fallback'), false);
+});
+
+test('EllipsisDeletion strikes lexical terminals and compiles no ghost set', () => {
+  const deletionTree = {
+    id: 'dp_delete',
+    label: 'DP',
+    silent: true,
+    children: [
+      { id: 'd_delete', label: 'D', silent: true, children: [
+        { id: 'the_delete', label: 'The', silent: true, children: [] }
+      ] },
+      { id: 'np_delete', label: 'NP', silent: true, children: [
+        { id: 'n_delete', label: 'N', silent: true, children: [
+          { id: 'students_delete', label: 'students', silent: true, children: [] }
+        ] }
+      ] }
+    ]
+  };
+  const plan = compileRelationRenderPlan([
+    stage([{ relation: 'EllipsisDeletion', anchors: { domain: 'dp_delete' } }], [deletionTree])
+  ]);
+  const items = plan.frames[0].items;
+  const strike = items.find((item) => item.kind === 'strike-ghost');
+  assert.deepEqual(strike?.strikeNodeIds, ['dp_delete']);
+  assert.deepEqual(strike?.ghostNodeIds, []);
+  assert.equal(items.some((item) => item.kind === 'ellipsis-site'), false);
+});
+
+test('ParasiticGap Phillips path topology leaves from the unique real-gap terminal', () => {
+  const plan = compileRelationRenderPlan([
+    stage([{
+      relation: 'ParasiticGap',
+      anchors: {
+        filler: 'tgt_fx',
+        realGap: 'src_fx',
+        traceWitness: 'w_fx',
+        parasiticGap: 'b_fx',
+        primaryPath: ['root_fx', 'src_fx'],
+        secondaryPath: ['d_fx', 'b_fx']
+      }
+    }], fixtureForest())
+  ]);
+  const trajectories = plan.frames[0].items.filter((item) => item.kind === 'trajectory');
+  assert.deepEqual(trajectories.map((item) => ({
+    source: item.sourceNodeId,
+    target: item.targetNodeId,
+    sourceAttachment: item.sourceAttachment,
+    targetAttachment: item.targetAttachment
+  })), [{
+    source: 'src_fx',
+    target: 'tgt_fx',
+    sourceAttachment: 'terminal',
+    targetAttachment: 'shell-bottom'
+  }]);
+  assert.equal(
+    trajectories.some((item) => item.sourceNodeId === 'b_fx'),
+    false,
+    'the Phillips secondary path never becomes a movement source'
+  );
+});
+
+test('Agree composed with CaseAssignment is presented once in either authored order', () => {
+  const agree = {
+    relation: 'Agree',
+    anchors: { probe: 'b_fx', goal: 'c_fx' },
+    values: { feature: 'Number', value: 'PL' }
+  };
+  const caseAssignment = {
+    relation: 'CaseAssignment',
+    anchors: { assigner: 'a_fx', bearer: 'b_fx' },
+    values: { feature: 'Case', value: 'DAT' }
+  };
+  [
+    [agree, caseAssignment],
+    [caseAssignment, agree]
+  ].forEach((relations) => {
+    const plan = compileRelationRenderPlan([stage(relations, fixtureForest())]);
+    const items = plan.frames[0].items;
+    assert.equal(items.some((item) => item.kind === 'fallback'), false);
+    assert.equal(
+      items.filter((item) => item.kind === 'directed-path' && item.pathStyle === 'case-agree').length,
+      1
+    );
   });
 });
 
@@ -294,11 +593,10 @@ test('PFRealization collects same-stage VocabularyInsertion rows into one plate,
   const plates = plan.frames[0].items.filter((item) => item.kind === 'node-plaque');
   assert.equal(plates.length, 1, 'insertions fold into the realization plate, not separate plates');
   assert.deepEqual(plates[0].rows, [
-    { label: 'input', value: '√LAUGH' },
-    { label: 'output', value: 'laugh' },
-    { label: 'input', value: 'T[past]' },
-    { label: 'output', value: '-ed' }
+    { label: '√LAUGH', value: 'laugh' },
+    { label: 'T[past]', value: '-ed' }
   ]);
+  assert.deepEqual(plates[0].rowRefs.map((ref) => ref?.relationIndex ?? null), [1, 2]);
   // A standalone insertion keeps its own plate.
   const alone = compileRelationRenderPlan([
     stage([
@@ -308,7 +606,7 @@ test('PFRealization collects same-stage VocabularyInsertion rows into one plate,
   assert.equal(alone.frames[0].items.filter((item) => item.kind === 'node-plaque').length, 1);
 });
 
-test('CyclicLinearization replaces its previous instance per frame and keeps the backward cue', () => {
+test('CyclicLinearization keeps earlier instances visible and retains the backward cue', () => {
   const forest = fixtureForest();
   const plan = compileRelationRenderPlan([
     stage([{
@@ -324,23 +622,84 @@ test('CyclicLinearization replaces its previous instance per frame and keeps the
     }], forest)
   ]);
   const frameZero = plan.frames[0].items.filter((item) => item.kind === 'node-plaque');
-  const frameOne = plan.frames[1].items.filter((item) => item.kind === 'node-plaque');
+  const frameOne = visiblePlanFrameItems(plan, 1, null)
+    .filter((item) => item.kind === 'node-plaque');
   assert.equal(frameZero.length, 1);
-  assert.equal(frameOne.length, 1);
-  assert.equal(frameOne[0].title, 'conflict', 'the later instance replaced the earlier one');
-  assert.equal(frameOne[0].backward, true);
-  assert.deepEqual(frameOne[0].priorWitnessNodeIds, ['a_fx', 'b_fx']);
+  assert.equal(frameOne.length, 2);
+  assert.equal(frameOne[0].title, 'licensed', 'the earlier authored instance persists');
+  assert.equal(frameOne[1].title, 'conflict', 'the later instance is added as a separate claim');
+  assert.equal(frameOne[1].backward, true);
+  assert.deepEqual(frameOne[1].priorWitnessNodeIds, ['a_fx', 'b_fx']);
 });
 
-test('a multidominance claim none of whose parents dominates the shared node fails closed', () => {
+test('CooperStorage keeps same-stage scope ledgers together and replaces the prior stage atomically', () => {
+  const forest = fixtureForest();
+  const plan = compileRelationRenderPlan([
+    stage([
+      {
+        relation: 'CooperStorage',
+        anchors: { scope: 'dom_fx', quantifier: 'a_fx' },
+        values: { category: 'VP', qstore: ['every book'], retrieved: [] }
+      },
+      {
+        relation: 'CooperStorage',
+        anchors: { scope: 'root_fx', quantifier: 'a_fx' },
+        values: { category: 'S', qstore: ['every book'], retrieved: [] }
+      }
+    ], forest),
+    stage([{
+      relation: 'CooperStorage',
+      anchors: { scope: 'root_fx', quantifier: 'a_fx' },
+      values: { category: 'S', qstore: [], retrieved: ['every book'] }
+    }], forest),
+    stage([{
+      relation: 'CooperStorage',
+      anchors: { scope: 'root_fx', quantifier: 'a_fx' },
+      values: { category: 'S', qstore: [], retrieved: ['someone'] }
+    }], forest)
+  ]);
+
+  const plaques = (frameIndex, played) => visiblePlanFrameItems(plan, frameIndex, played)
+    .filter((item) => item.kind === 'node-plaque');
+  assert.equal(plaques(0, null).length, 2, 'same-stage VP and S ledgers coexist');
+  assert.equal(plaques(1, new Set()).length, 2, 'the prior state remains through structural microsteps');
+  assert.equal(plaques(1, new Set([0])).length, 1, 'the new relation moment replaces the prior stage');
+  assert.equal(plaques(1, null).length, 1, 'the committed second stage contains only its current state');
+  assert.equal(plaques(2, null).length, 1, 'the committed final stage contains only its current state');
+});
+
+test('multidominance trusts fully resolved authored parent roles without inferring a native mother', () => {
   const plan = compileRelationRenderPlan([
     stage([{
       relation: 'Multidominance',
       anchors: { parents: ['a_fx', 'b_fx'], shared: 'c_fx' }
     }], fixtureForest())
   ]);
-  assert.equal(plan.frames[0].items.filter((item) => item.kind === 'shared-node').length, 0);
-  assert.ok(plan.diagnostics.some((d) => d.kind === 'illegal-configuration'));
+  assert.equal(plan.frames[0].items.filter((item) => item.kind === 'shared-node').length, 1);
+  assert.deepEqual(plan.diagnostics, []);
+});
+
+test('shared-subject multidominance uses one structural mother as its witness and adds the other', () => {
+  const shared = node('coord_md_subject', 'CoordP', [
+    node('tp_left_md_subject', 'TP', [
+      node('dp_shared_subject', 'DP', [leaf('n_shared_subject', 'N', 'Noa')]),
+      node('vp_left_md_subject', 'VP', [leaf('v_left_md_subject', 'V', 'sang')])
+    ]),
+    node('tp_right_md_subject', 'TP', [
+      node('vp_right_md_subject', 'VP', [leaf('v_right_md_subject', 'V', 'danced')])
+    ])
+  ]);
+  const plan = compileRelationRenderPlan([
+    stage([{
+      relation: 'Multidominance',
+      anchors: {
+        parents: ['tp_left_md_subject', 'tp_right_md_subject'],
+        shared: 'dp_shared_subject'
+      }
+    }], [shared])
+  ]);
+  assert.equal(plan.frames[0].items.filter((item) => item.kind === 'shared-node').length, 1);
+  assert.deepEqual(plan.diagnostics, []);
 });
 
 test('LF reconstruction compiles strike/ghost plus shared index and no connector of any kind', () => {
@@ -352,5 +711,6 @@ test('LF reconstruction compiles strike/ghost plus shared index and no connector
   ]);
   const kinds = plan.frames[0].items.map((item) => item.kind).sort();
   assert.deepEqual(kinds, ['coindex', 'strike-ghost']);
+  assert.equal(plan.frames[0].items.find((item) => item.kind === 'coindex')?.index, 'i');
   assert.equal(plan.frames[0].items.some((item) => item.kind === 'directed-path'), false);
 });

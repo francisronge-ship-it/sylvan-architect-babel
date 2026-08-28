@@ -8,6 +8,147 @@
 export type Point = { x: number; y: number };
 export type Rect = { x: number; y: number; width: number; height: number };
 
+export type AnalysisVerdictAnchor = {
+  analysisNodeId: string;
+  desiredY: number;
+  order: number;
+};
+
+export type AnalysisVerdictRow<T extends AnalysisVerdictAnchor = AnalysisVerdictAnchor> = T & {
+  y: number;
+};
+
+/**
+ * Keeps verdicts tied to their own analysis anchors while separating rows by
+ * a stable distance in the same tree coordinate system as their anchors.
+ */
+export const planAnalysisVerdictRows = <T extends AnalysisVerdictAnchor>(
+  anchors: readonly T[],
+  minimumTreeGap = 190
+): Array<AnalysisVerdictRow<T>> => {
+  let previousY = Number.NEGATIVE_INFINITY;
+  return [...anchors]
+    .sort((left, right) => (
+      left.desiredY - right.desiredY
+      || left.analysisNodeId.localeCompare(right.analysisNodeId, 'en-US')
+      || left.order - right.order
+    ))
+    .map((anchor) => {
+      const y = Math.max(anchor.desiredY, previousY + minimumTreeGap);
+      previousY = y;
+      return { ...anchor, y };
+    });
+};
+
+/** Places the complete measured verdict in a lane immediately outside the
+ * tree. The compound's right edge, rather than the star's origin, owns the
+ * gap, so an optional label can never spill back into the syntax. */
+export const analysisVerdictCompoundOrigin = (
+  treeRect: Rect,
+  compoundRect: Rect,
+  desiredCenterY: number,
+  treeGap = 24
+): Point => ({
+  x: treeRect.x - treeGap - compoundRect.x - compoundRect.width,
+  y: desiredCenterY - compoundRect.y - compoundRect.height / 2
+});
+
+/** Normalizes the verdict once against a card's initial camera fit. The
+ * renderer keeps this local scale unchanged afterward, so manual zoom still
+ * scales and moves the verdict with the syntax. */
+export const analysisVerdictInitialLocalScale = (
+  initialCameraScale: number,
+  targetJudgmentScreenPx = 28,
+  judgmentTreeSize = 160
+): number => targetJudgmentScreenPx
+  / (Math.max(0.001, initialCameraScale || 1) * judgmentTreeSize);
+
+const rectOverlapArea = (left: Rect, right: Rect): number => {
+  const overlapWidth = Math.max(
+    0,
+    Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x)
+  );
+  const overlapHeight = Math.max(
+    0,
+    Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y)
+  );
+  return overlapWidth * overlapHeight;
+};
+
+/**
+ * Keeps the preferred first rectangle untouched and moves only later
+ * colliding rectangles downward in deterministic authored order.
+ */
+export const placeRectBelowCollisions = (
+  preferred: Rect,
+  occupied: Rect[],
+  gap = 14,
+  collisionGap = 10
+): Rect => {
+  let placed = { ...preferred };
+  for (let attempt = 0; attempt < occupied.length + 1; attempt += 1) {
+    const blockers = occupied.filter((rect) => !(
+      placed.x + placed.width + collisionGap <= rect.x
+      || rect.x + rect.width + collisionGap <= placed.x
+      || placed.y + placed.height + collisionGap <= rect.y
+      || rect.y + rect.height + collisionGap <= placed.y
+    ));
+    if (blockers.length === 0) break;
+    placed = {
+      ...placed,
+      y: Math.max(...blockers.map((rect) => rect.y + rect.height)) + gap
+    };
+  }
+  return placed;
+};
+
+/**
+ * Places a measured plate after earlier plates that share its anchor.
+ * The first plate is untouched. Later plates prefer down, up, right, then
+ * left; occupied-plate overlap takes priority over incidental obstacles.
+ */
+export const placeStackedRect = (
+  preferred: Rect,
+  occupied: Rect[],
+  viewport: Rect,
+  obstacles: Rect[] = [],
+  gap = 18
+): Rect => {
+  if (occupied.length === 0) return { ...preferred };
+
+  const viewportRight = viewport.x + viewport.width;
+  const viewportBottom = viewport.y + viewport.height;
+  const clamp = (candidate: Rect): Rect => ({
+    ...candidate,
+    x: Math.max(viewport.x, Math.min(candidate.x, viewportRight - candidate.width)),
+    y: Math.max(viewport.y, Math.min(candidate.y, viewportBottom - candidate.height))
+  });
+  const minX = Math.min(...occupied.map((rect) => rect.x));
+  const maxX = Math.max(...occupied.map((rect) => rect.x + rect.width));
+  const minY = Math.min(...occupied.map((rect) => rect.y));
+  const maxY = Math.max(...occupied.map((rect) => rect.y + rect.height));
+  const candidates = [
+    clamp({ ...preferred, y: maxY + gap }),
+    clamp({ ...preferred, y: minY - preferred.height - gap }),
+    clamp({ ...preferred, x: maxX + gap }),
+    clamp({ ...preferred, x: minX - preferred.width - gap })
+  ].filter((candidate, index, all) => all.findIndex((other) =>
+    other.x === candidate.x && other.y === candidate.y) === index);
+  const score = (candidate: Rect) => ({
+    occupied: occupied.reduce((total, rect) => total + rectOverlapArea(candidate, rect), 0),
+    obstacles: obstacles.reduce((total, rect) => total + rectOverlapArea(candidate, rect), 0)
+  });
+
+  return candidates.reduce((best, candidate) => {
+    const bestScore = score(best);
+    const candidateScore = score(candidate);
+    if (candidateScore.occupied !== bestScore.occupied) {
+      return candidateScore.occupied < bestScore.occupied ? candidate : best;
+    }
+    return candidateScore.obstacles < bestScore.obstacles ? candidate : best;
+  });
+};
+
 /**
  * Deterministic lane allocation for horizontal spans.
  *
