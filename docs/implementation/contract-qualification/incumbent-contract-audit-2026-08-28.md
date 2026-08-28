@@ -22,7 +22,7 @@ node scripts/captureContractFingerprint.mjs
 ```
 
 Its audited source is bound to repository commit
-`6865921624c2a0f6e5383d3ae0b8d352d5913043`. The manifest separately hashes
+`f87c4aed81a1b5990df27782b10adb9151fe337b`. The manifest separately hashes
 the authored prompt, request boundary, provider boundary, deterministic ingress,
 Replay engine, provider-free fixtures, tests, dependency lock, and capture tool.
 It records no credentials or local environment values. The capture refuses to
