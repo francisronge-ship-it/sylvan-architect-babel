@@ -1,0 +1,226 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { buildDerivationReplayPlan } from '../derivationReplayPlan.js';
+import { __test__ } from '../server/babelParser.js';
+import { buildSystemInstruction } from '../server/babelParser/systemInstruction.js';
+
+const buildCurrentContractPayload = () => ({
+  derivationStages: [
+    {
+      statement: 'The noun Mia enters the derivation.',
+      stageRecord: 'Lexical selection introduces the proper noun Mia, which projects a noun phrase that will serve as the external argument of the predicate.',
+      relations: [],
+      workspaceForest: [
+        {
+          id: 'np_mia',
+          label: 'NP',
+          children: [
+            {
+              id: 'n_mia',
+              label: 'N',
+              children: [
+                { id: 'leaf_mia', label: 'Mia', word: 'Mia', tokenIndex: 0, children: [] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      statement: 'The intransitive verb laughed projects a verb phrase.',
+      stageRecord: 'The unergative verb laughed is selected and projects a verb phrase; its single theta role is assigned to the external argument position, which the noun phrase Mia will occupy.',
+      relations: [],
+      workspaceForest: [
+        { refId: 'np_mia' },
+        {
+          id: 'vp_laughed',
+          label: 'VP',
+          children: [
+            {
+              id: 'vbar_laughed',
+              label: "V'",
+              children: [
+                {
+                  id: 'v_laughed',
+                  label: 'V',
+                  children: [
+                    { id: 'leaf_laughed', label: 'laughed', word: 'laughed', tokenIndex: 1, children: [] }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      statement: 'Tense combines with the verb phrase.',
+      stageRecord: 'A finite past tense head selects the verb phrase as its complement, projecting the inflectional layer that licenses the subject position of the clause.',
+      relations: [],
+      workspaceForest: [
+        { refId: 'np_mia' },
+        {
+          id: 'tbar_1',
+          label: "T'",
+          children: [
+            { id: 't_past', label: 'T', children: [{ id: 'leaf_t', label: '∅', children: [] }] },
+            { refId: 'vp_laughed' }
+          ]
+        }
+      ]
+    },
+    {
+      statement: 'The subject occupies the specifier of TP and the clause converges.',
+      stageRecord: 'The noun phrase Mia merges as the specifier of the tense projection, and the tense head bears an open agreement relation to that subject; the derivation converges with the surface order Mia laughed.',
+      relations: [
+        {
+          relation: 'bespoke-open-agreement',
+          anchors: {
+            'unbounded-probe-role': 't_past',
+            'bespoke-goal-role': 'np_mia'
+          },
+          priorAnchors: {
+            'earlier-probe-role': 't_past',
+            'earlier-goal-role': 'np_mia'
+          },
+          values: {
+            notation: '[uφ]',
+            outcome: ['valued', 'NOM']
+          }
+        }
+      ],
+      workspaceForest: [
+        {
+          id: 'tp_root',
+          label: 'TP',
+          children: [{ refId: 'np_mia' }, { refId: 'tbar_1' }]
+        }
+      ]
+    }
+  ]
+});
+
+test('the model-facing contract teaches optional values and immediate-stage priorAnchors', () => {
+  const instruction = buildSystemInstruction('xbar', 'gemini');
+  assert.match(instruction, /may also have "values" and "priorAnchors"/);
+  assert.match(instruction, /literal notation the relation itself states/);
+  assert.doesNotMatch(instruction, /for example a feature, index, outcome, exponent/);
+  assert.match(instruction, /immediately preceding derivationStage/);
+  assert.match(instruction, /Do not use priorAnchors merely because an object existed earlier/);
+});
+
+test('the model-facing contract permits illicit analyses without fabricated syntax', () => {
+  const instruction = buildSystemInstruction('xbar', 'gemini');
+  assert.match(instruction, /Analyze the exact input as written, even when the selected framework judges it illicit/);
+  assert.match(instruction, /judges a configuration or the whole analysis illicit/);
+  assert.match(instruction, /anchor the relation to the final root/);
+  assert.match(instruction, /Do not introduce syntax whose only purpose is to represent an operation the analysis rejects/);
+  assert.match(instruction, /The last derivationStage must be the converged structure for the exact input tokens/);
+});
+
+test('normalizes the current four-field derivation contract without provider calls', () => {
+  const bundle = __test__.normalizeParseBundle(
+    buildCurrentContractPayload(),
+    'xbar',
+    'Mia laughed.',
+    'gemini',
+    true,
+    { payloadIntegrityFlags: [] }
+  );
+
+  assert.equal(bundle.analyses.length, 1);
+  const analysis = bundle.analyses[0];
+
+  assert.equal(analysis.derivationStages.length, 4);
+  analysis.derivationStages.forEach((stage) => {
+    assert.deepEqual(Object.keys(stage), [
+      'statement',
+      'stageRecord',
+      'relations',
+      'workspaceForest'
+    ]);
+    assert.equal(typeof stage.statement, 'string');
+    assert.equal(typeof stage.stageRecord, 'string');
+    assert.ok(Array.isArray(stage.relations));
+    assert.ok(Array.isArray(stage.workspaceForest));
+  });
+
+  assert.equal(analysis.derivationStages[3].relations[0].relation, 'bespoke-open-agreement');
+  assert.deepEqual(analysis.derivationStages[3].relations[0].anchors, {
+    'unbounded-probe-role': 't_past',
+    'bespoke-goal-role': 'np_mia'
+  });
+  assert.deepEqual(analysis.derivationStages[3].relations[0].priorAnchors, {
+    'earlier-probe-role': 't_past',
+    'earlier-goal-role': 'np_mia'
+  });
+  assert.deepEqual(analysis.derivationStages[3].relations[0].values, {
+    notation: '[uφ]',
+    outcome: ['valued', 'NOM']
+  });
+  assert.deepEqual(
+    analysis.derivationStages.map((stage) => stage.stageRecord),
+    buildCurrentContractPayload().derivationStages.map((stage) => stage.stageRecord)
+  );
+  assert.equal(analysis.provenance.treeSource, 'derivationStages');
+  const replayPlan = buildDerivationReplayPlan({ derivationStages: analysis.derivationStages });
+  assert.equal(replayPlan.stages.length, 4);
+  assert.equal(replayPlan.stages[0].stepId, 'stage-1');
+  assert.equal(
+    replayPlan.stages[3].relationSteps[0].relation,
+    'bespoke-open-agreement'
+  );
+  assert.deepEqual(
+    replayPlan.stages[3].macroStep.workspaceForest,
+    analysis.derivationStages[3].workspaceForest
+  );
+  assert.deepEqual(Object.keys(analysis).sort(), [
+    'derivationStages',
+    'derivationSteps',
+    'provenance',
+    'tree'
+  ]);
+});
+
+test('rejects derivation stages that add a fifth authored field', () => {
+  const payload = buildCurrentContractPayload();
+  payload.derivationStages = payload.derivationStages.map((stage, index) => ({
+    ...stage,
+    compilerHint: `stage-${index + 1}`
+  }));
+
+  assert.throws(
+    () => __test__.normalizeParseBundle(
+      payload,
+      'xbar',
+      'Mia laughed.',
+      'gemini',
+      true,
+      { payloadIntegrityFlags: [] }
+    ),
+    (error) => error?.code === 'BAD_MODEL_RESPONSE'
+  );
+});
+
+test('rejects a top-level array at JSON ingress', () => {
+  assert.throws(
+    () => __test__.parseModelJson(JSON.stringify([buildCurrentContractPayload()])),
+    (error) => error?.code === 'BAD_MODEL_RESPONSE'
+  );
+});
+
+test('preserves every distinct analysis in the strict ambiguity envelope', () => {
+  const payload = buildCurrentContractPayload();
+  const bundle = __test__.normalizeParseBundle(
+    { analyses: [payload, payload, payload] },
+    'xbar',
+    'Mia laughed.',
+    'gemini',
+    true,
+    { payloadIntegrityFlags: [] }
+  );
+
+  assert.equal(bundle.analyses.length, 3);
+  assert.equal(bundle.ambiguityDetected, true);
+});

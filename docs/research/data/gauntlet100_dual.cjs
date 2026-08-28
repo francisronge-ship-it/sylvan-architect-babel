@@ -1,12 +1,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { loadChromium, resolveChromiumLaunchOptions } = require('../../../.artifacts/helpers/loadPlaywright.cjs');
 
-let chromium;
-try {
-  ({ chromium } = require('playwright'));
-} catch {
-  ({ chromium } = require('/Users/francisronge/.npm/_npx/e41f203b7505f1fb/node_modules/playwright'));
-}
+const chromium = loadChromium();
 
 const {
   normalizeSurfaceToken,
@@ -39,7 +35,6 @@ const CASE_ID_FILTER = new Set(
     .filter(Boolean)
 );
 const CASE_LIMIT = Number(process.env.BABEL_CASE_LIMIT || 0);
-const CHROME_BIN = '/Users/francisronge/Library/Caches/ms-playwright/chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 const TRACE_RE = /^(?:t|trace|t\d+|trace\d+|(?:t|trace)(?:_[a-z0-9]+)+|[a-z]+_trace(?:_[a-z0-9]+)*|<[^>]+>|⟨[^⟩]+⟩|\(t\)|\{t\}|∅|Ø|ε|null|epsilon)$/i;
 const MOVEMENT_RE = /\b(move(?:ment|d|s|ing)?|internal\s*merge|head[\s-]*move(?:ment)?|raising|raised|lower(?:ing|ed)|trace|copy|a-?bar|a-?move|wh-?move|front(?:ing|ed)?|displac(?:e|ed|ement|ing)|spec(?:ifier)?[, ]*(?:cp|tp|inflp|ip)|epp|focus|topic)\b/i;
 const NO_MOVEMENT_RE = /\b(no movement is posited|no displacement operation is encoded)\b/i;
@@ -457,7 +452,6 @@ function analyzeSuccess(testCase, route, payload, notesText, replay) {
       issues,
       modelUsed: payload?.modelUsed || payload?.metadata?.modelUsed || null,
       actualRoute: inferRouteFromModel(payload?.modelUsed || payload?.metadata?.modelUsed || ''),
-      fallbackUsed: Boolean(payload?.fallbackUsed),
       leaves,
       surfaceOrder,
       movementEventsCount: movementEvents.length,
@@ -655,10 +649,7 @@ async function runCase(page, testCase, route) {
     }
   }
 
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: CHROME_BIN
-  });
+  const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: true }));
   const context = await browser.newContext({ viewport: { width: 1832, height: 1142 } });
   const page = await context.newPage();
   await page.goto(CAPTURE_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });

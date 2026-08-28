@@ -1,0 +1,8145 @@
+import * as d3 from 'd3';
+import type { DerivationStage, DerivationStep, ReplayDetailBlock, SyntaxNode } from '../types.ts';
+import {
+  isFrontingMovementIdentity,
+  isMovementIdentity,
+  isRegisteredFrontingTrajectoryRelation,
+  isRegisteredTrajectoryRelation,
+  movementIdentityKind,
+  registeredTrajectoryDisplayKind
+} from './relations/movementIdentities.ts';
+import {
+  PRODUCTION_RENDER_FAMILIES,
+  TRAJECTORY_SOURCE_ROLES,
+  TRAJECTORY_TARGET_ROLES,
+  TRAJECTORY_WITNESS_ROLES,
+  type ProductionTransitionKind
+} from './relations/renderFamilies.ts';
+import {
+  findRelationRegistryEntry,
+  productionRelationRegistry
+} from './relationDispatch/index.js';
+import type { ResolvedRelationLink, ResolvedRelationAnchor } from '../relationLinks.ts';
+import {
+  buildDerivationReplayPlan,
+  resolveRelationAnchors
+} from '../derivationReplayPlan.js';
+import { tokenizeSentenceSurfaceOrder } from '../server/babelParser/surfaceTokens.js';
+
+export type HierNode = d3.HierarchyNode<SyntaxNode>;
+export type VisibleLink = d3.HierarchyLink<SyntaxNode>;
+
+export interface PlaybackStep {
+  operation: DerivationStep['operation'];
+  sourceKind?: 'microstep' | 'derivation-effect' | 'derived';
+  trajectoryKind?: ResolvedRelationLink['trajectoryKind'];
+  movementSerializationStatus?: 'complete' | 'underspecified' | 'incoherent';
+  movementDiagnostics?: string[];
+  sourceFrameIndex?: number;
+  visualFrameIndex?: number;
+  replayFrameIndex?: number;
+  replayKind?: 'micro' | 'relation' | 'macro';
+  /**
+   * Exact authored identity of the relation this Replay moment plays.
+   * Placement may reorder relation moments around structural construction,
+   * so a count of played moments is NOT a reliable identity — consumers must
+   * reveal and focus plan items from this exact identity.
+   */
+  replayRelationIdentity?: { stageIndex: number; relationIndex: number };
+  replayProgressLabel?: string;
+  targetNodeId: string;
+  targetLabel: string;
+  sourceNodeIds?: string[];
+  sourceLabels: string[];
+  recipe?: string;
+  workspaceAfter?: string[];
+  detailBlocks?: ReplayDetailBlock[];
+  stepId?: string;
+  chainId?: string;
+  note?: string;
+  stageRecord?: string;
+  replayCanvasData?: SyntaxNode | null;
+  replayVisibleNodeIds?: string[];
+  replayRelationLinks?: ResolvedRelationLink[];
+  replayUsesFutureLayoutScaffold?: boolean;
+  preserveReplayStep?: boolean;
+  replaySuppressAutoRevealNodeIds?: string[];
+}
+
+interface ReplaySupportLine {
+  label: string;
+  value: string;
+}
+
+export const DERIVATION_WORKSPACE_ROOT_LABEL = '__DERIVATION_WORKSPACE__';
+const DERIVATION_WORKSPACE_ROOT_ID = '__derivation_workspace_root__';
+
+export interface MovementArrow {
+  source: HierNode;
+  /** The authored lower occurrence before display-endpoint resolution. */
+  sourceOccurrence?: HierNode;
+  target: HierNode;
+  traceNode?: HierNode;
+  step: number;
+  index?: string | null;
+  operation?: DerivationStep['operation'];
+  trajectoryKind?: ResolvedRelationLink['trajectoryKind'];
+}
+
+type MovementCopyTraceCandidate = {
+  arrow: MovementArrow;
+  authoredOrder: number;
+  commonLineageIds: Set<string>;
+  sourceNodeCount: number;
+  lexicalLeaves: HierNode[];
+};
+
+interface DerivationMovementTransition {
+  authoredLink: ResolvedRelationLink;
+  sourceId: string;
+  targetId: string;
+  traceId: string | null;
+  step: number;
+  index: string;
+  chainId?: string | null;
+  operation?: DerivationStep['operation'];
+  trajectoryKind?: ResolvedRelationLink['trajectoryKind'];
+  note?: string;
+}
+
+interface ReplayDerivationMovementPayload {
+  operation?: DerivationStep['operation'];
+  sourceNodeId?: string;
+  landingNodeId?: string;
+  targetNodeId?: string;
+  hostNodeId?: string;
+  traceNodeId?: string;
+  chainId?: string;
+  note?: string;
+  serializationStatus?: 'complete' | 'underspecified' | 'incoherent';
+  diagnostics?: string[];
+}
+
+interface ReplayDerivationAnchor {
+  role?: string;
+  nodeId?: string;
+  lineageId?: string;
+  value?: string;
+  text?: string;
+  [key: string]: unknown;
+}
+
+interface ReplayDerivationChange {
+  statement?: string;
+  anchors?: ReplayDerivationAnchor[];
+  continuityIds?: string[];
+  details?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface ReplayDerivationAfterState {
+  workspaceForest?: SyntaxNode[];
+  reusePreviousWorkspace?: boolean;
+}
+
+export interface ReplayDerivationFrame {
+  frameId?: string;
+  stepId?: string;
+  statement?: string;
+  stageRecord?: string;
+  relations?: DerivationStage['relations'];
+  after?: ReplayDerivationAfterState;
+  change?: ReplayDerivationChange;
+  workspaceForest: SyntaxNode[];
+  operation?: DerivationStep['operation'];
+  recipe?: string;
+  chainId?: string;
+  movement?: ReplayDerivationMovementPayload | null;
+}
+
+interface DerivationReplayPlanStep {
+  kind?: 'micro' | 'relation' | 'macro';
+  stageIndex?: number;
+  stageNumber?: number;
+  stageStepNumber?: number;
+  stageStepCount?: number;
+  progressLabel?: string;
+  relation?: string;
+  anchors?: Record<string, unknown>;
+  /** Authored previous-stage witnesses, verbatim when authored. */
+  priorAnchors?: Record<string, string | string[]>;
+  /** Authored literal payload, verbatim when authored. */
+  values?: Record<string, string | string[]>;
+  authoredRelationIndex?: number;
+  resolvedAnchors?: ReplayResolvedRelationAnchor[];
+  sourceNodeIds?: string[];
+  targetNodeId?: string;
+  stageRecord?: string;
+}
+
+interface ReplayResolvedRelationAnchor extends ResolvedRelationAnchor {
+  authoredAnchorIndex: number;
+}
+
+interface ReplayAuthoredRelationLink extends ResolvedRelationLink {
+  authoredRelationIndex: number;
+  authoredRelationKey: string;
+  endpointOrderProvenance?: 'authored-anchor-order' | 'registered-role-order';
+  identityKey?: string;
+  identityProvenance?: 'authored-shared-lineage';
+  relationIndexProvenance: 'derived-presentation';
+}
+
+interface DerivationReplayPlanStage {
+  stageIndex: number;
+  stageNumber: number;
+  statement?: string;
+  stageRecord?: string;
+  relationSteps?: DerivationReplayPlanStep[];
+  macroStep?: DerivationReplayPlanStep;
+}
+
+export interface DerivationReplayPlan {
+  stages?: DerivationReplayPlanStage[];
+  steps?: DerivationReplayPlanStep[];
+}
+
+export const getNodeId = (node: HierNode): string => (node as any).__vizId as string;
+
+/**
+ * Index laid-out syntax by its current renderer id and by every preserved
+ * authored alias. An id that names more than one node is omitted entirely:
+ * relation geometry must fail closed instead of choosing by traversal order.
+ */
+export const indexHierarchyNodesByIdAndAliases = <T extends HierNode>(
+  nodes: readonly T[]
+): Map<string, T> => {
+  const candidates = new Map<string, T | null>();
+  nodes.forEach((node) => {
+    const ids = Array.from(new Set([
+      getNodeId(node),
+      ...(Array.isArray(node.data?.aliasIds) ? node.data.aliasIds : [])
+    ].map((id) => String(id || '').trim()).filter(Boolean)));
+    ids.forEach((id) => {
+      if (!candidates.has(id)) {
+        candidates.set(id, node);
+        return;
+      }
+      if (candidates.get(id) !== node) candidates.set(id, null);
+    });
+  });
+  return new Map(
+    Array.from(candidates.entries())
+      .filter((entry): entry is [string, T] => Boolean(entry[1]))
+  );
+};
+export const STEP_DELAY_MS = 1000;
+export const MOVEMENT_ARROW_COLOR = '#10b981';
+export const MOVEMENT_ARC_STROKE = 2.6;
+
+export const applyVizIds = (root: HierNode) => {
+  const used = new Set<string>();
+  let generated = 1;
+  root.eachBefore((node) => {
+    const raw = typeof node.data.id === 'string' ? node.data.id.trim() : '';
+    let id = raw;
+    if (!id || used.has(id)) {
+      while (used.has(`n${generated}`)) generated += 1;
+      id = `n${generated}`;
+      generated += 1;
+    }
+    used.add(id);
+    (node as any).__vizId = id;
+  });
+};
+
+export const isSyntheticWorkspaceRootNode = (node: HierNode): boolean =>
+  String(node.data?.label || '') === DERIVATION_WORKSPACE_ROOT_LABEL;
+
+export const buildDerivationCanvasData = (forest: SyntaxNode[]): SyntaxNode | null => {
+  if (!Array.isArray(forest) || forest.length === 0) return null;
+  return forest.length === 1 ? forest[0] : {
+    id: DERIVATION_WORKSPACE_ROOT_ID,
+    label: DERIVATION_WORKSPACE_ROOT_LABEL,
+    children: forest
+  };
+};
+
+const normalizeReplayStableIdPart = (value?: string | number | null): string =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    || 'leaf';
+
+const shouldStabilizeReplayLeafId = (node?: SyntaxNode | null): boolean => {
+  if (!node || typeof node !== 'object') return false;
+  if (Array.isArray(node.children) && node.children.length > 0) return false;
+  if ((node as any).silent === true) return false;
+  const word = String(node.word || '').trim();
+  const label = String(node.label || '').trim();
+  if (!word || !label) return false;
+  if (isTraceLike(label) || isTraceLike(word) || isNullLike(label) || isNullLike(word)) return false;
+  if (shouldExpandPreterminalLeaf(node)) return false;
+  return true;
+};
+
+const normalizeReplayStructuralNodeId = (value?: string | number | null): string => {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '';
+  return raw.replace(/_stage\d+$/i, '');
+};
+
+const stabilizeReplayOvertLeafIds = (node?: SyntaxNode | null): SyntaxNode | null => {
+  if (!node || typeof node !== 'object') return null;
+
+  const walk = (current: SyntaxNode, parentId: string): SyntaxNode => {
+    const ownId = normalizeReplayStructuralNodeId(current.id);
+    const ownStableParentId = ownId || parentId;
+    const children = Array.isArray(current.children)
+      ? current.children
+          .filter((child): child is SyntaxNode => Boolean(child && typeof child === 'object'))
+          .map((child) => walk(child, ownStableParentId))
+      : [];
+    const next: SyntaxNode = { ...current };
+    if (ownId && ownId !== String(current.id || '').trim()) {
+      next.id = ownId;
+    }
+    if (children.length > 0) {
+      next.children = children;
+      return next;
+    }
+    delete next.children;
+    if (!parentId || !shouldStabilizeReplayLeafId(current)) return next;
+
+    const tokenIndex = Number.isInteger((current as any).tokenIndex)
+      ? `tok_${(current as any).tokenIndex}`
+      : '';
+    const surfaceKey = normalizeReplayStableIdPart(current.word || current.label);
+    const stableKey = tokenIndex ? `${tokenIndex}_${surfaceKey}` : surfaceKey;
+    next.aliasIds = Array.from(new Set([
+      ...(Array.isArray(current.aliasIds) ? current.aliasIds : []),
+      String(current.id || '').trim()
+    ].filter(Boolean)));
+    next.id = `${parentId}::__lex_${stableKey}`;
+    return next;
+  };
+
+  return walk(node, '');
+};
+
+export const buildRenderableDerivationCanvasData = (
+  forest: SyntaxNode[],
+  _resolvedRelationLinks?: ResolvedRelationLink[]
+): SyntaxNode | null => {
+  const canvas = buildDerivationCanvasData(forest);
+  if (!canvas) return null;
+  const stableReplayCanvas = stabilizeReplayOvertLeafIds(canvas) || canvas;
+  return materializeCanopyPreterminals(stableReplayCanvas);
+};
+
+export const buildRenderableCommittedCanvasData = (
+  tree: SyntaxNode,
+  _resolvedRelationLinks?: ResolvedRelationLink[]
+): SyntaxNode => {
+  return materializeCanopyPreterminals(tree);
+};
+
+const getMovementLandingNodeId = (
+  movement?: { landingNodeId?: string; targetNodeId?: string; toNodeId?: string } | null
+): string => String(
+  movement?.landingNodeId
+  || movement?.targetNodeId
+  || movement?.toNodeId
+  || ''
+).trim();
+
+const getDerivationFrameChange = (frame?: ReplayDerivationFrame | null): ReplayDerivationChange | null =>
+  frame?.change && typeof frame.change === 'object' && !Array.isArray(frame.change)
+    ? frame.change
+    : null;
+
+const cloneSyntaxForest = (forest: SyntaxNode[] = []): SyntaxNode[] =>
+  forest
+    .map((root) => cloneSyntaxTree(root))
+    .filter((root): root is SyntaxNode => Boolean(root));
+
+export const adaptDerivationStagesForReplay = (stages?: DerivationStage[] | null): ReplayDerivationFrame[] => {
+  if (!Array.isArray(stages) || stages.length === 0) return [];
+  let previousWorkspaceForest: SyntaxNode[] = [];
+  return stages.map((stage, index) => {
+    const explicitWorkspaceForest = Array.isArray(stage.workspaceForest) ? stage.workspaceForest : [];
+    const workspaceForest = explicitWorkspaceForest.length > 0
+      ? cloneSyntaxForest(explicitWorkspaceForest)
+      : cloneSyntaxForest(previousWorkspaceForest);
+    previousWorkspaceForest = cloneSyntaxForest(workspaceForest);
+    const relations = Array.isArray(stage.relations) ? stage.relations : [];
+    const details = {
+      stageRecord: String(stage.stageRecord || '').trim(),
+      derivationStageRelations: relations
+    };
+    const change: ReplayDerivationChange = {
+      statement: String(stage.statement || '').trim(),
+      details
+    };
+
+    return {
+      frameId: `stage-${index + 1}`,
+      stepId: `stage-${index + 1}`,
+      statement: String(stage.statement || '').trim(),
+      stageRecord: String(stage.stageRecord || '').trim(),
+      relations,
+      after: { workspaceForest },
+      change,
+      workspaceForest,
+      recipe: String(change?.statement || '').trim() || undefined,
+      movement: null
+    };
+  });
+};
+
+export const collectVisibleDerivationNodeIds = (
+  forest: SyntaxNode[],
+  resolvedRelationLinks?: ResolvedRelationLink[]
+): Set<string> => {
+  const canvas = buildRenderableDerivationCanvasData(forest, resolvedRelationLinks);
+  const cloned = cloneSyntaxTree(canvas);
+  if (!cloned) return new Set<string>();
+  const hierarchy = d3.hierarchy(cloned);
+  applyVizIds(hierarchy);
+  return new Set(
+    hierarchy
+      .descendants()
+      .filter((node) => !isSyntheticWorkspaceRootNode(node))
+      .map((node) => getNodeId(node))
+  );
+};
+
+const buildVisibleSyntaxSnapshotFromHierarchy = (
+  root: HierNode,
+  visibleNodeIds?: Set<string>,
+  detachedRootIds?: Set<string>,
+  detachedRootSideHints?: Map<string, number>
+): SyntaxNode | null => {
+  if (!visibleNodeIds || visibleNodeIds.size === 0) return null;
+
+  const nodeMatchesVisibleId = (node: HierNode): boolean => {
+    const nodeId = getNodeId(node);
+    if (visibleNodeIds.has(nodeId)) return true;
+    return (Array.isArray(node.data?.aliasIds) ? node.data.aliasIds : [])
+      .map((aliasId) => String(aliasId || '').trim())
+      .filter(Boolean)
+      .some((aliasId) => visibleNodeIds.has(aliasId));
+  };
+
+  const cloneVisibleNode = (node: HierNode): SyntaxNode | null => {
+    if (!nodeMatchesVisibleId(node)) return null;
+    const dataClone = cloneSyntaxTree(node.data);
+    if (!dataClone) return null;
+    const childSnapshots = (node.children || [])
+      .map((child) => {
+        const childId = getNodeId(child);
+        if (detachedRootIds?.has(childId) && visibleNodeIds.has(childId)) {
+          return null;
+        }
+        return cloneVisibleNode(child);
+      })
+      .filter((child): child is SyntaxNode => Boolean(child));
+    if (childSnapshots.length > 0) {
+      dataClone.children = childSnapshots;
+    } else {
+      delete dataClone.children;
+    }
+    return dataClone;
+  };
+
+  const preorderIndex = new Map<string, number>();
+  let preorderCursor = 0;
+  root.eachBefore((node) => {
+    preorderIndex.set(getNodeId(node), preorderCursor);
+    preorderCursor += 1;
+  });
+
+  const visibleRoots = root
+    .descendants()
+    .filter((node) => !isSyntheticWorkspaceRootNode(node))
+    .filter(nodeMatchesVisibleId)
+    .filter((node) => {
+      const nodeId = getNodeId(node);
+      const detached = detachedRootIds?.has(nodeId);
+      if (detached) return true;
+      const parent = node.parent;
+      if (!parent || isSyntheticWorkspaceRootNode(parent)) return true;
+      return !nodeMatchesVisibleId(parent);
+    })
+    .sort((a, b) => {
+      const resolveDetachedRootSideHint = (node: HierNode): number => {
+        let current: HierNode | null = node;
+        while (current) {
+          const currentId = getNodeId(current);
+          if (detachedRootSideHints?.has(currentId)) {
+            return Number(detachedRootSideHints.get(currentId) || 0);
+          }
+          if (detachedRootIds?.has(currentId)) {
+            return 0;
+          }
+          current = current.parent;
+        }
+        return 0;
+      };
+      const sideA = resolveDetachedRootSideHint(a);
+      const sideB = resolveDetachedRootSideHint(b);
+      if (sideA !== sideB) return sideA - sideB;
+      return (preorderIndex.get(getNodeId(a)) ?? 0) - (preorderIndex.get(getNodeId(b)) ?? 0);
+    });
+
+  const forest = visibleRoots
+    .map((node) => cloneVisibleNode(node))
+    .filter((node): node is SyntaxNode => Boolean(node));
+
+  if (forest.length === 0) return null;
+  if (forest.length === 1) return forest[0];
+  return {
+    id: DERIVATION_WORKSPACE_ROOT_ID,
+    label: DERIVATION_WORKSPACE_ROOT_LABEL,
+    children: forest
+  };
+};
+
+const collectRenderableVisibleNodeIds = (
+  root: HierNode,
+  rawVisibleNodeIds?: Set<string>
+): string[] => {
+  const allRenderableNodeIds = root
+    .descendants()
+    .filter((node) => !isSyntheticWorkspaceRootNode(node))
+    .map((node) => getNodeId(node));
+  if (!rawVisibleNodeIds || rawVisibleNodeIds.size === 0) {
+    return allRenderableNodeIds;
+  }
+
+  const nodesById = new Map<string, HierNode>();
+  root
+    .descendants()
+    .filter((node) => !isSyntheticWorkspaceRootNode(node))
+    .forEach((node) => {
+      nodesById.set(getNodeId(node), node);
+      (Array.isArray(node.data?.aliasIds) ? node.data.aliasIds : [])
+        .map((aliasId) => String(aliasId || '').trim())
+        .filter(Boolean)
+        .forEach((aliasId) => nodesById.set(aliasId, node));
+    });
+  const visibleIds = new Set<string>();
+  const markRenderableNode = (node: HierNode) => {
+    if (isSyntheticWorkspaceRootNode(node)) return;
+    const nodeId = getNodeId(node);
+    visibleIds.add(nodeId);
+    // Materialized preterminals add synthetic display leaves under authored leaf ids.
+    // Show those leaves, but do not auto-reveal ordinary authored descendants.
+    (node.children || []).forEach((child) => {
+      const childId = getNodeId(child);
+      if (childId.startsWith(`${nodeId}::__`)) visibleIds.add(childId);
+    });
+  };
+
+  rawVisibleNodeIds.forEach((requestedId) => {
+    const normalizedRequestedId = String(requestedId || '').trim();
+    if (!normalizedRequestedId) return;
+
+    const exactNode = nodesById.get(normalizedRequestedId);
+    if (exactNode) {
+      markRenderableNode(exactNode);
+      return;
+    }
+
+    const strippedId = stripSyntheticReplayLeafSuffix(normalizedRequestedId);
+    const strippedNode = nodesById.get(strippedId);
+    if (!strippedNode) return;
+    // A movement frame can replace an overt materialized display leaf with an
+    // authored silent child under the same preterminal. Never retain the old
+    // synthetic id after that replacement: it is not present on this canvas.
+    // Genuine lexical-select frames resolve their display leaf through the
+    // exact-node branch above.
+  });
+
+  return visibleIds.size > 0 ? Array.from(visibleIds) : allRenderableNodeIds;
+};
+
+const extractReplayWorkspaceLabels = (canvasData: SyntaxNode | null): string[] => {
+  if (!canvasData) return [];
+  const roots = String(canvasData.label || '').trim() === DERIVATION_WORKSPACE_ROOT_LABEL
+    ? (Array.isArray(canvasData.children) ? canvasData.children : [])
+    : [canvasData];
+  return roots
+    .map((node) => String(node?.label || '').trim())
+    .filter(Boolean);
+};
+
+const getReplayLeafSelectionTarget = (
+  root: SyntaxNode
+): { nodeId: string; surface: string } | null => {
+  const renderableRoot = buildRenderableDerivationCanvasData([cloneSyntaxTree(root) || root]);
+  if (!renderableRoot) return null;
+  const hierarchy = d3.hierarchy(renderableRoot);
+  applyVizIds(hierarchy);
+  const leaf = hierarchy.descendants().find((node) => !node.children || node.children.length === 0);
+  if (!leaf) return null;
+  const surface = resolveLeafSurface(leaf);
+  if (!surface) return null;
+  return {
+    nodeId: getNodeId(leaf),
+    surface
+  };
+};
+
+const materializeReplayPreterminals = (node: SyntaxNode): SyntaxNode => {
+  const walk = (current: SyntaxNode): SyntaxNode => {
+    if (!current || typeof current !== 'object') {
+      throw new Error('Replay preterminal expansion requires an authored syntax node.');
+    }
+    const children = Array.isArray(current.children)
+      ? current.children
+          .filter((child): child is SyntaxNode => Boolean(child && typeof child === 'object'))
+          .map(walk)
+      : [];
+    const next: SyntaxNode = { ...current };
+    delete next.children;
+    const currentIsReplayLayoutOnly = (current as any).replayLayoutOnly === true;
+    if (currentIsReplayLayoutOnly) {
+      (next as any).replayLayoutOnly = true;
+    }
+
+    if (children.length > 0) {
+      next.children = children;
+      return next;
+    }
+
+    const word = typeof current.word === 'string' ? current.word.trim() : '';
+    if (!word) {
+      if (Array.isArray(current.children)) next.children = [];
+      return next;
+    }
+
+    if (shouldExpandPreterminalLeaf(current)) {
+      next.children = [{
+        id: buildSyntheticReplayLeafId(current, 'leaf', word),
+        label: word,
+        word,
+        ...(String(current.lineageId || '').trim() ? { lineageId: current.lineageId } : {}),
+        ...(current.silent === true ? { silent: true } : {}),
+        ...(currentIsReplayLayoutOnly ? { replayLayoutOnly: true } : {})
+      }];
+      return next;
+    }
+
+    next.word = word;
+    return next;
+  };
+
+  return walk(node);
+};
+
+export const buildDerivationReplaySnapshot = (
+  forest: SyntaxNode[],
+  activeFrameIndex: number,
+  relationLinks?: ResolvedRelationLink[],
+  visibleNodeIds?: Set<string>
+  ,
+  layoutNodeIds?: Set<string>,
+  derivationFrames?: ReplayDerivationFrame[],
+  detachedRootIds?: Set<string>,
+  detachedRootSideHints?: Map<string, number>,
+  layoutScaffoldForest?: SyntaxNode[]
+): {
+  canvasData: SyntaxNode | null;
+  visibleNodeIds: string[];
+  relationLinks: ResolvedRelationLink[];
+} => {
+  const transitionInputLinks = Array.isArray(relationLinks)
+    ? relationLinks
+    : [];
+  const transitionLinks = resolveDerivationMovementTransitions(
+    forest,
+    derivationFrames,
+    activeFrameIndex,
+    transitionInputLinks
+  ).map((transition) => ({
+    ...transition.authoredLink,
+    relationIndex: transition.index,
+    relation: transition.operation,
+    anchors: Array.isArray(transition.authoredLink.anchors)
+      ? transition.authoredLink.anchors
+      : [
+          { role: 'source', nodeId: transition.sourceId },
+          { role: 'target', nodeId: transition.targetId },
+          ...(transition.traceId ? [{ role: 'witness', nodeId: transition.traceId }] : [])
+        ],
+    sourceNodeId: transition.sourceId,
+    targetNodeId: transition.targetId,
+    witnessNodeId: transition.traceId || undefined,
+    renderFamily: 'trajectory',
+    trajectoryKind: transition.trajectoryKind,
+    stepIndex: transition.step,
+    operation: transition.operation,
+    chainId: transition.chainId || undefined,
+    note: transition.note
+  } satisfies ResolvedRelationLink));
+  const nonMovementLinks = transitionInputLinks.filter((link) => !isResolvedMovementLink(link));
+  const effectiveRelationLinks = [...transitionLinks, ...nonMovementLinks];
+  const usesLayoutScaffold = Array.isArray(layoutScaffoldForest) && layoutScaffoldForest.length > 0;
+  const rawCanvas = stabilizeReplayOvertLeafIds(buildDerivationCanvasData(
+    usesLayoutScaffold ? layoutScaffoldForest : forest
+  ));
+  const clonedRawCanvas = cloneSyntaxTree(rawCanvas);
+  if (!clonedRawCanvas) {
+    return {
+      canvasData: null,
+      visibleNodeIds: [],
+      relationLinks: effectiveRelationLinks
+    };
+  }
+
+  const rawHierarchy: HierNode = d3.hierarchy<SyntaxNode>(clonedRawCanvas);
+  applyVizIds(rawHierarchy);
+  const semanticVisibleNodeIds = (() => {
+    if (!usesLayoutScaffold) return null;
+    const semanticCanvas = stabilizeReplayOvertLeafIds(buildDerivationCanvasData(forest));
+    const clonedSemanticCanvas = cloneSyntaxTree(semanticCanvas);
+    if (!clonedSemanticCanvas) return new Set<string>();
+    const semanticHierarchy: HierNode = d3.hierarchy<SyntaxNode>(clonedSemanticCanvas);
+    applyVizIds(semanticHierarchy);
+    return new Set<string>(
+      semanticHierarchy
+        .descendants()
+        .filter((node) => !isSyntheticWorkspaceRootNode(node))
+        .map((node) => getNodeId(node))
+    );
+  })();
+  const effectiveVisibleNodeIds: Set<string> = visibleNodeIds && visibleNodeIds.size > 0
+    ? visibleNodeIds
+    : semanticVisibleNodeIds || new Set<string>(
+        rawHierarchy
+          .descendants()
+          .filter((node) => !isSyntheticWorkspaceRootNode(node))
+          .map((node) => getNodeId(node))
+      );
+  const effectiveLayoutNodeIds = usesLayoutScaffold
+    ? new Set<string>([
+        ...rawHierarchy
+          .descendants()
+          .filter((node) => !isSyntheticWorkspaceRootNode(node))
+          .map((node) => getNodeId(node)),
+        ...(layoutNodeIds ? Array.from(layoutNodeIds) : [])
+      ])
+    : layoutNodeIds && layoutNodeIds.size > 0
+      ? layoutNodeIds
+      : effectiveVisibleNodeIds;
+  const visibleRawCanvas = buildVisibleSyntaxSnapshotFromHierarchy(
+    rawHierarchy,
+    effectiveLayoutNodeIds,
+    detachedRootIds,
+    detachedRootSideHints
+  );
+  const renderableCanvas = visibleRawCanvas
+    ? materializeReplayPreterminals(visibleRawCanvas)
+    : (
+      buildRenderableDerivationCanvasData(forest, effectiveRelationLinks)
+      || materializeCanopyPreterminals(clonedRawCanvas)
+    );
+  const clonedRenderableCanvas = cloneSyntaxTree(renderableCanvas);
+  if (!clonedRenderableCanvas) {
+    return {
+      canvasData: null,
+      visibleNodeIds: [],
+      relationLinks: effectiveRelationLinks
+    };
+  }
+  const renderableHierarchy: HierNode = d3.hierarchy<SyntaxNode>(clonedRenderableCanvas);
+  applyVizIds(renderableHierarchy);
+  const renderableVisibleNodeIds = new Set<string>(collectRenderableVisibleNodeIds(
+    renderableHierarchy,
+    effectiveVisibleNodeIds
+  ));
+  if (effectiveVisibleNodeIds && effectiveVisibleNodeIds.size > 0) {
+    const renderableNodesById = new Map<string, HierNode>(
+      renderableHierarchy
+        .descendants()
+        .filter((node) => !isSyntheticWorkspaceRootNode(node))
+        .map((node) => [getNodeId(node), node] as const)
+    );
+    effectiveVisibleNodeIds.forEach((requestedId) => {
+      const normalizedRequestedId = String(requestedId || '').trim();
+      if (!normalizedRequestedId) return;
+      const exactNode = renderableNodesById.get(normalizedRequestedId);
+      if (exactNode && exactNode.children && exactNode.children.length > 0) {
+        const exactNodeId = getNodeId(exactNode);
+        exactNode.children.forEach((child) => {
+          const childId = getNodeId(child);
+          if (!childId.startsWith(`${exactNodeId}::__`)) return;
+          if ((child.data as any)?.replayLayoutOnly) return;
+          renderableVisibleNodeIds.add(childId);
+        });
+      }
+    });
+  }
+
+  const replayVisibleNodeIds = Array.from(renderableVisibleNodeIds)
+    .filter((nodeId) => {
+      // Visibility belongs to the exact rendered occurrence. Alias-aware lookup
+      // can resolve a future layout-only landing id to its current lower copy
+      // and accidentally reveal the future occurrence one relation too early.
+      const node = findExactNodeByIdInForest([renderableCanvas], nodeId);
+      return !(node as any)?.replayLayoutOnly;
+    });
+
+  return {
+    canvasData: renderableCanvas,
+    visibleNodeIds: replayVisibleNodeIds,
+    relationLinks: effectiveRelationLinks
+  };
+};
+
+export const hidePendingInflSpecifierWrappersInStep = (step: PlaybackStep): PlaybackStep => {
+  const visibleIds = new Set(
+    (Array.isArray(step.replayVisibleNodeIds) ? step.replayVisibleNodeIds : [])
+      .map((nodeId) => String(nodeId || '').trim())
+      .filter(Boolean)
+  );
+  const protectedRelationEndpointIds = new Set<string>();
+  (Array.isArray(step.replayRelationLinks) ? step.replayRelationLinks : []).forEach((link) => {
+    [
+      String(link?.sourceNodeId || '').trim(),
+      String(link?.targetNodeId || '').trim(),
+      String(link?.witnessNodeId || '').trim()
+    ].filter(Boolean).forEach((nodeId) => protectedRelationEndpointIds.add(nodeId));
+  });
+  const canvasRoot = step.replayCanvasData || null;
+  if (!canvasRoot || visibleIds.size === 0) return step;
+
+  const hiddenIds = new Set<string>();
+  const walk = (node: SyntaxNode) => {
+    const nodeId = String(node?.id || '').trim();
+    const label = String(node?.label || '').trim().toLowerCase();
+    const children = Array.isArray(node?.children) ? node.children : [];
+    if (nodeId && visibleIds.has(nodeId) && ['infl', 'ip', 't', 'tp'].includes(label)) {
+      if (children.length === 1) {
+        const onlyChild = children[0];
+        if (
+          visibleIds.has(String(onlyChild?.id || '').trim())
+          && String(onlyChild?.label || '').trim().toLowerCase() === label
+        ) {
+          if (!protectedRelationEndpointIds.has(nodeId)) hiddenIds.add(nodeId);
+        }
+      } else if (children.length > 1) {
+        const spineChildIndex = children.findIndex((child, index) =>
+          index > 0
+          && visibleIds.has(String(child?.id || '').trim())
+          && String(child?.label || '').trim().toLowerCase() === label
+        );
+        if (spineChildIndex > 0) {
+          const hasVisibleSpecifierMaterial = children
+            .slice(0, spineChildIndex)
+            .some((child) => {
+              let found = false;
+              const scan = (candidate: SyntaxNode) => {
+                if (visibleIds.has(String(candidate?.id || '').trim())) {
+                  found = true;
+                  return;
+                }
+                (candidate.children || []).forEach(scan);
+              };
+              scan(child);
+              return found;
+            });
+          if (!hasVisibleSpecifierMaterial && !protectedRelationEndpointIds.has(nodeId)) hiddenIds.add(nodeId);
+        }
+      }
+    }
+    children.forEach(walk);
+  };
+  walk(canvasRoot);
+
+  if (hiddenIds.size === 0) return step;
+  const markHiddenInflWrappersAsLayoutOnly = (node: SyntaxNode): SyntaxNode | null => {
+    const nodeId = String(node?.id || '').trim();
+    const children = Array.isArray(node?.children) ? node.children : [];
+    const nextNode = { ...node };
+    if (nodeId && hiddenIds.has(nodeId)) {
+      (nextNode as any).replayLayoutOnly = true;
+    }
+    if (children.length > 0) {
+      nextNode.children = children
+        .map(markHiddenInflWrappersAsLayoutOnly)
+        .filter(Boolean) as SyntaxNode[];
+    }
+    return nextNode;
+  };
+  const replayCanvasData = markHiddenInflWrappersAsLayoutOnly(canvasRoot) || canvasRoot;
+  return {
+    ...step,
+    replayCanvasData,
+    replayVisibleNodeIds: (step.replayVisibleNodeIds || []).filter((nodeId) =>
+      !hiddenIds.has(String(nodeId || '').trim())
+    )
+  };
+};
+
+export const cloneSyntaxTree = (node?: SyntaxNode | null): SyntaxNode | null => {
+  if (!node || typeof node !== 'object') return null;
+  const serialized = JSON.stringify(node);
+  if (!serialized) return null;
+  return JSON.parse(serialized) as SyntaxNode;
+};
+
+const LOW_SIGNAL_REPLAY_TEXT_RE = /^(?:initial logic and parameters are validated|standard processing applied|standard processing is applied|default processing applied|final transformation(?: applied)?|structural relations are established|final structure established|the derivation converges(?: with all features checked(?: and the overt word order successfully derived)?)?(?: and is sent to spellout)?|(?:lexicalselect|project|externalmerge|headmove|a-move|abarmove|agree|spellout|other|[a-z][a-z0-9_-]*(?:\s+[a-z][a-z0-9_-]*)*)\s+frame\s+\d+)\.?$/i;
+
+const isLowSignalReplayText = (value?: string | null): boolean => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return true;
+  return LOW_SIGNAL_REPLAY_TEXT_RE.test(trimmed);
+};
+
+const pickPreferredReplayText = (...values: Array<string | undefined | null>): string | undefined => {
+  for (const value of values) {
+    const trimmed = String(value || '').trim();
+    if (!trimmed || isLowSignalReplayText(trimmed)) continue;
+    return trimmed;
+  }
+  return undefined;
+};
+
+const formatReplayLabelSeries = (labels: string[]): string => {
+  const cleaned = labels.map((label) => String(label || '').trim()).filter(Boolean);
+  if (cleaned.length === 0) return '';
+  if (cleaned.length === 1) return cleaned[0];
+  if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`;
+  return `${cleaned.slice(0, -1).join(', ')}, and ${cleaned[cleaned.length - 1]}`;
+};
+
+const buildStructuralReplayFallback = (
+  operation: DerivationStep['operation'] | string | undefined,
+  primaryRootLabel: string,
+  rootLabels: string[]
+): string => {
+  const op = String(operation || '').trim();
+  const readableOperation = formatOperationLabel(op as DerivationStep['operation']);
+  const target = primaryRootLabel || rootLabels[0] || 'workspace';
+  const targetSummary = rootLabels.length > 1 ? rootLabels.join(' + ') : target;
+  const targetIsTraceLike = isTraceLike(target) || isNullLike(target);
+  const describesWorkspaceState = target === 'Workspace';
+  switch (op) {
+    case 'LexicalSelect':
+      return `Select ${targetSummary}`;
+    case 'Project':
+      return `Project ${targetSummary}`;
+    case 'ExternalMerge':
+      if (targetIsTraceLike) return 'External merge in workspace';
+      if (describesWorkspaceState) {
+        const mergeSourceSummary = formatReplayLabelSeries(rootLabels);
+        return mergeSourceSummary ? `External merge of ${mergeSourceSummary}` : 'External merge in workspace';
+      }
+      return `External merge into ${target}`;
+    case 'InternalMerge':
+    case 'Move':
+      return (targetIsTraceLike || describesWorkspaceState || isGenericReplayStructuralLabel(target)) ? 'Internal merge' : `Internal merge to ${target}`;
+    case 'A-Move':
+      return (targetIsTraceLike || describesWorkspaceState || isGenericReplayStructuralLabel(target)) ? 'A-movement' : `A-movement to ${target}`;
+    case 'AbarMove':
+      return (targetIsTraceLike || describesWorkspaceState || isGenericReplayStructuralLabel(target)) ? 'A-bar movement' : `A-bar movement to ${target}`;
+    case 'HeadMove':
+      return (targetIsTraceLike || describesWorkspaceState || isGenericReplayStructuralLabel(target)) ? 'Head movement' : `Head movement to ${target}`;
+    case 'Agree':
+      return `Agree on ${target}`;
+    case 'Other':
+      return target && target !== 'Workspace' ? `Establish ${target}` : 'Update derivational workspace';
+    default:
+      if (!op) return target && target !== 'Workspace' ? `Establish ${target}` : 'Update derivational workspace';
+      if (/(?:move|movement|raise|lower|front|displac|extract|shift|scrambl|rollup|sideward|incorpor|clitic|affix|remnant|piedpip|topicaliz|focaliz|extraposit|atb|remerge)/i.test(op)) {
+        return readableOperation;
+      }
+      return target && target !== 'Workspace'
+        ? `${readableOperation} to ${target}`
+        : readableOperation;
+  }
+};
+
+const reorderWorkspaceRootsForReplay = (
+  workspaceRoots: SyntaxNode[],
+  preferredRootIds?: string[] | null
+): SyntaxNode[] => {
+  if (!Array.isArray(workspaceRoots) || workspaceRoots.length <= 1) return workspaceRoots;
+  const preferredIds = Array.isArray(preferredRootIds)
+    ? preferredRootIds.map((id) => String(id || '').trim()).filter(Boolean)
+    : [];
+  if (preferredIds.length === 0) return workspaceRoots;
+
+  const rootsById = new Map(
+    workspaceRoots
+      .map((node) => [String(node?.id || '').trim(), node] as const)
+      .filter(([id]) => Boolean(id))
+  );
+  const ordered: SyntaxNode[] = [];
+  const used = new Set<string>();
+
+  preferredIds.forEach((id) => {
+    const node = rootsById.get(id);
+    if (!node || used.has(id)) return;
+    ordered.push(node);
+    used.add(id);
+  });
+
+  workspaceRoots.forEach((node) => {
+    const id = String(node?.id || '').trim();
+    if (id && used.has(id)) return;
+    ordered.push(node);
+  });
+
+  return ordered.length === workspaceRoots.length ? ordered : workspaceRoots;
+};
+
+const collectWorkspaceRootIds = (workspaceRoots: SyntaxNode[]): string[] =>
+  (Array.isArray(workspaceRoots) ? workspaceRoots : [])
+    .map((node) => String(node?.id || '').trim())
+    .filter(Boolean);
+
+const replayLayoutContinuitySignature = (node?: SyntaxNode | null): string => {
+  if (!node || typeof node !== 'object') return '';
+  return JSON.stringify([
+    String(node.id || '').trim(),
+    String(node.label || '').trim(),
+    String(node.word || '').trim(),
+    node.silent === true,
+    Number.isFinite(Number(node.tokenIndex)) ? Number(node.tokenIndex) : null,
+    String(node.lineageId || '').trim(),
+    (Array.isArray(node.children) ? node.children : [])
+      .map((child) => replayLayoutContinuitySignature(child))
+  ]);
+};
+
+const replayLayoutTopologySignature = (node?: SyntaxNode | null): string => {
+  if (!node || typeof node !== 'object') return '';
+  return JSON.stringify([
+    String(node.id || '').trim(),
+    (Array.isArray(node.children) ? node.children : [])
+      .map((child) => replayLayoutTopologySignature(child))
+  ]);
+};
+
+const replayLayoutMaterialSignature = (node?: SyntaxNode | null): string => {
+  if (!node || typeof node !== 'object') return '';
+  return JSON.stringify([
+    String(node.id || '').trim(),
+    String(node.label || '').trim(),
+    String(node.word || '').trim(),
+    node.silent === true,
+    Number.isFinite(Number(node.tokenIndex)) ? Number(node.tokenIndex) : null,
+    String(node.lineageId || '').trim()
+  ]);
+};
+
+const findExactNodesByIdInForest = (
+  forest: SyntaxNode[],
+  targetNodeId: string
+): SyntaxNode[] => {
+  const normalizedTargetNodeId = String(targetNodeId || '').trim();
+  if (!normalizedTargetNodeId) return [];
+  const matches: SyntaxNode[] = [];
+  const visit = (node?: SyntaxNode | null) => {
+    if (!node || typeof node !== 'object') return;
+    if (String(node.id || '').trim() === normalizedTargetNodeId) matches.push(node);
+    (Array.isArray(node.children) ? node.children : []).forEach(visit);
+  };
+  (Array.isArray(forest) ? forest : []).forEach(visit);
+  return matches;
+};
+
+const forestCanUseFutureLayoutScaffold = (
+  currentRoots: SyntaxNode[],
+  futureRoots: SyntaxNode[]
+): boolean => {
+  if (!Array.isArray(currentRoots) || currentRoots.length === 0) return false;
+  if (!Array.isArray(futureRoots) || futureRoots.length === 0) return false;
+  return currentRoots.every((currentRoot) => {
+    const currentRootId = String(currentRoot?.id || '').trim();
+    if (!currentRootId) return false;
+    const futureMatches = findExactNodesByIdInForest(futureRoots, currentRootId);
+    return futureMatches.length === 1
+      && replayLayoutContinuitySignature(futureMatches[0])
+        === replayLayoutContinuitySignature(currentRoot);
+  });
+};
+
+const futureForestPreservesCurrentRootIdentities = (
+  currentRoots: SyntaxNode[],
+  futureRoots: SyntaxNode[]
+): boolean => currentRoots.every((currentRoot) => {
+  const currentRootId = String(currentRoot?.id || '').trim();
+  return Boolean(currentRootId)
+    && findExactNodesByIdInForest(futureRoots, currentRootId).length === 1;
+});
+
+const collectExactNodesByIdInForest = (forest: SyntaxNode[]): Map<string, SyntaxNode[]> => {
+  const nodesById = new Map<string, SyntaxNode[]>();
+  const visit = (node?: SyntaxNode | null) => {
+    if (!node || typeof node !== 'object') return;
+    const nodeId = String(node.id || '').trim();
+    if (nodeId) {
+      const matches = nodesById.get(nodeId) || [];
+      matches.push(node);
+      nodesById.set(nodeId, matches);
+    }
+    (Array.isArray(node.children) ? node.children : []).forEach(visit);
+  };
+  (Array.isArray(forest) ? forest : []).forEach(visit);
+  return nodesById;
+};
+
+/**
+ * A layout scaffold may add hidden future parents and siblings, but it must
+ * preserve every current node's exact authored material. This prevents a
+ * future casing, silence, or token-order state from leaking into Replay.
+ */
+const forestCanUseCurrentMaterialLayoutScaffold = (
+  currentRoots: SyntaxNode[],
+  scaffoldRoots: SyntaxNode[]
+): boolean => {
+  if (!Array.isArray(currentRoots) || currentRoots.length === 0) return false;
+  if (!Array.isArray(scaffoldRoots) || scaffoldRoots.length === 0) return false;
+  const currentNodesById = collectExactNodesByIdInForest(currentRoots);
+  const scaffoldNodesById = collectExactNodesByIdInForest(scaffoldRoots);
+  if (currentNodesById.size === 0) return false;
+  return Array.from(currentNodesById.entries()).every(([nodeId, currentMatches]) => {
+    const scaffoldMatches = scaffoldNodesById.get(nodeId) || [];
+    return currentMatches.length === 1
+      && scaffoldMatches.length === 1
+      && replayLayoutMaterialSignature(currentMatches[0])
+        === replayLayoutMaterialSignature(scaffoldMatches[0]);
+  });
+};
+
+/**
+ * Borrow only a future frame's topology. Current nodes keep their exact
+ * authored material; future-only nodes are layout-only and therefore reserve
+ * coordinates without appearing. Every current workspace root must have one
+ * unambiguous future occurrence, including roots later wrapped by External
+ * Merge.
+ */
+const buildCurrentMaterialLayoutScaffold = (
+  currentRoots: SyntaxNode[],
+  futureRoots: SyntaxNode[],
+  allowedFutureOccurrenceIds: ReadonlySet<string> = new Set()
+): SyntaxNode[] | null => {
+  if (!Array.isArray(currentRoots) || currentRoots.length === 0) return null;
+  if (!Array.isArray(futureRoots) || futureRoots.length === 0) return null;
+  const currentNodesById = collectExactNodesByIdInForest(currentRoots);
+  if (currentNodesById.size === 0) return null;
+  if (Array.from(currentNodesById.values()).some((matches) => matches.length !== 1)) return null;
+
+  const currentTopology = JSON.stringify(
+    currentRoots.map((root) => replayLayoutTopologySignature(root))
+  );
+  const futureTopology = JSON.stringify(
+    futureRoots.map((root) => replayLayoutTopologySignature(root))
+  );
+  if (currentTopology === futureTopology) return null;
+
+  const findExactPaths = (roots: SyntaxNode[], targetNodeId: string): number[][] => {
+    const paths: number[][] = [];
+    const visit = (node: SyntaxNode, path: number[]) => {
+      if (String(node.id || '').trim() === targetNodeId) paths.push(path);
+      (Array.isArray(node.children) ? node.children : []).forEach((child, childIndex) => {
+        visit(child, [...path, childIndex]);
+      });
+    };
+    roots.forEach((root, rootIndex) => visit(root, [rootIndex]));
+    return paths;
+  };
+  const getNodeAtPath = (roots: SyntaxNode[], path: number[]): SyntaxNode | null => {
+    let current = roots[path[0]] || null;
+    for (let index = 1; current && index < path.length; index += 1) {
+      current = (Array.isArray(current.children) ? current.children : [])[path[index]] || null;
+    }
+    return current;
+  };
+  const replaceNodeAtPath = (
+    roots: SyntaxNode[],
+    path: number[],
+    replacement: SyntaxNode
+  ): SyntaxNode[] => {
+    const nextRoots = roots.map((root) => cloneSyntaxTree(root) || root);
+    if (path.length === 1) {
+      nextRoots[path[0]] = replacement;
+      return nextRoots;
+    }
+    let parent = nextRoots[path[0]];
+    for (let index = 1; index < path.length - 1; index += 1) {
+      parent = (parent.children || [])[path[index]];
+    }
+    const children = Array.isArray(parent.children) ? [...parent.children] : [];
+    children[path[path.length - 1]] = replacement;
+    parent.children = children;
+    return nextRoots;
+  };
+
+  let placeholderIndex = 0;
+  const buildLayoutOnlySkeleton = (futureNode: SyntaxNode): SyntaxNode => {
+    const originalNodeId = String(futureNode.id || '').trim();
+    const next: SyntaxNode = { ...futureNode };
+    delete next.children;
+    if (Array.isArray(futureNode.children)) {
+      next.children = futureNode.children.map(buildLayoutOnlySkeleton);
+    }
+    if (originalNodeId && currentNodesById.has(originalNodeId)) {
+      placeholderIndex += 1;
+      next.id = `__babel_future_layout_${placeholderIndex}__${originalNodeId}`;
+      delete next.aliasIds;
+      delete next.lineageId;
+      delete next.tokenIndex;
+    }
+    (next as any).replayLayoutOnly = true;
+    return next;
+  };
+
+  const graftCurrentMaterial = (
+    currentNode: SyntaxNode,
+    futureNode: SyntaxNode
+  ): SyntaxNode => {
+    const next = cloneSyntaxTree(currentNode) || currentNode;
+    delete (next as any).replayLayoutOnly;
+    const currentChildren = Array.isArray(currentNode.children) ? currentNode.children : [];
+    const futureChildren = Array.isArray(futureNode.children) ? futureNode.children : [];
+    if (currentChildren.length === 0 || futureChildren.length === 0) return next;
+
+    const childMatches = currentChildren.map((currentChild) => ({
+      currentChild,
+      paths: findExactPaths(futureChildren, String(currentChild.id || '').trim())
+    }));
+    if (childMatches.some(({ paths }) => paths.length !== 1 || paths[0].length !== 1)) {
+      next.children = currentChildren.map((child) => cloneSyntaxTree(child) || child);
+      return next;
+    }
+
+    let scaffoldChildren = futureChildren.map(buildLayoutOnlySkeleton);
+    childMatches
+      .sort((left, right) => right.paths[0].length - left.paths[0].length)
+      .forEach(({ currentChild, paths }) => {
+        const futureMatch = getNodeAtPath(futureChildren, paths[0]);
+        if (!futureMatch) return;
+        scaffoldChildren = replaceNodeAtPath(
+          scaffoldChildren,
+          paths[0],
+          graftCurrentMaterial(currentChild, futureMatch)
+        );
+      });
+    next.children = scaffoldChildren;
+    return next;
+  };
+
+  const rootMatches = currentRoots.map((currentRoot) => ({
+    currentRoot,
+    paths: findExactPaths(futureRoots, String(currentRoot.id || '').trim())
+  }));
+  if (rootMatches.some(({ paths }) => paths.length !== 1)) return null;
+
+  let scaffold = futureRoots.map(buildLayoutOnlySkeleton);
+  rootMatches
+    .sort((left, right) => right.paths[0].length - left.paths[0].length)
+    .forEach(({ currentRoot, paths }) => {
+      const futureMatch = getNodeAtPath(futureRoots, paths[0]);
+      if (!futureMatch) return;
+      scaffold = replaceNodeAtPath(
+        scaffold,
+        paths[0],
+        graftCurrentMaterial(currentRoot, futureMatch)
+      );
+    });
+
+  const containsUnauthorizedFutureOccurrence = Array.from(
+    collectExactNodesByIdInForest(scaffold).keys()
+  ).some((nodeId) => {
+    const match = nodeId.match(/^__babel_future_layout_\d+__(.+)$/u);
+    return Boolean(match && !allowedFutureOccurrenceIds.has(match[1]));
+  });
+  if (containsUnauthorizedFutureOccurrence) return null;
+
+  return forestCanUseCurrentMaterialLayoutScaffold(currentRoots, scaffold) ? scaffold : null;
+};
+
+/**
+ * Reserve the next unambiguous parent layout. Exact retained subtrees use it
+ * directly. Detached workspace objects may also borrow a later wrapper after
+ * their current-stage versions have been substituted back into that scaffold.
+ */
+const inferFutureLayoutScaffold = (
+  workspaceRoots: SyntaxNode[],
+  frames: ReplayDerivationFrame[],
+  currentFrameIndex: number
+): SyntaxNode[] | null => {
+  if (!Array.isArray(workspaceRoots) || workspaceRoots.length === 0) return null;
+  const seeksComposedWorkspaceLayout = workspaceRoots.length > 1;
+  let bestLayoutScaffold: SyntaxNode[] | null = null;
+  const allowedFutureOccurrenceIds = new Set<string>();
+  const currentForestSignature = JSON.stringify(
+    workspaceRoots.map((root) => replayLayoutContinuitySignature(root))
+  );
+
+  for (let futureFrameIndex = currentFrameIndex + 1; futureFrameIndex < frames.length; futureFrameIndex += 1) {
+    const futureFrame = frames[futureFrameIndex];
+    const futureRoots = Array.isArray(frames[futureFrameIndex]?.workspaceForest)
+      ? frames[futureFrameIndex].workspaceForest
+      : [];
+    const preservesCurrentSubtrees = forestCanUseFutureLayoutScaffold(workspaceRoots, futureRoots);
+    const preservesCurrentTopology = JSON.stringify(
+      workspaceRoots.map((root) => replayLayoutTopologySignature(root))
+    ) === JSON.stringify(
+      futureRoots.map((root) => replayLayoutTopologySignature(root))
+    );
+    const addsOnlyOuterWrapper = workspaceRoots.every((currentRoot) => {
+      const currentRootId = String(currentRoot?.id || '').trim();
+      if (!currentRootId) return false;
+      return findExactNodesByIdInForest(futureRoots, currentRootId).length === 1
+        && !futureRoots.some((futureRoot) => String(futureRoot?.id || '').trim() === currentRootId);
+    });
+    const futureIntroducesTrajectory = (Array.isArray(futureFrame?.relations) ? futureFrame.relations : [])
+      .some((relation) => isRegisteredTrajectoryRelation(relation?.relation, relation?.anchors));
+    const futureIntroducesCrossWorkspaceTrajectory = (
+      Array.isArray(futureFrame?.relations) ? futureFrame.relations : []
+    ).some((relation) => {
+      const entry = findRelationRegistryEntry(
+        productionRelationRegistry,
+        String(relation?.relation || '')
+      );
+      return Boolean(entry && PRODUCTION_RENDER_FAMILIES[entry.id]?.trajectoryKind === 'sideward');
+    });
+    if (futureIntroducesCrossWorkspaceTrajectory) break;
+    if (seeksComposedWorkspaceLayout) {
+      (Array.isArray(futureFrame?.relations) ? futureFrame.relations : [])
+        .filter((relation) => isRegisteredTrajectoryRelation(relation?.relation, relation?.anchors))
+        .forEach((relation) => {
+          (['pronouncedCopy', 'higherCopy'] as const).forEach((role) => {
+            const authoredValue = relation?.anchors?.[role];
+            const targetIds = Array.isArray(authoredValue) ? authoredValue : [authoredValue];
+            targetIds.forEach((targetId) => {
+              const normalizedTargetId = String(targetId || '').trim();
+              if (!normalizedTargetId) return;
+              allowedFutureOccurrenceIds.add(normalizedTargetId);
+              const targetMatches = findExactNodesByIdInForest(futureRoots, normalizedTargetId);
+              if (targetMatches.length === 1) {
+                collectExactNodesByIdInForest([targetMatches[0]]).forEach((_nodes, nodeId) => {
+                  allowedFutureOccurrenceIds.add(nodeId);
+                });
+              }
+            });
+          });
+        });
+    }
+    if (
+      futureIntroducesTrajectory
+      && !preservesCurrentSubtrees
+      && !addsOnlyOuterWrapper
+      && !preservesCurrentTopology
+      && !seeksComposedWorkspaceLayout
+    ) break;
+    if (preservesCurrentSubtrees) {
+      const futureForestSignature = JSON.stringify(
+        futureRoots.map((root) => replayLayoutContinuitySignature(root))
+      );
+      if (futureForestSignature !== currentForestSignature) {
+        const scaffold = buildCurrentMaterialLayoutScaffold(
+          workspaceRoots,
+          futureRoots,
+          allowedFutureOccurrenceIds
+        );
+        if (scaffold) {
+          bestLayoutScaffold = scaffold;
+        }
+      }
+      continue;
+    }
+    const topologyScaffold = buildCurrentMaterialLayoutScaffold(
+      workspaceRoots,
+      futureRoots,
+      allowedFutureOccurrenceIds
+    );
+    if (topologyScaffold) {
+      bestLayoutScaffold = topologyScaffold;
+      continue;
+    }
+    if (preservesCurrentTopology) continue;
+    if (!futureForestPreservesCurrentRootIdentities(workspaceRoots, futureRoots)) break;
+  }
+
+  return bestLayoutScaffold;
+};
+
+const buildWorkspaceRootSideHints = (
+  workspaceRoots: SyntaxNode[],
+  preferredRootIds?: string[] | null
+): Map<string, number> => {
+  const orderedRootIds = (
+    Array.isArray(preferredRootIds) && preferredRootIds.length > 0
+      ? preferredRootIds
+      : collectWorkspaceRootIds(workspaceRoots)
+  )
+    .map((id) => String(id || '').trim())
+    .filter(Boolean);
+  const hints = new Map<string, number>();
+  orderedRootIds.forEach((rootId, index) => {
+    hints.set(rootId, index);
+  });
+  return hints;
+};
+
+const inferFutureWorkspaceRootOrder = (
+  workspaceRoots: SyntaxNode[],
+  frames: ReplayDerivationFrame[],
+  currentFrameIndex: number
+): string[] | null => {
+  if (!Array.isArray(workspaceRoots) || workspaceRoots.length <= 1) return null;
+  const currentRoots = workspaceRoots
+    .map((root, index) => ({
+      root,
+      id: String(root?.id || '').trim(),
+      originalIndex: index
+    }))
+    .filter(({ id }) => Boolean(id));
+  const currentRootIds = new Set(currentRoots.map(({ id }) => id));
+  if (currentRootIds.size <= 1) return null;
+
+  const comparePaths = (left: number[], right: number[]): number => {
+    const limit = Math.min(left.length, right.length);
+    for (let index = 0; index < limit; index += 1) {
+      if (left[index] !== right[index]) return left[index] - right[index];
+    }
+    return left.length - right.length;
+  };
+  let bestPreferredOrder: string[] | null = null;
+  let bestMergedRoots = -1;
+  let bestDepthScore = -1;
+
+  for (let futureFrameIndex = currentFrameIndex + 1; futureFrameIndex < frames.length; futureFrameIndex += 1) {
+    const futureRoots = Array.isArray(frames[futureFrameIndex]?.workspaceForest)
+      ? frames[futureFrameIndex].workspaceForest
+      : [];
+    const futureForestNodeIds = new Set(futureRoots.flatMap((root) => collectSubtreeNodeIds(root)));
+    if (!currentRoots.every(({ id }) => futureForestNodeIds.has(id))) {
+      break;
+    }
+
+    const rootMembership = currentRoots.map(({ id, originalIndex }) => {
+      let futureRootIndex = -1;
+      let localPath: number[] | null = null;
+      futureRoots.some((futureRoot, index) => {
+        const pathWithinRoot = findNodePathInForest([futureRoot], id);
+        if (!pathWithinRoot) return false;
+        futureRootIndex = index;
+        localPath = pathWithinRoot;
+        return true;
+      });
+      return { id, originalIndex, futureRootIndex, localPath };
+    });
+
+    if (rootMembership.some(({ futureRootIndex, localPath }) => futureRootIndex < 0 || !localPath)) {
+      break;
+    }
+
+    const groupedByFutureRoot = new Map<number, number>();
+    rootMembership.forEach(({ futureRootIndex }) => {
+      groupedByFutureRoot.set(futureRootIndex, (groupedByFutureRoot.get(futureRootIndex) || 0) + 1);
+    });
+    const mergedRoots = currentRoots.length - groupedByFutureRoot.size;
+    if (mergedRoots <= 0) continue;
+
+    const preferredOrder = [...rootMembership]
+      .sort((left, right) => {
+        if (left.futureRootIndex !== right.futureRootIndex) {
+          return left.futureRootIndex - right.futureRootIndex;
+        }
+        const pathOrder = comparePaths(left.localPath || [], right.localPath || []);
+        if (pathOrder !== 0) return pathOrder;
+        return left.originalIndex - right.originalIndex;
+      })
+      .map(({ id }) => id);
+    const depthScore = rootMembership.reduce((total, entry) => total + (entry.localPath?.length || 0), 0);
+
+    if (preferredOrder.length !== currentRoots.length) break;
+    if (
+      mergedRoots > bestMergedRoots
+      || (mergedRoots === bestMergedRoots && depthScore > bestDepthScore)
+    ) {
+      bestPreferredOrder = preferredOrder;
+      bestMergedRoots = mergedRoots;
+      bestDepthScore = depthScore;
+    }
+  }
+
+  return bestPreferredOrder;
+};
+
+const collectNextFramePendingRootSubtreeIds = (
+  workspaceRoots: SyntaxNode[],
+  nextFrame?: ReplayDerivationFrame | null
+): Set<string> => {
+  const currentRootIds = new Set(
+    (Array.isArray(workspaceRoots) ? workspaceRoots : [])
+      .map((node) => String(node?.id || '').trim())
+      .filter(Boolean)
+  );
+  const nextRoots = Array.isArray(nextFrame?.workspaceForest) ? nextFrame.workspaceForest : [];
+  return new Set(
+    nextRoots
+      .filter((node) => {
+        const nodeId = String(node?.id || '').trim();
+        return Boolean(nodeId) && !currentRootIds.has(nodeId);
+      })
+      .flatMap((node) => collectSubtreeNodeIds(node))
+  );
+};
+
+const mergeReplayDetailBlocks = (
+  ...sources: Array<ReplayDetailBlock[] | undefined>
+): ReplayDetailBlock[] | undefined => {
+  const mergedByTitle = new Map<string, ReplayDetailBlock>();
+  sources
+    .flat()
+    .filter((block): block is ReplayDetailBlock => Boolean(block && typeof block === 'object'))
+    .forEach((block) => {
+      const title = String(block.title || '').trim();
+      if (!title) return;
+      const normalizedTitle = normalizeReplayBlockTitleKey(title);
+      const lines = (Array.isArray(block.lines) ? block.lines : [])
+        .map((line) => String(line || '').trim())
+        .filter(Boolean);
+      if (lines.length === 0) return;
+      const existing = mergedByTitle.get(normalizedTitle);
+      if (!existing) {
+        mergedByTitle.set(normalizedTitle, {
+          title,
+          lines: Array.from(new Set(lines))
+        });
+        return;
+      }
+      existing.lines = Array.from(new Set([...(existing.lines || []), ...lines]));
+    });
+  const merged = Array.from(mergedByTitle.values());
+  return merged.length > 0 ? merged : undefined;
+};
+
+const getReplayPlanStage = (
+  plan: DerivationReplayPlan | null | undefined,
+  stageIndex: number
+): DerivationReplayPlanStage | null => {
+  const stages = Array.isArray(plan?.stages) ? plan.stages : [];
+  return stages.find((stage) => Number(stage?.stageIndex) === stageIndex) || null;
+};
+
+const buildReplayProgressLabel = (
+  stage: DerivationReplayPlanStage | null | undefined,
+  stageCount: number,
+  stepNumber: number,
+  stepCount: number
+): string | undefined => {
+  if (!stage || !Number.isFinite(stage.stageNumber) || stage.stageNumber <= 0 || stageCount <= 0 || stepCount <= 0) {
+    return undefined;
+  }
+  return `Stage ${stage.stageNumber}/${stageCount} \u00b7 Step ${stepNumber}/${stepCount}`;
+};
+
+const stripSemanticPayloadFromMicrostep = (step: PlaybackStep): PlaybackStep => ({
+  ...step,
+  sourceKind: 'microstep',
+  detailBlocks: undefined,
+  note: undefined,
+  movementSerializationStatus: undefined,
+  movementDiagnostics: undefined
+});
+
+const RELATION_OWNED_PHRASAL_TREE_TRANSITIONS = new Set([
+  'QuantifierRaising'
+]);
+
+const relationOwnedPhrasalSourceRoles = (
+  relation?: string,
+  _anchors: ReplayResolvedRelationAnchor[] = []
+): readonly string[] => {
+  if (String(relation || '').trim() === 'QuantifierRaising') return ['pronouncedQP', 'source'];
+  return TRAJECTORY_SOURCE_ROLES;
+};
+
+const relationOwnedPhrasalTargetRoles = (
+  relation?: string,
+  _anchors: ReplayResolvedRelationAnchor[] = []
+): readonly string[] => {
+  if (String(relation || '').trim() === 'QuantifierRaising') return ['lfQP', 'target'];
+  return TRAJECTORY_TARGET_ROLES;
+};
+
+const relationOwnsPhrasalTreeTransition = (
+  relation: string | undefined,
+  _forest: SyntaxNode[],
+  _sourceNodeIds: string[],
+  _targetNodeId: string
+): boolean => RELATION_OWNED_PHRASAL_TREE_TRANSITIONS.has(String(relation || '').trim());
+
+/**
+ * A final movement tree serializes the landed occurrence and silent lower
+ * occurrence. Before the relation moment, Replay needs the inverse state: the
+ * landing is still withheld and the lower occurrence is overt. Reconstruct
+ * only what the authored contract proves — a registered phrasal trajectory
+ * whose source and target nodes share exact lineage ids. Missing or ambiguous
+ * lineage fails closed and leaves the authored tree unchanged.
+ */
+const buildPreMovementStructuralForest = (
+  forest: SyntaxNode[],
+  relations: DerivationReplayPlanStep[],
+  previousForest: SyntaxNode[] = []
+): SyntaxNode[] => {
+  const structuralForest = cloneSyntaxForest(forest);
+  const collectNodes = (root?: SyntaxNode | null): SyntaxNode[] => {
+    if (!root) return [];
+    const nodes: SyntaxNode[] = [];
+    const visit = (node: SyntaxNode) => {
+      nodes.push(node);
+      (Array.isArray(node.children) ? node.children : []).forEach(visit);
+    };
+    visit(root);
+    return nodes;
+  };
+  const findNode = (nodeId: string): SyntaxNode | null => {
+    const normalizedNodeId = String(nodeId || '').trim();
+    if (!normalizedNodeId) return null;
+    for (const root of structuralForest) {
+      const found = collectNodes(root).find((node) => String(node.id || '').trim() === normalizedNodeId);
+      if (found) return found;
+    }
+    return null;
+  };
+  const findNodeInForest = (candidateForest: SyntaxNode[], nodeId: string): SyntaxNode | null => {
+    const normalizedNodeId = String(nodeId || '').trim();
+    if (!normalizedNodeId) return null;
+    for (const root of candidateForest) {
+      const found = collectNodes(root).find((node) => String(node.id || '').trim() === normalizedNodeId);
+      if (found) return found;
+    }
+    return null;
+  };
+  const replaceStructuralNode = (nodeId: string, replacement: SyntaxNode): boolean => {
+    const normalizedNodeId = String(nodeId || '').trim();
+    if (!normalizedNodeId) return false;
+    const rootIndex = structuralForest.findIndex((root) => String(root.id || '').trim() === normalizedNodeId);
+    if (rootIndex >= 0) {
+      structuralForest[rootIndex] = replacement;
+      return true;
+    }
+    const visit = (node: SyntaxNode): boolean => {
+      const children = Array.isArray(node.children) ? node.children : [];
+      const childIndex = children.findIndex((child) => String(child.id || '').trim() === normalizedNodeId);
+      if (childIndex >= 0) {
+        children[childIndex] = replacement;
+        node.children = children;
+        return true;
+      }
+      return children.some(visit);
+    };
+    return structuralForest.some(visit);
+  };
+  const restoreCurrentSourceState = (
+    currentSource: SyntaxNode,
+    previousSource: SyntaxNode
+  ): SyntaxNode | null => {
+    if (String(currentSource.label || '').trim() !== String(previousSource.label || '').trim()) {
+      return null;
+    }
+    // Before a later movement relation, the source is exactly the occurrence
+    // authored in the preceding stage. This matters for remnant and roll-up
+    // movement, where the relation frame relocates a previously derived subtree
+    // and creates a differently shaped lower silent copy. Reusing the complete
+    // prior occurrence keeps every lexical/structural change inside the movement
+    // mesostep instead of leaking it into a fake construction microstep.
+    return cloneSyntaxTree(previousSource);
+  };
+  const findParent = (nodeId: string): SyntaxNode | null => {
+    const normalizedNodeId = String(nodeId || '').trim();
+    if (!normalizedNodeId) return null;
+    const visit = (node: SyntaxNode): SyntaxNode | null => {
+      const children = Array.isArray(node.children) ? node.children : [];
+      if (children.some((child) => String(child.id || '').trim() === normalizedNodeId)) return node;
+      for (const child of children) {
+        const found = visit(child);
+        if (found) return found;
+      }
+      return null;
+    };
+    for (const root of structuralForest) {
+      const found = visit(root);
+      if (found) return found;
+    }
+    return null;
+  };
+  const findAnchor = (
+    anchors: ReplayResolvedRelationAnchor[],
+    roles: readonly string[]
+  ): ReplayResolvedRelationAnchor | undefined => {
+    const wanted = new Set(roles.map((role) => role.toLowerCase()));
+    return anchors.find((anchor) => wanted.has(String(anchor.role || '').trim().toLowerCase()));
+  };
+  const overtSurface = (node?: SyntaxNode | null): string => {
+    if (!node) return '';
+    const candidates = collectNodes(node).filter((candidate) => {
+      const children = Array.isArray(candidate.children) ? candidate.children : [];
+      if (children.length > 0 || candidate.silent === true) return false;
+      const explicitWord = String(candidate.word || '').trim();
+      const surface = explicitWord || String(candidate.label || '').trim();
+      return Boolean(surface)
+        && !isTraceLike(surface)
+        && !isNullLike(surface)
+        && (Boolean(explicitWord) || !isStructuralCategorySurface(surface));
+    });
+    return String(candidates[0]?.word || candidates[0]?.label || '').trim();
+  };
+  const baseGenerationSurface = (targetNode: SyntaxNode, surface: string): string => {
+    const category = String(targetNode.label || '').trim();
+    if (
+      targetNode.tokenIndex === 0
+      && (category === 'D' || category === 'C')
+      && /^[A-Z][a-z]/.test(surface)
+    ) {
+      return `${surface.charAt(0).toLowerCase()}${surface.slice(1)}`;
+    }
+    return surface;
+  };
+  [...relations].reverse().forEach((relation) => {
+    const anchors = Array.isArray(relation.resolvedAnchors)
+      ? relation.resolvedAnchors
+      : [];
+    const sourceRoles = relationOwnedPhrasalSourceRoles(relation.relation, anchors);
+    const targetRoles = relationOwnedPhrasalTargetRoles(relation.relation, anchors);
+    const sourceIds = Array.from(new Set([
+      ...getRelationSourceNodeIds(relation),
+      ...findResolvedReplayAnchorsByRoles(anchors, sourceRoles)
+        .map((anchor) => String(anchor.nodeId || '').trim())
+    ].filter(Boolean)));
+    const targetId = String(
+      getRelationTargetNodeId(relation)
+      || findAnchor(anchors, targetRoles)?.nodeId
+      || ''
+    ).trim();
+    const trajectoryDisplayKind = registeredTrajectoryDisplayKind(
+      relation.relation,
+      relation.resolvedAnchors
+    );
+    if (
+      trajectoryDisplayKind !== 'phrasal'
+      && trajectoryDisplayKind !== 'head'
+      && !relationOwnsPhrasalTreeTransition(
+        relation.relation,
+        structuralForest,
+        sourceIds,
+        targetId
+      )
+    ) return;
+    const restoredFromPreviousStage = new Set<string>();
+    sourceIds.forEach((sourceId) => {
+      const previousSource = findNodeInForest(previousForest, sourceId);
+      const currentSource = findNode(sourceId);
+      if (!previousSource || !currentSource) return;
+      const restoredSource = restoreCurrentSourceState(currentSource, previousSource);
+      if (restoredSource && replaceStructuralNode(sourceId, restoredSource)) {
+        restoredFromPreviousStage.add(sourceId);
+      }
+    });
+    const sources = sourceIds
+      .map((sourceId) => findNode(sourceId))
+      .filter((source): source is SyntaxNode => Boolean(source));
+    const target = findNode(targetId);
+    if (sources.length !== sourceIds.length || sources.length === 0 || !target) return;
+    const targetLineageId = String(target.lineageId || '').trim();
+    if (!targetLineageId || sources.some((source) => {
+      const sourceLineageId = String(source.lineageId || '').trim();
+      return !sourceLineageId
+        || sourceLineageId !== targetLineageId
+        || source === target
+        || collectNodes(source).includes(target)
+        || collectNodes(target).includes(source);
+    })) return;
+    const targetParent = findParent(targetId);
+    const targetRootIndex = structuralForest.findIndex((root) => String(root.id || '').trim() === targetId);
+    if (!targetParent && targetRootIndex < 0) return;
+
+    const targetByLineage = new Map<string, SyntaxNode | null>();
+    collectNodes(target).forEach((node) => {
+      const lineageId = String(node.lineageId || '').trim();
+      if (!lineageId) return;
+      if (!targetByLineage.has(lineageId)) {
+        targetByLineage.set(lineageId, node);
+      } else if (targetByLineage.get(lineageId) !== node) {
+        targetByLineage.set(lineageId, null);
+      }
+    });
+
+    const sourceRestorations = sources.map((source) => {
+      const sourceNodes = collectNodes(source);
+      const sourceId = String(source.id || '').trim();
+      // A prior-stage source is already the exact derivational input to the
+      // current movement. Any silence inside it belongs to an earlier
+      // operation (for example, the evacuated object gap inside a remnant VP)
+      // and must persist. Only a source serialized from the current final tree
+      // needs its newly silent leaves restored from the landing lineage.
+      const sourceLeavesToRestore = restoredFromPreviousStage.has(sourceId)
+        ? []
+        : sourceNodes.filter((node) => {
+        const children = Array.isArray(node.children) ? node.children : [];
+        if (children.length > 0) return false;
+        const surface = String(node.word || node.label || '').trim();
+        return node.silent === true || isTraceLike(surface) || isNullLike(surface);
+        });
+      const restoredSurfaceBySource = new Map<SyntaxNode, string>();
+      sourceLeavesToRestore.forEach((node) => {
+        const lineageId = String(node.lineageId || '').trim();
+        const targetNode = lineageId ? targetByLineage.get(lineageId) : null;
+        const restoredSurface = targetNode
+          ? baseGenerationSurface(targetNode, overtSurface(targetNode))
+          : '';
+        if (restoredSurface) restoredSurfaceBySource.set(node, restoredSurface);
+      });
+      return { sourceNodes, sourceLeavesToRestore, restoredSurfaceBySource };
+    });
+    if (sourceRestorations.some(({ sourceLeavesToRestore, restoredSurfaceBySource }) =>
+      sourceLeavesToRestore.length > 0
+      && restoredSurfaceBySource.size !== sourceLeavesToRestore.length
+    )) return;
+
+    sourceRestorations.forEach(({ sourceNodes, restoredSurfaceBySource }) => {
+      sourceNodes.forEach((node) => {
+        delete node.silent;
+        const children = Array.isArray(node.children) ? node.children : [];
+        if (children.length > 0) return;
+        const restoredSurface = restoredSurfaceBySource.get(node);
+        if (!restoredSurface) return;
+        if (typeof node.word === 'string') node.word = restoredSurface;
+        else node.label = restoredSurface;
+      });
+    });
+
+    if (trajectoryDisplayKind === 'head') {
+      const targetChildren = Array.isArray(target.children) ? target.children : [];
+      if (targetChildren.length > 0) {
+        target.children = [];
+      } else {
+        delete target.word;
+        target.label = String(target.label || '').trim() || '∅';
+        target.silent = true;
+      }
+    } else if (targetParent) {
+      targetParent.children = (Array.isArray(targetParent.children) ? targetParent.children : [])
+        .filter((child) => String(child.id || '').trim() !== targetId);
+    } else {
+      structuralForest.splice(targetRootIndex, 1);
+    }
+  });
+
+  return structuralForest;
+};
+
+const relationProductionTransitionKinds = (
+  relation: DerivationReplayPlanStep
+): readonly ProductionTransitionKind[] => {
+  const entry = findRelationRegistryEntry(
+    productionRelationRegistry,
+    String(relation.relation || '').trim()
+  );
+  return entry
+    ? PRODUCTION_RENDER_FAMILIES[entry.id]?.transitionKinds || []
+    : [];
+};
+
+type FallbackTreeTransitionOwnership = {
+  currentNodeIds: Set<string>;
+  priorNodeIds: Set<string>;
+};
+
+const relationAnchorNodeIds = (block?: Record<string, unknown>): string[] =>
+  Object.values(block || {})
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+const collectExactSubtreeNodeIds = (node: SyntaxNode): Set<string> => {
+  const nodeIds = new Set<string>();
+  const visit = (candidate: SyntaxNode) => {
+    const nodeId = String(candidate.id || '').trim();
+    if (nodeId) nodeIds.add(nodeId);
+    (Array.isArray(candidate.children) ? candidate.children : []).forEach(visit);
+  };
+  visit(node);
+  return nodeIds;
+};
+
+const resolveFallbackTreeTransitionOwnership = (
+  relation: DerivationReplayPlanStep,
+  previousForest: SyntaxNode[],
+  currentForest: SyntaxNode[]
+): FallbackTreeTransitionOwnership | null => {
+  if (findRelationRegistryEntry(
+    productionRelationRegistry,
+    String(relation.relation || '').trim()
+  )) return null;
+
+  const currentAnchorIds = relationAnchorNodeIds(relation.anchors);
+  const priorAnchorIds = relationAnchorNodeIds(relation.priorAnchors);
+  if (currentAnchorIds.length === 0 || priorAnchorIds.length === 0) return null;
+
+  const currentAnchors = currentAnchorIds.map((nodeId) =>
+    findExactNodesByIdInForest(currentForest, nodeId));
+  const priorAnchors = priorAnchorIds.map((nodeId) =>
+    findExactNodesByIdInForest(previousForest, nodeId));
+  if (
+    currentAnchors.some((matches) => matches.length !== 1)
+    || priorAnchors.some((matches) => matches.length !== 1)
+  ) return null;
+
+  return {
+    currentNodeIds: new Set(
+      currentAnchors.flatMap(([node]) => Array.from(collectExactSubtreeNodeIds(node)))
+    ),
+    priorNodeIds: new Set(
+      priorAnchors.flatMap(([node]) => Array.from(collectExactSubtreeNodeIds(node)))
+    )
+  };
+};
+
+type ExactForestNodeLocation = {
+  node: SyntaxNode;
+  parent: SyntaxNode | null;
+  parentId: string;
+  childIndex: number;
+  rootIndex: number;
+  depth: number;
+};
+
+const indexExactForestNodeLocations = (
+  forest: SyntaxNode[]
+): Map<string, ExactForestNodeLocation | null> => {
+  const locations = new Map<string, ExactForestNodeLocation | null>();
+  const visit = (
+    node: SyntaxNode,
+    parent: SyntaxNode | null,
+    childIndex: number,
+    rootIndex: number,
+    depth: number
+  ) => {
+    const nodeId = String(node.id || '').trim();
+    if (nodeId) {
+      const location = {
+        node,
+        parent,
+        parentId: String(parent?.id || '').trim(),
+        childIndex,
+        rootIndex,
+        depth
+      };
+      locations.set(nodeId, locations.has(nodeId) ? null : location);
+    }
+    (Array.isArray(node.children) ? node.children : []).forEach((child, index) => {
+      visit(child, node, index, rootIndex, depth + 1);
+    });
+  };
+  forest.forEach((root, rootIndex) => visit(root, null, rootIndex, rootIndex, 0));
+  return locations;
+};
+
+const syntaxNodeMaterialSignature = (node: SyntaxNode): string => {
+  const material = { ...node };
+  delete material.children;
+  return JSON.stringify(material);
+};
+
+/**
+ * Apply only the raw tree deltas witnessed by active unregistered relations.
+ * A fallback relation owns its current/prior anchor subtrees, never the whole
+ * stage forest. It may add the minimum current ancestor chain needed to keep
+ * those subtrees attached; unrelated current-stage additions remain hidden.
+ */
+const buildFallbackTreeTransitionForest = (
+  previousForest: SyntaxNode[],
+  currentForest: SyntaxNode[],
+  activeRelations: DerivationReplayPlanStep[]
+): SyntaxNode[] => {
+  const ownerships = activeRelations
+    .map((relation) => resolveFallbackTreeTransitionOwnership(
+      relation,
+      previousForest,
+      currentForest
+    ))
+    .filter((ownership): ownership is FallbackTreeTransitionOwnership => Boolean(ownership));
+  if (ownerships.length === 0) return cloneSyntaxForest(previousForest);
+
+  const activeCurrentNodeIds = new Set(
+    ownerships.flatMap((ownership) => Array.from(ownership.currentNodeIds))
+  );
+  const activePriorNodeIds = new Set(
+    ownerships.flatMap((ownership) => Array.from(ownership.priorNodeIds))
+  );
+  const previousLocations = indexExactForestNodeLocations(previousForest);
+  const currentLocations = indexExactForestNodeLocations(currentForest);
+  let result = cloneSyntaxForest(previousForest);
+
+  const exactLocation = (
+    locations: Map<string, ExactForestNodeLocation | null>,
+    nodeId: string
+  ): ExactForestNodeLocation | null => locations.get(nodeId) || null;
+  const hasOwnedAncestor = (
+    location: ExactForestNodeLocation,
+    ownedIds: Set<string>,
+    locations: Map<string, ExactForestNodeLocation | null>,
+    predicate: (nodeId: string) => boolean
+  ): boolean => {
+    let parentId = location.parentId;
+    while (parentId) {
+      if (ownedIds.has(parentId) && predicate(parentId)) return true;
+      parentId = exactLocation(locations, parentId)?.parentId || '';
+    }
+    return false;
+  };
+  const removeExactNode = (nodeId: string): SyntaxNode | null => {
+    const location = exactLocation(indexExactForestNodeLocations(result), nodeId);
+    if (!location) return null;
+    if (location.parent) {
+      const children = Array.isArray(location.parent.children) ? [...location.parent.children] : [];
+      const [removed] = children.splice(location.childIndex, 1);
+      location.parent.children = children;
+      return removed || null;
+    }
+    const [removed] = result.splice(location.rootIndex, 1);
+    return removed || null;
+  };
+  const insertExactNode = (
+    node: SyntaxNode,
+    parentId: string,
+    childIndex: number,
+    rootIndex: number
+  ): boolean => {
+    if (!parentId) {
+      result.splice(Math.min(Math.max(rootIndex, 0), result.length), 0, node);
+      return true;
+    }
+    const parentLocation = exactLocation(indexExactForestNodeLocations(result), parentId);
+    if (!parentLocation) return false;
+    const children = Array.isArray(parentLocation.node.children)
+      ? [...parentLocation.node.children]
+      : [];
+    children.splice(Math.min(Math.max(childIndex, 0), children.length), 0, node);
+    parentLocation.node.children = children;
+    return true;
+  };
+
+  const activeCurrentAncestorNodeIds = new Set<string>();
+  activeCurrentNodeIds.forEach((nodeId) => {
+    let parentId = exactLocation(currentLocations, nodeId)?.parentId || '';
+    while (parentId) {
+      activeCurrentAncestorNodeIds.add(parentId);
+      parentId = exactLocation(currentLocations, parentId)?.parentId || '';
+    }
+  });
+
+  const ensureCurrentNodeShell = (
+    nodeId: string,
+    visiting = new Set<string>()
+  ): boolean => {
+    if (!nodeId) return true;
+    const currentLocation = exactLocation(currentLocations, nodeId);
+    if (!currentLocation || visiting.has(nodeId)) return false;
+
+    visiting.add(nodeId);
+    if (
+      currentLocation.parentId
+      && !ensureCurrentNodeShell(currentLocation.parentId, visiting)
+    ) return false;
+
+    const resultLocation = exactLocation(indexExactForestNodeLocations(result), nodeId);
+    if (resultLocation) {
+      if (resultLocation.parentId !== currentLocation.parentId) {
+        const detachedNode = removeExactNode(nodeId);
+        if (!detachedNode || !insertExactNode(
+          detachedNode,
+          currentLocation.parentId,
+          currentLocation.childIndex,
+          currentLocation.rootIndex
+        )) return false;
+      }
+      visiting.delete(nodeId);
+      return true;
+    }
+
+    const currentMaterial = { ...currentLocation.node };
+    delete currentMaterial.children;
+    const shell = structuredClone(currentMaterial) as SyntaxNode;
+    shell.children = [];
+    if (!insertExactNode(
+      shell,
+      currentLocation.parentId,
+      currentLocation.childIndex,
+      currentLocation.rootIndex
+    )) return false;
+
+    const currentChildren = Array.isArray(currentLocation.node.children)
+      ? currentLocation.node.children
+      : [];
+    for (const [childIndex, child] of currentChildren.entries()) {
+      const childId = String(child.id || '').trim();
+      if (!childId) continue;
+      if (
+        !activeCurrentNodeIds.has(childId)
+        && !activeCurrentAncestorNodeIds.has(childId)
+      ) continue;
+      const existingChild = exactLocation(indexExactForestNodeLocations(result), childId);
+      if (!existingChild) continue;
+      const detachedChild = removeExactNode(childId);
+      if (!detachedChild || !insertExactNode(
+        detachedChild,
+        nodeId,
+        childIndex,
+        currentLocation.rootIndex
+      )) return false;
+    }
+
+    visiting.delete(nodeId);
+    return true;
+  };
+
+  const removedNodeIds = Array.from(activePriorNodeIds).filter((nodeId) =>
+    Boolean(exactLocation(previousLocations, nodeId))
+    && !exactLocation(currentLocations, nodeId));
+  const movedNodeIds = Array.from(new Set([
+    ...activeCurrentNodeIds,
+    ...activePriorNodeIds
+  ])).filter((nodeId) => {
+    const previous = exactLocation(previousLocations, nodeId);
+    const current = exactLocation(currentLocations, nodeId);
+    return Boolean(previous && current) && (
+      previous!.parentId !== current!.parentId
+      || (previous!.parentId === current!.parentId && previous!.childIndex !== current!.childIndex)
+    );
+  });
+  const topLevelMovedNodeIds = movedNodeIds
+    .filter((nodeId) => {
+      const location = exactLocation(currentLocations, nodeId);
+      return Boolean(location) && !hasOwnedAncestor(
+        location!,
+        activeCurrentNodeIds,
+        currentLocations,
+        (ancestorId) => movedNodeIds.includes(ancestorId)
+      );
+    })
+    .sort((left, right) => (
+      (exactLocation(currentLocations, left)?.depth || 0)
+      - (exactLocation(currentLocations, right)?.depth || 0)
+    ));
+  const addedNodeIds = Array.from(activeCurrentNodeIds).filter((nodeId) =>
+    Boolean(exactLocation(currentLocations, nodeId))
+    && !exactLocation(previousLocations, nodeId));
+  const topLevelAddedNodeIds = addedNodeIds
+    .filter((nodeId) => {
+      const location = exactLocation(currentLocations, nodeId);
+      return Boolean(location) && !hasOwnedAncestor(
+        location!,
+        activeCurrentNodeIds,
+        currentLocations,
+        (ancestorId) => addedNodeIds.includes(ancestorId)
+      );
+    })
+    .sort((left, right) => (
+      (exactLocation(currentLocations, left)?.depth || 0)
+      - (exactLocation(currentLocations, right)?.depth || 0)
+    ));
+
+  const destinationParentIds = Array.from(new Set([
+    ...topLevelMovedNodeIds,
+    ...topLevelAddedNodeIds
+  ].map((nodeId) => exactLocation(currentLocations, nodeId)?.parentId || '')
+    .filter(Boolean)));
+  if (destinationParentIds.some((parentId) => !ensureCurrentNodeShell(parentId))) {
+    return cloneSyntaxForest(previousForest);
+  }
+
+  removedNodeIds
+    .filter((nodeId) => {
+      const location = exactLocation(previousLocations, nodeId);
+      return Boolean(location) && !hasOwnedAncestor(
+        location!,
+        activePriorNodeIds,
+        previousLocations,
+        (ancestorId) => removedNodeIds.includes(ancestorId)
+      );
+    })
+    .sort((left, right) => (
+      (exactLocation(previousLocations, right)?.depth || 0)
+      - (exactLocation(previousLocations, left)?.depth || 0)
+    ))
+    .forEach((nodeId) => removeExactNode(nodeId));
+
+  topLevelMovedNodeIds
+    .forEach((nodeId) => {
+      const destination = exactLocation(currentLocations, nodeId);
+      if (
+        destination?.parentId
+        && !exactLocation(indexExactForestNodeLocations(result), destination.parentId)
+      ) return;
+      const moved = removeExactNode(nodeId);
+      if (!destination || !moved) return;
+      insertExactNode(
+        moved,
+        destination.parentId,
+        destination.childIndex,
+        destination.rootIndex
+      );
+    });
+
+  topLevelAddedNodeIds
+    .forEach((nodeId) => {
+      const destination = exactLocation(currentLocations, nodeId);
+      if (!destination) return;
+      if (exactLocation(indexExactForestNodeLocations(result), nodeId)) return;
+      insertExactNode(
+        cloneSyntaxTree(destination.node) || destination.node,
+        destination.parentId,
+        destination.childIndex,
+        destination.rootIndex
+      );
+    });
+
+  Array.from(activeCurrentNodeIds).forEach((nodeId) => {
+    const previous = exactLocation(previousLocations, nodeId);
+    const current = exactLocation(currentLocations, nodeId);
+    if (!previous || !current) return;
+    if (syntaxNodeMaterialSignature(previous.node) === syntaxNodeMaterialSignature(current.node)) return;
+    const resultLocation = exactLocation(indexExactForestNodeLocations(result), nodeId);
+    if (!resultLocation) return;
+    const children = resultLocation.node.children;
+    const currentMaterial = { ...current.node };
+    delete currentMaterial.children;
+    Object.keys(resultLocation.node).forEach((key) => {
+      if (key !== 'children') {
+        delete (resultLocation.node as unknown as Record<string, unknown>)[key];
+      }
+    });
+    Object.assign(resultLocation.node, structuredClone(currentMaterial));
+    if (children) resultLocation.node.children = children;
+  });
+
+  return result;
+};
+
+const relationOwnsNonMovementTreeTransition = (
+  relation: DerivationReplayPlanStep,
+  previousForest: SyntaxNode[] = [],
+  currentForest: SyntaxNode[] = []
+): boolean => {
+  const relationName = String(relation.relation || '').trim();
+  const registryEntry = findRelationRegistryEntry(
+    productionRelationRegistry,
+    relationName
+  );
+
+  if (!registryEntry) {
+    return Boolean(resolveFallbackTreeTransitionOwnership(
+      relation,
+      previousForest,
+      currentForest
+    ));
+  }
+
+  const transitionKinds = relationProductionTransitionKinds(relation);
+  const nonMovementKinds = transitionKinds.filter((kind) => kind !== 'movement');
+  if (nonMovementKinds.length === 0) return false;
+
+  return true;
+};
+
+export const buildPlaybackStepsFromDerivationFrames = (
+  frames: ReplayDerivationFrame[],
+  derivationSteps?: DerivationStep[],
+  sentence?: string,
+  replayPlan?: DerivationReplayPlan | null
+): PlaybackStep[] => {
+  const alignedSteps = (Array.isArray(derivationSteps) ? derivationSteps : [])
+    .filter((step) => String(step?.operation || '').trim() !== 'SpellOut');
+  const plannedStageCount = Array.isArray(replayPlan?.stages) ? replayPlan.stages.length : 0;
+  const stepsById = new Map(
+    alignedSteps
+      .map((step) => [String(step?.stepId || '').trim(), step] as const)
+      .filter(([stepId]) => Boolean(stepId))
+  );
+
+  const usedStepIds = new Set<string>();
+  let previousVisibleNodeIds = new Set<string>();
+  let previousWorkspaceRootIds = new Set<string>();
+  const sentenceInitialSurface = String(tokenizeReplaySentenceSurface(sentence)[0] || '').trim();
+  const firstFrontingStageIndex = (() => {
+    const stages = Array.isArray(replayPlan?.stages) ? replayPlan.stages : [];
+    for (const stage of stages) {
+      const relationSteps = Array.isArray(stage?.relationSteps) ? stage.relationSteps : [];
+      if (!relationSteps.some((relation) => isRegisteredFrontingTrajectoryRelation(
+        relation?.relation,
+        relation?.anchors
+      ))) continue;
+      const stageIndex = Number(stage?.stageIndex);
+      return Number.isFinite(stageIndex) ? stageIndex : -1;
+    }
+    return -1;
+  })();
+  const getPreFrontingLexicalSurface = (surface: string, frameIndex: number): string => {
+    const trimmed = String(surface || '').trim();
+    if (
+      !trimmed
+      || !sentenceInitialSurface
+      || firstFrontingStageIndex <= frameIndex
+      || normalizeToken(trimmed) !== normalizeToken(sentenceInitialSurface)
+    ) {
+      return trimmed;
+    }
+    return trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
+  };
+  const frameBackedSteps = frames.flatMap((frame, index) => {
+    const plannedStage = getReplayPlanStage(replayPlan, index);
+    const alignedStep = (() => {
+      const frameStepId = String(frame?.stepId || '').trim();
+      if (frameStepId && stepsById.has(frameStepId)) {
+        return stepsById.get(frameStepId);
+      }
+      // A stage-identified frame must never borrow an unrelated positional step.
+      if (frameStepId) return undefined;
+      return alignedSteps[index];
+    })();
+    const rawWorkspaceRoots = Array.isArray(frame.workspaceForest) ? frame.workspaceForest : [];
+    const nextFrame = index < frames.length - 1 ? frames[index + 1] : null;
+    const fallbackOperation = frame.movement?.operation || frame.operation || alignedStep?.operation || 'Other';
+    // Anchor detached roots to explicit future daughter order as soon as a later
+    // derivation frame makes that merge order unambiguous. This keeps bottom-up
+    // workspace assembly visually aligned with the eventual tree without guessing.
+    const preferredWorkspaceRootOrder = inferFutureWorkspaceRootOrder(rawWorkspaceRoots, frames, index);
+    const preferredWorkspaceRootSideHints = buildWorkspaceRootSideHints(
+      rawWorkspaceRoots,
+      preferredWorkspaceRootOrder
+    );
+    const workspaceRoots = reorderWorkspaceRootsForReplay(rawWorkspaceRoots, preferredWorkspaceRootOrder);
+    const futureLayoutScaffold = inferFutureLayoutScaffold(workspaceRoots, frames, index);
+    const rootLabels = workspaceRoots
+      .map((node) => String(node?.label || '').trim())
+      .filter(Boolean);
+    const primaryRoot = workspaceRoots[0];
+    const primaryRootId = String(primaryRoot?.id || '').trim();
+    const primaryRootLabel = String(primaryRoot?.label || '').trim() || 'Workspace';
+    const preferredNote = pickPreferredReplayText(alignedStep?.note);
+    const structuralFallbackRecipe = buildStructuralReplayFallback(
+      fallbackOperation,
+      primaryRootLabel,
+      rootLabels
+    );
+    const preferredRecipe = pickPreferredReplayText(
+      frame.recipe,
+      frame.movement?.note,
+      alignedStep?.recipe,
+      preferredNote
+    );
+    const plannedFrameRelations = plannedStage
+      ? getFrameRelations(frame, plannedStage)
+      : [];
+    const previousFrameWorkspaceRoots = index > 0 && Array.isArray(frames[index - 1]?.workspaceForest)
+      ? frames[index - 1].workspaceForest
+      : [];
+    const plannedStageRelocatesPriorLandingOccurrence = index > 0
+      && !plannedFrameRelations.some((relation) => relation?.relation === 'CopyOccurrence')
+      && plannedFrameRelations.some((relation) => {
+        if (!isRegisteredTrajectoryRelation(relation?.relation, relation?.anchors)) return false;
+        const relationLabel = String(relation?.relation || '').trim();
+        const resolvedAnchors = getResolvedReplayRelationAnchors(relation);
+        const targetNodeId = getRelationTargetNodeId(relation)
+          || String(findResolvedReplayAnchorByRoles(
+            resolvedAnchors,
+            relationOwnedPhrasalTargetRoles(relationLabel, resolvedAnchors)
+          )?.nodeId || '').trim();
+        const explicitSourceNodeIds = getRelationSourceNodeIds(relation);
+        const sourceNodeIds = explicitSourceNodeIds.length > 0
+          ? explicitSourceNodeIds
+          : findResolvedReplayAnchorsByRoles(
+              resolvedAnchors,
+              relationOwnedPhrasalSourceRoles(relationLabel, resolvedAnchors)
+            )
+              .map((anchor) => String(anchor.nodeId || '').trim())
+              .filter(Boolean);
+        return Boolean(targetNodeId)
+          && Boolean(findNodeByIdInForest(previousFrameWorkspaceRoots, targetNodeId))
+          && sourceNodeIds.length > 0
+          && sourceNodeIds.every((sourceNodeId) =>
+            !findNodeByIdInForest(previousFrameWorkspaceRoots, sourceNodeId));
+      });
+    const authoredLandingNodeId = getMovementLandingNodeId(frame.movement);
+    const frameHasMovementPayload = Boolean(
+      authoredLandingNodeId
+      || String(frame.movement?.sourceNodeId || '').trim()
+      || String(frame.movement?.traceNodeId || '').trim()
+      || String(frame.chainId || alignedStep?.chainId || '').trim()
+      || plannedStageRelocatesPriorLandingOccurrence
+    );
+    const frameCarriesAuthoredEffect =
+      Boolean(String(getDerivationFrameChange(frame)?.statement || '').trim());
+    const movementRecipe = pickPreferredReplayText(
+      frame.movement?.note,
+      alignedStep?.note,
+      alignedStep?.recipe
+    );
+    const semanticRecipe = (() => {
+      if (isMoveLikeOperation(fallbackOperation) || frameHasMovementPayload) {
+        return movementRecipe || structuralFallbackRecipe;
+      }
+      return structuralFallbackRecipe;
+    })();
+    const alignedStepId = String(alignedStep?.stepId || '').trim();
+    if (alignedStepId) usedStepIds.add(alignedStepId);
+
+    const priorVisibleNodeIds = new Set(previousVisibleNodeIds);
+    type IndexedRelationStep = DerivationReplayPlanStep & { authoredRelationIndex: number };
+    const frameRelationSteps: IndexedRelationStep[] = plannedStage
+      ? plannedFrameRelations
+          .map((relation, listIndex) => ({
+            ...relation,
+            // The authored array position is the relation's exact identity;
+            // keep the plan's own index when present — a positional index
+            // is wrong as soon as any upstream step was filtered.
+            authoredRelationIndex: Number.isInteger(relation.authoredRelationIndex)
+              ? (relation.authoredRelationIndex as number)
+              : listIndex
+          }))
+          .filter(isRenderableReplayRelation)
+      : [];
+    const nonMovementTreeTransitionRelationIndexes = new Set(
+      frameRelationSteps
+        .map((relation, relationIndex) => (
+          relationOwnsNonMovementTreeTransition(
+            relation,
+            previousFrameWorkspaceRoots,
+            workspaceRoots
+          ) ? relationIndex : -1
+        ))
+        .filter((relationIndex) => relationIndex >= 0)
+    );
+    const fallbackTreeTransitionRelationIndexes = new Set(
+      frameRelationSteps
+        .map((relation, relationIndex) => (
+          resolveFallbackTreeTransitionOwnership(
+            relation,
+            previousFrameWorkspaceRoots,
+            workspaceRoots
+          ) ? relationIndex : -1
+        ))
+        .filter((relationIndex) => relationIndex >= 0)
+    );
+    const frameHasNonMovementTreeTransition =
+      index > 0
+      && nonMovementTreeTransitionRelationIndexes.size > 0
+      && JSON.stringify(previousFrameWorkspaceRoots) !== JSON.stringify(workspaceRoots);
+    const frameIsPureVisualTrajectoryStage =
+      frameHasMovementPayload
+      && collectReplayOvertTokenMultisetKey(previousFrameWorkspaceRoots) === collectReplayOvertTokenMultisetKey(workspaceRoots)
+      && collectReplayRootStructuralKey(previousFrameWorkspaceRoots) === collectReplayRootStructuralKey(workspaceRoots);
+    const authoredPreviousRelationRelationLinks = plannedStage
+      ? buildAuthoredRelationLinksForFrames(
+          frames,
+          replayPlan,
+          index - 1,
+          workspaceRoots
+        )
+      : [];
+    const authoredCumulativeRelationRelationLinks = plannedStage
+      ? buildAuthoredRelationLinksForFrames(
+          frames,
+          replayPlan,
+          index,
+          workspaceRoots
+        )
+      : [];
+    const currentFrameVisibleNodeIds = collectVisibleDerivationNodeIds(
+      workspaceRoots,
+      authoredCumulativeRelationRelationLinks
+    );
+    const frameReplaySnapshot = buildDerivationReplaySnapshot(
+      workspaceRoots,
+      index,
+      authoredCumulativeRelationRelationLinks,
+      futureLayoutScaffold ? currentFrameVisibleNodeIds : undefined,
+      undefined,
+      frames,
+      undefined,
+      undefined,
+      futureLayoutScaffold || undefined
+    );
+    const frameReplayBlocks = buildFrameReplayBlocks(
+      frame,
+      frameReplaySnapshot.canvasData,
+      plannedStage
+    );
+    const frameStageRecordBlocks = plannedStage
+      ? buildStageRecordReplayBlocks(frame, plannedStage)
+      : frameReplayBlocks;
+    const frameRelationRelationLinks = plannedStage
+      ? authoredCumulativeRelationRelationLinks.filter((link) => Number(link?.stepIndex) === index)
+      : [];
+    const structuralWorkspaceRoots = buildPreMovementStructuralForest(
+      workspaceRoots,
+      frameRelationSteps,
+      previousFrameWorkspaceRoots
+    );
+    const frameLayoutTopology = futureLayoutScaffold || workspaceRoots;
+    const preauthorizedFramePlaceholderIds = new Set(
+      Array.from(collectExactNodesByIdInForest(frameLayoutTopology).keys())
+        .flatMap((nodeId) => {
+          const match = String(nodeId || '').match(/^__babel_future_layout_\d+__(.+)$/u);
+          return match?.[1] ? [match[1]] : [];
+        })
+    );
+    const buildFrameLayoutScaffold = (snapshotRoots: SyntaxNode[]): SyntaxNode[] | undefined => {
+      const scaffold = buildCurrentMaterialLayoutScaffold(
+        snapshotRoots,
+        frameLayoutTopology,
+        preauthorizedFramePlaceholderIds
+      );
+      if (scaffold) return scaffold;
+      return futureLayoutScaffold
+        && forestCanUseCurrentMaterialLayoutScaffold(snapshotRoots, futureLayoutScaffold)
+          ? futureLayoutScaffold
+          : undefined;
+    };
+    const structuralLayoutScaffold = buildFrameLayoutScaffold(structuralWorkspaceRoots);
+    const frameMacroBlocks = plannedStage
+      ? frameStageRecordBlocks
+      : frameReplayBlocks;
+    const mergedFrameDetailBlocks = mergeReplayDetailBlocks(frameMacroBlocks);
+    const frameEncodesMovement = frameHasMovementPayload;
+    const frameTrajectoryKind = frameEncodesMovement
+      ? (
+          Array.isArray(frameReplaySnapshot.relationLinks) && frameReplaySnapshot.relationLinks.length > 0
+            ? (
+                frameReplaySnapshot.relationLinks.some((link) => normalizeTrajectoryKind(link?.trajectoryKind) === 'head')
+                  ? 'head'
+                  : 'phrasal'
+              )
+            : inferHeadLikeTrajectoryKindFromForest({
+                forest: workspaceRoots,
+                operation: fallbackOperation,
+                sourceNodeId: String(frame.movement?.sourceNodeId || '').trim(),
+                targetNodeId: authoredLandingNodeId,
+                traceNodeId: String(frame.movement?.traceNodeId || '').trim()
+              })
+        )
+      : '';
+
+    const currentWorkspaceRootIds = new Set(
+      workspaceRoots
+        .map((node) => String(node?.id || '').trim())
+        .filter(Boolean)
+    );
+    const newlyIntroducedRootIds = new Set(
+      workspaceRoots
+        .map((node) => String(node?.id || '').trim())
+        .filter((nodeId) => Boolean(nodeId) && !previousWorkspaceRootIds.has(nodeId))
+    );
+    const nextFramePendingRootSubtreeIds = collectNextFramePendingRootSubtreeIds(structuralWorkspaceRoots, nextFrame);
+    const moveSourceNodeIds = frameEncodesMovement
+      ? Array.from(new Set([
+          String(frame.movement?.traceNodeId || '').trim(),
+          String(frame.movement?.sourceNodeId || '').trim()
+        ].filter(Boolean)))
+      : [];
+    const moveSourceLabels = moveSourceNodeIds
+      .map((nodeId) => getReplayNodeDisplayFromCanvas(frameReplaySnapshot.canvasData, nodeId))
+      .filter(Boolean);
+    const moveTargetNodeId = authoredLandingNodeId;
+    const moveTargetLabel = frameEncodesMovement
+      ? (
+          frameTrajectoryKind === 'head'
+            ? (
+                getReplayNodeDisplayFromCanvas(frameReplaySnapshot.canvasData, moveTargetNodeId)
+              )
+            : (
+                describeReplayNodePosition(frameReplaySnapshot.canvasData, moveTargetNodeId)
+              )
+        )
+      : '';
+    const moveStructuralFallbackRecipe = frameEncodesMovement
+      ? buildStructuralReplayFallback(
+          fallbackOperation,
+          moveTargetLabel || primaryRootLabel,
+          moveTargetLabel ? [moveTargetLabel] : rootLabels
+        )
+      : structuralFallbackRecipe;
+    const resolvedSemanticRecipe = frameEncodesMovement
+      ? (movementRecipe || moveStructuralFallbackRecipe)
+      : semanticRecipe;
+
+    const frameSemanticStep: PlaybackStep = {
+      operation: fallbackOperation,
+      sourceKind: 'derivation-effect',
+      trajectoryKind: frameTrajectoryKind || undefined,
+      movementSerializationStatus: frame.movement?.serializationStatus,
+      movementDiagnostics: Array.isArray(frame.movement?.diagnostics) ? frame.movement.diagnostics : undefined,
+      sourceFrameIndex: index,
+      visualFrameIndex: index,
+      targetNodeId:
+        (frameEncodesMovement
+          ? moveTargetNodeId
+          : (
+              primaryRootId
+              || alignedStep?.targetNodeId
+              || frame.frameId
+              || frame.stepId
+              || `__derivation_${index}`
+            )),
+      // Move steps should describe the local landing site, not the frame root.
+      targetLabel:
+        frameEncodesMovement
+          ? moveTargetLabel
+          : (
+              (rootLabels.length === 1 ? primaryRootLabel : 'Workspace')
+              || alignedStep?.targetLabel
+              || 'Workspace'
+            ),
+      sourceNodeIds: moveSourceNodeIds.length > 0 ? moveSourceNodeIds : alignedStep?.sourceNodeIds,
+      sourceLabels: moveSourceLabels.length > 0
+        ? moveSourceLabels
+        : (frameEncodesMovement
+          ? (Array.isArray(alignedStep?.sourceLabels) ? alignedStep.sourceLabels : [])
+          : (Array.isArray(alignedStep?.sourceLabels) && alignedStep.sourceLabels.length > 0
+            ? alignedStep.sourceLabels
+            : rootLabels)),
+      recipe: resolvedSemanticRecipe,
+      workspaceAfter: Array.isArray(alignedStep?.workspaceAfter) && alignedStep.workspaceAfter.length > 0
+        ? alignedStep.workspaceAfter
+        : rootLabels,
+      detailBlocks: mergedFrameDetailBlocks,
+      replayKind: plannedStage ? 'macro' : undefined,
+      stageRecord: getFrameStageRecordText(frame, plannedStage),
+      stepId: alignedStep?.stepId || frame.stepId,
+      chainId: alignedStep?.chainId || frame.chainId,
+      note: preferredNote && preferredNote !== resolvedSemanticRecipe ? preferredNote : undefined,
+      replayFrameIndex: index,
+      replayCanvasData: frameReplaySnapshot.canvasData,
+      replayVisibleNodeIds: frameReplaySnapshot.visibleNodeIds,
+      replayRelationLinks: frameReplaySnapshot.relationLinks,
+      replayUsesFutureLayoutScaffold: Boolean(futureLayoutScaffold)
+    };
+
+    const finalizeStructuralReplayForFrame = (steps: PlaybackStep[]): PlaybackStep[] => {
+      let structuralSteps = steps.map(stripSemanticPayloadFromMicrostep);
+      if (plannedStage) {
+        // PF, deletion, and rewrite relations own their serialized tree-state
+        // change at their exact authored relation index. Structural frames may
+        // not reveal that completed output first.
+        if (frameHasNonMovementTreeTransition && !frameHasMovementPayload) {
+          structuralSteps = [];
+        }
+        const resolveRelationPlacement = (relation: IndexedRelationStep, relationIndex: number) => {
+          const relationLabel = String(relation?.relation || '').trim() || 'Visual Relation';
+          const resolvedAnchors = getResolvedReplayRelationAnchors(relation);
+          const sourceRoles = relationOwnedPhrasalSourceRoles(relationLabel, resolvedAnchors);
+          const targetRoles = relationOwnedPhrasalTargetRoles(relationLabel, resolvedAnchors);
+          const registeredSourceAnchors = findResolvedReplayAnchorsByRoles(
+            resolvedAnchors,
+            sourceRoles
+          );
+          const registeredTargetAnchor = findResolvedReplayAnchorByRoles(
+            resolvedAnchors,
+            targetRoles
+          );
+          const explicitSourceNodeIds = getRelationSourceNodeIds(relation);
+          const rawAuthoredTargetNodeId =
+            getRelationTargetNodeId(relation)
+            || String(registeredTargetAnchor?.nodeId || '').trim();
+          const rawSourceNodeIds = explicitSourceNodeIds.length > 0
+            ? explicitSourceNodeIds
+            : registeredSourceAnchors
+                .map((anchor) => String(anchor.nodeId || '').trim())
+                .filter(Boolean);
+          // Trajectory placement semantics apply only when the plan authored
+          // explicit source/target endpoints; every other renderable relation
+          // keeps its own Replay moment anchored to its resolved anchors.
+          const isTrajectoryRelation =
+            isRenderableReplayRelation(relation)
+            && isRegisteredTrajectoryRelation(relationLabel, resolvedAnchors)
+            && Boolean(rawAuthoredTargetNodeId)
+            && rawSourceNodeIds.length > 0;
+          const ownsPhrasalTreeTransition =
+            relationOwnsPhrasalTreeTransition(
+              relationLabel,
+              workspaceRoots,
+              rawSourceNodeIds,
+              rawAuthoredTargetNodeId
+            )
+            && Boolean(rawAuthoredTargetNodeId)
+            && rawSourceNodeIds.length > 0;
+          const ownsTrajectoryPlacement = isTrajectoryRelation || ownsPhrasalTreeTransition;
+          const sourceNodeIds = rawSourceNodeIds
+            .map((nodeId) => resolveRelationAnchorNodeId(workspaceRoots, nodeId, 'source'))
+            .filter(Boolean);
+          const authoredTargetNodeId = resolveRelationAnchorNodeId(
+            workspaceRoots,
+            rawAuthoredTargetNodeId,
+            'target'
+          );
+          const sourceNodeId = ownsTrajectoryPlacement
+            ? (
+                sourceNodeIds.find((nodeId) =>
+                  relationAnchorsExistInForest(workspaceRoots, authoredTargetNodeId, nodeId)
+                ) || sourceNodeIds[0] || ''
+              )
+            : '';
+          if (ownsTrajectoryPlacement) {
+            if (!relationAnchorsExistInForest(workspaceRoots, authoredTargetNodeId, sourceNodeId)) return null;
+          }
+          const relationAnchorNodeIds = ownsTrajectoryPlacement
+            ? Array.from(new Set([authoredTargetNodeId, ...sourceNodeIds].filter(Boolean)))
+            : getRelationAllAnchorNodeIds(relation)
+                .map((nodeId) => resolveRelationAnchorNodeId(workspaceRoots, nodeId, 'source'))
+                .filter(Boolean);
+          if (relationAnchorNodeIds.length === 0) return null;
+          const targetWitnessNodeId = ownsTrajectoryPlacement
+            ? (
+                findParentNodeIdInForest(workspaceRoots, authoredTargetNodeId)
+                || authoredTargetNodeId
+              )
+            : '';
+          const sourceWitnessNodeIds = (ownsTrajectoryPlacement
+            ? sourceNodeIds
+            : [
+                ...relationAnchorNodeIds,
+                ...relationAnchorNodeIds.map((nodeId) =>
+                  findParentNodeIdInForest(workspaceRoots, nodeId))
+              ])
+            .map((nodeId) => String(nodeId || '').trim())
+            .filter(Boolean);
+          const witnessNodeIds = Array.from(new Set([
+            targetWitnessNodeId,
+            ...sourceWitnessNodeIds
+          ].filter(Boolean)));
+          const insertAfterStepIndex = (() => {
+            if (structuralSteps.length === 0) return -1;
+            if (witnessNodeIds.length === 0) return structuralSteps.length - 1;
+            const foundIndex = structuralSteps.findIndex((step) => {
+              const visibleNodeIds = new Set(Array.isArray(step.replayVisibleNodeIds) ? step.replayVisibleNodeIds : []);
+              return witnessNodeIds.every((nodeId) => visibleNodeIds.has(nodeId));
+            });
+            return foundIndex >= 0 ? foundIndex : structuralSteps.length - 1;
+          })();
+          return {
+            relation,
+            relationIndex,
+            relationLabel,
+            sourceNodeIds,
+            authoredTargetNodeId,
+            relationAnchorNodeIds,
+            renderableTrajectory: isTrajectoryRelation,
+            ownsPhrasalTreeTransition,
+            insertAfterStepIndex
+          };
+        };
+        let relationPlacements = frameRelationSteps
+          .map((relation, relationIndex) => resolveRelationPlacement(relation, relationIndex))
+          .filter((placement): placement is NonNullable<ReturnType<typeof resolveRelationPlacement>> => Boolean(placement))
+          .sort((left, right) =>
+            left.insertAfterStepIndex === right.insertAfterStepIndex
+              ? left.relationIndex - right.relationIndex
+              : left.insertAfterStepIndex - right.insertAfterStepIndex
+          );
+        const resolveRelationInsertAfterStepIndex = (
+          placement: NonNullable<ReturnType<typeof resolveRelationPlacement>>
+        ): number => {
+          if (structuralSteps.length === 0) return -1;
+          const targetWitnessNodeId = (placement.renderableTrajectory || placement.ownsPhrasalTreeTransition)
+            ? (
+                findParentNodeIdInForest(workspaceRoots, placement.authoredTargetNodeId)
+                || placement.authoredTargetNodeId
+              )
+            : '';
+          const sourceWitnessNodeIds = ((placement.renderableTrajectory || placement.ownsPhrasalTreeTransition)
+            ? placement.sourceNodeIds
+            : [
+                ...placement.relationAnchorNodeIds,
+                ...placement.relationAnchorNodeIds.map((nodeId) =>
+                  findParentNodeIdInForest(workspaceRoots, nodeId))
+              ])
+            .map((nodeId) => String(nodeId || '').trim())
+            .filter(Boolean);
+          const witnessNodeIds = Array.from(new Set([
+            targetWitnessNodeId,
+            ...sourceWitnessNodeIds
+          ].filter(Boolean)));
+          const firstWitnessIndex = witnessNodeIds.length === 0
+            ? structuralSteps.length - 1
+            : structuralSteps.findIndex((step) => {
+                const visibleNodeIds = new Set(Array.isArray(step.replayVisibleNodeIds) ? step.replayVisibleNodeIds : []);
+                return witnessNodeIds.every((nodeId) => visibleNodeIds.has(nodeId));
+              });
+          const targetParentNodeId = (placement.renderableTrajectory || placement.ownsPhrasalTreeTransition)
+            ? findParentNodeIdInForest(workspaceRoots, placement.authoredTargetNodeId)
+            : '';
+          const targetParentLocalCompletionIndex = (() => {
+            if (!targetParentNodeId) return -1;
+            const targetParentNode = findNodeByIdInForest(workspaceRoots, targetParentNodeId);
+            const targetChildIds = (Array.isArray(targetParentNode?.children) ? targetParentNode.children : [])
+              .map((child) => String(child?.id || '').trim())
+              .filter(Boolean);
+            if (targetChildIds.length === 0) return -1;
+            return structuralSteps.findIndex((step) => {
+              const visibleNodeIds = new Set(Array.isArray(step.replayVisibleNodeIds) ? step.replayVisibleNodeIds : []);
+              return visibleNodeIds.has(targetParentNodeId)
+                && targetChildIds.every((childId) => visibleNodeIds.has(childId));
+            });
+          })();
+          const targetParentIndex = targetParentNodeId
+            ? structuralSteps.findIndex((step) => {
+                const visibleNodeIds = new Set(Array.isArray(step.replayVisibleNodeIds) ? step.replayVisibleNodeIds : []);
+                return stripSyntheticReplayLeafSuffix(String(step.targetNodeId || '').trim()) === targetParentNodeId
+                  || visibleNodeIds.has(targetParentNodeId);
+              })
+            : -1;
+          return Math.max(
+            firstWitnessIndex >= 0 ? firstWitnessIndex : structuralSteps.length - 1,
+            targetParentIndex,
+            targetParentLocalCompletionIndex
+          );
+        };
+        relationPlacements = relationPlacements
+          .map((placement) => ({
+            ...placement,
+            insertAfterStepIndex: resolveRelationInsertAfterStepIndex(placement)
+          }))
+          .sort((left, right) =>
+            left.insertAfterStepIndex === right.insertAfterStepIndex
+              ? left.relationIndex - right.relationIndex
+              : left.insertAfterStepIndex - right.insertAfterStepIndex
+          );
+        const getMovementCreatedLandingHostNodeId = (
+          placement: NonNullable<ReturnType<typeof resolveRelationPlacement>>
+        ): string => {
+          if (!placement.renderableTrajectory && !placement.ownsPhrasalTreeTransition) return '';
+          const trajectoryDisplayKind = registeredTrajectoryDisplayKind(
+            placement.relationLabel,
+            placement.relation.resolvedAnchors
+          );
+          const relationIsPhrasal = trajectoryDisplayKind === 'phrasal'
+            || placement.ownsPhrasalTreeTransition;
+          if (!relationIsPhrasal) return '';
+          const landingHostNodeId = findParentNodeIdInForest(
+            workspaceRoots,
+            placement.authoredTargetNodeId
+          );
+          if (!landingHostNodeId) return '';
+          return findNodeByIdInForest(previousFrameWorkspaceRoots, landingHostNodeId)
+            ? ''
+            : landingHostNodeId;
+        };
+        const singleRelationLinksByIndex = new Map<number, ResolvedRelationLink[]>();
+        frameRelationSteps.forEach((relation, relationIndex) => {
+          const authoredRelationIndex = Number.isInteger(relation.authoredRelationIndex)
+            ? relation.authoredRelationIndex
+            : relationIndex;
+          const throughRelationLinks = buildAuthoredRelationLinksForFrames(
+            frames,
+            replayPlan,
+            index,
+            workspaceRoots,
+            authoredRelationIndex
+          );
+          const beforeRelationLinks = buildAuthoredRelationLinksForFrames(
+            frames,
+            replayPlan,
+            index,
+            workspaceRoots,
+            authoredRelationIndex - 1
+          );
+          const beforeLinkKeys = new Set(beforeRelationLinks.map((link) => resolvedRelationLinkKey(link)));
+          singleRelationLinksByIndex.set(
+            relationIndex,
+            throughRelationLinks.filter((link) =>
+              Number(link?.stepIndex) === index
+              && !beforeLinkKeys.has(resolvedRelationLinkKey(link))
+            )
+          );
+        });
+        const explicitPlacementRelationLinks = relationPlacements.flatMap((placement) => {
+          const existingLinks = singleRelationLinksByIndex.get(placement.relationIndex) || [];
+          return existingLinks;
+        });
+        const plannedFrameRelationLinks = Array.from(new Map(
+          [
+            ...frameRelationRelationLinks,
+            ...explicitPlacementRelationLinks
+          ].map((link) => [resolvedRelationLinkKey(link), link])
+        ).values());
+        const relationVisibleNodeIdsByIndex = new Map<number, string[]>();
+        relationPlacements.forEach((placement) => {
+          if (!placement.renderableTrajectory && !placement.ownsPhrasalTreeTransition) {
+            relationVisibleNodeIdsByIndex.set(
+              placement.relationIndex,
+              []
+            );
+            return;
+          }
+          const placementRelationLinks = singleRelationLinksByIndex.get(placement.relationIndex) || [];
+          const shouldReserveHeadLandingLeaf = placementRelationLinks.some((link) =>
+            normalizeTrajectoryKind(link?.trajectoryKind) === 'head'
+            || isHeadLikeResolvedRelation(link)
+          );
+          const targetSubtreeNodeIds = collectSyntaxSubtreeNodeIds(
+            findNodeByIdInForest(workspaceRoots, placement.authoredTargetNodeId)
+          );
+          const targetParentNodeId = findParentNodeIdInForest(
+            workspaceRoots,
+            placement.authoredTargetNodeId
+          );
+          const sourceSubtreeNodeIds = placement.sourceNodeIds.flatMap((nodeId) =>
+            collectSyntaxSubtreeNodeIds(findNodeByIdInForest(workspaceRoots, nodeId))
+          );
+          const targetSyntheticLeafNodeIds = shouldReserveHeadLandingLeaf && placement.authoredTargetNodeId
+            ? [`${placement.authoredTargetNodeId}::__leaf`]
+            : [];
+          relationVisibleNodeIdsByIndex.set(
+            placement.relationIndex,
+            Array.from(new Set([
+              targetParentNodeId,
+              ...targetSubtreeNodeIds,
+              ...targetSyntheticLeafNodeIds,
+              ...sourceSubtreeNodeIds,
+              ...placement.sourceNodeIds
+            ].filter(Boolean)))
+          );
+        });
+        const relationLayoutNodeIds = Array.from(new Set(
+          Array.from(relationVisibleNodeIdsByIndex.values()).flat().filter(Boolean)
+        ));
+        const frameHasTreeTransition =
+          Array.from(singleRelationLinksByIndex.values()).some((links) => links.some(isResolvedMovementLink))
+          || relationPlacements.some((placement) => placement.ownsPhrasalTreeTransition)
+          || frameHasNonMovementTreeTransition;
+        const collectInactiveTrajectoryTargetNodeIds = (
+          activeRelationIndexes: Set<number>,
+          preservedForest: SyntaxNode[] = []
+        ): Set<string> => {
+          const inactiveTargetNodeIds = new Set<string>();
+          const activeTargetNodeIds = new Set(
+            relationPlacements
+              .filter((placement) => activeRelationIndexes.has(placement.relationIndex))
+              .filter((placement) => placement.renderableTrajectory || placement.ownsPhrasalTreeTransition)
+              .map((placement) => String(placement.authoredTargetNodeId || '').trim())
+              .filter(Boolean)
+          );
+          const addInactiveTargetSubtree = (
+            targetNodeId: string,
+            preserveTargetShell = false
+          ) => {
+            const normalizedTargetNodeId = String(targetNodeId || '').trim();
+            if (!normalizedTargetNodeId) return;
+            const targetStillExists = Boolean(
+              findNodeByIdInForest(preservedForest, normalizedTargetNodeId)
+            );
+            collectSyntaxSubtreeNodeIds(
+              findNodeByIdInForest(workspaceRoots, normalizedTargetNodeId)
+            ).forEach((nodeId) => {
+              if (preserveTargetShell && nodeId === normalizedTargetNodeId) return;
+              // Remnant and roll-up derivations may reuse canonical descendant
+              // ids between the prior source and future landing. When the
+              // landing root itself is absent, an id still present in the
+              // reconstructed source belongs to that source and stays visible.
+              if (!targetStillExists && findNodeByIdInForest(preservedForest, nodeId)) return;
+              inactiveTargetNodeIds.add(nodeId);
+            });
+          };
+          frameRelationSteps
+            .map((_relation, relationIndex) => relationIndex)
+            .filter((relationIndex) => !activeRelationIndexes.has(relationIndex))
+            .forEach((relationIndex) => {
+              const placement = relationPlacements.find((candidate) => candidate.relationIndex === relationIndex);
+              if (
+                placement?.ownsPhrasalTreeTransition
+                && !activeTargetNodeIds.has(String(placement.authoredTargetNodeId || '').trim())
+              ) {
+                addInactiveTargetSubtree(placement.authoredTargetNodeId);
+              }
+              (singleRelationLinksByIndex.get(relationIndex) || [])
+                .filter(isResolvedMovementLink)
+                .filter((link) =>
+                  !activeTargetNodeIds.has(String(link?.targetNodeId || '').trim()))
+                .forEach((link) => {
+                  addInactiveTargetSubtree(
+                    String(link?.targetNodeId || '').trim(),
+                    isHeadLikeResolvedRelation(link)
+                  );
+                });
+            });
+          return inactiveTargetNodeIds;
+        };
+        const collectInactivePhrasalLandingHostNodeIds = (
+          activeRelationIndexes: Set<number>
+        ): Set<string> => {
+          const activeLandingHostNodeIds = new Set(
+            relationPlacements
+              .filter((placement) => activeRelationIndexes.has(placement.relationIndex))
+              .map(getMovementCreatedLandingHostNodeId)
+              .filter(Boolean)
+          );
+          return new Set(
+            relationPlacements
+              .filter((placement) => !activeRelationIndexes.has(placement.relationIndex))
+              .map(getMovementCreatedLandingHostNodeId)
+              .filter((nodeId) => Boolean(nodeId) && !activeLandingHostNodeIds.has(nodeId))
+          );
+        };
+        const buildActiveRelationLinks = (activeRelationIndexes: Set<number>): ResolvedRelationLink[] => {
+          const links: ResolvedRelationLink[] = [...authoredPreviousRelationRelationLinks];
+          const seen = new Set(links.map((link) => resolvedRelationLinkKey(link)));
+          Array.from(activeRelationIndexes)
+            .sort((left, right) => left - right)
+            .forEach((relationIndex) => {
+              (singleRelationLinksByIndex.get(relationIndex) || []).forEach((link) => {
+                const key = resolvedRelationLinkKey(link);
+                if (seen.has(key)) return;
+                seen.add(key);
+                links.push(link);
+              });
+            });
+          return links;
+        };
+        const buildSnapshotForActiveRelations = (
+          baseStep: PlaybackStep | undefined,
+          activeRelationIndexes: Set<number>,
+          extraVisibleNodeIds: string[] = []
+        ) => {
+          const activeFallbackTransitionRelations = frameRelationSteps.filter((_relation, relationIndex) =>
+            activeRelationIndexes.has(relationIndex)
+            && fallbackTreeTransitionRelationIndexes.has(relationIndex));
+          const registeredNonMovementTreeTransitionIsActive = Array.from(activeRelationIndexes)
+            .some((relationIndex) => (
+              nonMovementTreeTransitionRelationIndexes.has(relationIndex)
+              && !fallbackTreeTransitionRelationIndexes.has(relationIndex)
+            ));
+          const activeTreeTransitionTargetNodeIds = new Set(
+            relationPlacements
+              .filter((placement) => activeRelationIndexes.has(placement.relationIndex))
+              .filter((placement) => placement.renderableTrajectory || placement.ownsPhrasalTreeTransition)
+              .map((placement) => String(placement.authoredTargetNodeId || '').trim())
+              .filter(Boolean)
+          );
+          const nonMovementTransitionForest = !frameHasNonMovementTreeTransition
+            || registeredNonMovementTreeTransitionIsActive
+            ? workspaceRoots
+            : activeFallbackTransitionRelations.length > 0
+              ? buildFallbackTreeTransitionForest(
+                  previousFrameWorkspaceRoots,
+                  workspaceRoots,
+                  activeFallbackTransitionRelations
+                )
+              : cloneSyntaxForest(previousFrameWorkspaceRoots);
+          const snapshotWorkspaceRoots = buildPreMovementStructuralForest(
+            nonMovementTransitionForest,
+            frameRelationSteps.filter((_relation, relationIndex) =>
+              !activeRelationIndexes.has(relationIndex)
+              && !activeTreeTransitionTargetNodeIds.has(
+                String(
+                  relationPlacements.find((placement) => placement.relationIndex === relationIndex)
+                    ?.authoredTargetNodeId || ''
+                ).trim()
+              )
+            ),
+            previousFrameWorkspaceRoots
+          );
+          const activeRelationLinks = buildActiveRelationLinks(activeRelationIndexes);
+          const baseVisibleNodeIds = Array.isArray(baseStep?.replayVisibleNodeIds)
+            ? baseStep.replayVisibleNodeIds
+            : [];
+          const fullFrameVisibleNodeIds = frameIsPureVisualTrajectoryStage
+            ? Array.from(currentFrameVisibleNodeIds)
+            : [];
+          const activeRelationVisibleNodeIds = Array.from(activeRelationIndexes)
+            .sort((left, right) => left - right)
+            .flatMap((relationIndex) => relationVisibleNodeIdsByIndex.get(relationIndex) || []);
+          const requestedVisibleNodeIds = new Set([
+            ...baseVisibleNodeIds,
+            ...fullFrameVisibleNodeIds,
+            ...activeRelationVisibleNodeIds,
+            ...extraVisibleNodeIds
+          ].filter(Boolean));
+          const inactiveTrajectoryTargetNodeIds = collectInactiveTrajectoryTargetNodeIds(
+            activeRelationIndexes,
+            snapshotWorkspaceRoots
+          );
+          inactiveTrajectoryTargetNodeIds.forEach((nodeId) => requestedVisibleNodeIds.delete(nodeId));
+          const inactivePhrasalLandingHostNodeIds = collectInactivePhrasalLandingHostNodeIds(
+            activeRelationIndexes
+          );
+          inactivePhrasalLandingHostNodeIds.forEach((nodeId) => requestedVisibleNodeIds.delete(nodeId));
+          const requestedLayoutNodeIds = new Set([
+            ...requestedVisibleNodeIds,
+            ...collectSyntaxSubtreeNodeIds(baseStep?.replayCanvasData),
+            ...relationLayoutNodeIds
+          ].filter(Boolean));
+          activeRelationLinks.filter(isResolvedMovementLink).forEach((link) => {
+            [
+              String(link?.sourceNodeId || '').trim(),
+              String(link?.targetNodeId || '').trim(),
+              String(link?.witnessNodeId || '').trim()
+            ].filter(Boolean).forEach((nodeId) => {
+              collectSyntaxSubtreeNodeIds(findNodeByIdInForest(workspaceRoots, nodeId)).forEach((subtreeNodeId) => {
+                requestedVisibleNodeIds.add(subtreeNodeId);
+                requestedLayoutNodeIds.add(subtreeNodeId);
+              });
+              requestedVisibleNodeIds.add(nodeId);
+              requestedLayoutNodeIds.add(nodeId);
+              if (isHeadLikeResolvedRelation(link)) {
+                requestedVisibleNodeIds.add(`${nodeId}::__leaf`);
+                requestedLayoutNodeIds.add(`${nodeId}::__leaf`);
+              }
+            });
+          });
+          const activeFutureLayoutScaffold = buildFrameLayoutScaffold(snapshotWorkspaceRoots);
+          const snapshotForest = buildDerivationReplaySnapshot(
+            snapshotWorkspaceRoots,
+            index,
+            activeRelationLinks,
+            requestedVisibleNodeIds,
+            requestedLayoutNodeIds,
+            frames,
+            undefined,
+            undefined,
+            activeFutureLayoutScaffold
+          );
+          return {
+            ...snapshotForest,
+            usesFutureLayoutScaffold: Boolean(activeFutureLayoutScaffold),
+            visibleNodeIds: snapshotForest.visibleNodeIds.filter((nodeId) =>
+              !inactiveTrajectoryTargetNodeIds.has(
+                stripSyntheticReplayLeafSuffix(String(nodeId || '').trim())
+              )
+              && !inactivePhrasalLandingHostNodeIds.has(
+                stripSyntheticReplayLeafSuffix(String(nodeId || '').trim())
+              )
+            ),
+            activeRelationLinks,
+            inactiveTrajectoryTargetNodeIds,
+            inactivePhrasalLandingHostNodeIds
+          };
+        };
+        const rebuildStructuralStepForActiveRelations = (
+          step: PlaybackStep,
+          activeRelationIndexes: Set<number>
+        ): PlaybackStep => {
+          if (
+            activeRelationIndexes.size === 0
+            && relationLayoutNodeIds.length === 0
+            && !frameHasTreeTransition
+          ) {
+            return step;
+          }
+          const snapshot = buildSnapshotForActiveRelations(step, activeRelationIndexes);
+          const inactiveTrajectoryTargetNodeIds = snapshot.inactiveTrajectoryTargetNodeIds;
+          const inactivePhrasalLandingHostNodeIds = snapshot.inactivePhrasalLandingHostNodeIds;
+          const suppressedInactiveTrajectoryNodeIds = new Set(inactiveTrajectoryTargetNodeIds);
+          inactiveTrajectoryTargetNodeIds.forEach((nodeId) => {
+            collectSyntaxSubtreeNodeIds(
+              findNodeByIdInForest(step.replayCanvasData ? [step.replayCanvasData] : [], nodeId)
+            ).forEach((subtreeNodeId) => suppressedInactiveTrajectoryNodeIds.add(subtreeNodeId));
+          });
+          inactivePhrasalLandingHostNodeIds.forEach((nodeId) => {
+            suppressedInactiveTrajectoryNodeIds.add(nodeId);
+          });
+          return {
+            ...step,
+            replayCanvasData: snapshot.canvasData,
+            replayVisibleNodeIds: snapshot.visibleNodeIds,
+            replayRelationLinks: snapshot.relationLinks,
+            replayUsesFutureLayoutScaffold: snapshot.usesFutureLayoutScaffold,
+            replaySuppressAutoRevealNodeIds: Array.from(new Set([
+              ...(Array.isArray(step.replaySuppressAutoRevealNodeIds)
+                ? step.replaySuppressAutoRevealNodeIds
+                : []),
+              ...suppressedInactiveTrajectoryNodeIds
+            ]))
+          };
+        };
+        const buildRelationPlaybackStep = (
+          placement: ReturnType<typeof resolveRelationPlacement>,
+          activeRelationIndexes: Set<number>,
+          baseStep?: PlaybackStep
+        ): PlaybackStep => {
+          const extraVisibleNodeIds = relationVisibleNodeIdsByIndex.get(placement.relationIndex) || [];
+          const relationReplaySnapshot = buildSnapshotForActiveRelations(
+            baseStep,
+            activeRelationIndexes,
+            extraVisibleNodeIds
+          );
+          const resolvedTargetNodeId =
+            placement.authoredTargetNodeId
+            || placement.relationAnchorNodeIds[0]
+            || frameSemanticStep.targetNodeId;
+          const resolvedSourceNodeIds = placement.renderableTrajectory
+            ? placement.sourceNodeIds
+            : placement.relationAnchorNodeIds.filter((nodeId) => nodeId !== resolvedTargetNodeId);
+          return {
+            ...frameSemanticStep,
+            operation: placement.relationLabel as DerivationStep['operation'],
+            replayKind: 'relation',
+            replayRelationIdentity: {
+              stageIndex: index,
+              relationIndex: Number.isInteger(placement.relation.authoredRelationIndex)
+                ? placement.relation.authoredRelationIndex
+                : placement.relationIndex
+            },
+            targetNodeId: resolvedTargetNodeId || frameSemanticStep.targetNodeId,
+            targetLabel:
+              getReplayNodeOvertYieldFromCanvas(relationReplaySnapshot.canvasData, resolvedTargetNodeId)
+              || getReplayNodeDisplayFromCanvas(relationReplaySnapshot.canvasData, resolvedTargetNodeId)
+              || getReplayNodeCategoryFromCanvas(relationReplaySnapshot.canvasData, resolvedTargetNodeId)
+              || placement.relationLabel,
+            sourceNodeIds: resolvedSourceNodeIds.length > 0
+              ? resolvedSourceNodeIds
+              : frameSemanticStep.sourceNodeIds,
+            sourceLabels: resolvedSourceNodeIds
+              .map((nodeId) =>
+                getReplayNodeOvertYieldFromCanvas(relationReplaySnapshot.canvasData, nodeId)
+                || getReplayNodeDisplayFromCanvas(relationReplaySnapshot.canvasData, nodeId)
+                || getReplayNodeCategoryFromCanvas(relationReplaySnapshot.canvasData, nodeId)
+              )
+              .filter(Boolean),
+            recipe: placement.relationLabel,
+            note: undefined,
+            preserveReplayStep: true,
+            stageRecord: getFrameStageRecordText(frame, plannedStage),
+            detailBlocks: buildRelationReplayBlocks([placement.relation], relationReplaySnapshot.canvasData),
+            replayCanvasData: relationReplaySnapshot.canvasData,
+            replayVisibleNodeIds: relationReplaySnapshot.visibleNodeIds,
+            replayRelationLinks: relationReplaySnapshot.relationLinks,
+            replayUsesFutureLayoutScaffold: relationReplaySnapshot.usesFutureLayoutScaffold
+          } satisfies PlaybackStep;
+        };
+        const shouldFoldStructuralStepIntoRelationFrame = (
+          step: PlaybackStep,
+          _structuralStepIndex: number
+        ): boolean => {
+          const operation = String(step.operation || '').trim();
+          if (!['LexicalSelect', 'Project', 'ExternalMerge'].includes(operation)) return false;
+          const stepTargetNodeId = stripSyntheticReplayLeafSuffix(String(step.targetNodeId || '').trim());
+          if (!stepTargetNodeId) return false;
+          return relationPlacements.some((placement) => {
+            if (!placement.renderableTrajectory && !placement.ownsPhrasalTreeTransition) return false;
+            const relationTargetNode = findNodeByIdInForest(workspaceRoots, placement.authoredTargetNodeId);
+            const relationTargetSubtreeIds = new Set(collectSyntaxSubtreeNodeIds(relationTargetNode));
+            if (relationTargetSubtreeIds.has(stepTargetNodeId)) return true;
+
+            // Internal Merge creates both the landed phrase occurrence and the
+            // projection that immediately contains it. When that landing host
+            // did not exist in the preceding authored stage, its structural
+            // step belongs to the movement mesostep too. Keeping the host step
+            // would turn ExternalMerge(target, sister -> host) into the false
+            // Project(sister -> host) frame while the target is withheld.
+            return getMovementCreatedLandingHostNodeId(placement) === stepTargetNodeId;
+          });
+        };
+
+        /*
+         * Structural construction remains bottom-up, but Internal Merge owns
+         * a landing host that did not exist in the preceding authored stage.
+         * Play that relation after its lower source is complete and before the
+         * first higher projection consumes the new host. Otherwise Replay
+         * exposes a false hanging ancestor whose missing child is licensed only
+         * by a later movement frame.
+         */
+        const activeRelationIndexes = new Set<number>();
+        const normalizeWithheldLandingHostStep = (step: PlaybackStep): PlaybackStep => {
+          const stepTargetNodeId = stripSyntheticReplayLeafSuffix(String(step.targetNodeId || '').trim());
+          if (!stepTargetNodeId) return step;
+          const withheldLandingNodeIds = new Set(
+            relationPlacements
+              .filter((placement) => placement.renderableTrajectory || placement.ownsPhrasalTreeTransition)
+              .filter((placement) =>
+                findParentNodeIdInForest(workspaceRoots, placement.authoredTargetNodeId) === stepTargetNodeId)
+              .map((placement) => placement.authoredTargetNodeId)
+              .filter(Boolean)
+          );
+          if (withheldLandingNodeIds.size === 0) return step;
+          const sourceNodeIds = Array.isArray(step.sourceNodeIds) ? step.sourceNodeIds : [];
+          const sourceLabels = Array.isArray(step.sourceLabels) ? step.sourceLabels : [];
+          const retainedSources = sourceNodeIds
+            .map((nodeId, sourceIndex) => ({ nodeId, label: sourceLabels[sourceIndex] || '' }))
+            .filter(({ nodeId }) => !withheldLandingNodeIds.has(nodeId));
+          if (retainedSources.length === sourceNodeIds.length || retainedSources.length === 0) return step;
+          const operation: DerivationStep['operation'] = retainedSources.length === 1
+            ? 'Project'
+            : 'ExternalMerge';
+          const retainedLabels = retainedSources.map(({ label }) => label).filter(Boolean);
+          return {
+            ...step,
+            operation,
+            sourceNodeIds: retainedSources.map(({ nodeId }) => nodeId),
+            sourceLabels: retainedLabels,
+            recipe: buildStructuralReplayFallback(
+              operation,
+              String(step.targetLabel || '').trim(),
+              retainedLabels
+            )
+          };
+        };
+        let precedingStructuralVisibleNodeIds = new Set(previousVisibleNodeIds);
+        const structuralStepEntries = structuralSteps.map((step, structuralStepIndex) => {
+          const visibleNodeIds = new Set(
+            (Array.isArray(step.replayVisibleNodeIds) ? step.replayVisibleNodeIds : [])
+              .map((nodeId) => String(nodeId || '').trim())
+              .filter(Boolean)
+          );
+          const introducedVisibleNodeIds = Array.from(visibleNodeIds)
+            .filter((nodeId) => !precedingStructuralVisibleNodeIds.has(nodeId));
+          precedingStructuralVisibleNodeIds = visibleNodeIds;
+          return { step, structuralStepIndex, introducedVisibleNodeIds };
+        });
+        let pendingStructuralStepEntries = structuralStepEntries
+          .filter(({ step, structuralStepIndex }) =>
+            !shouldFoldStructuralStepIntoRelationFrame(step, structuralStepIndex))
+          .map((entry) => ({
+            ...entry,
+            step: normalizeWithheldLandingHostStep(entry.step)
+          }));
+        const movementCreatedLandingHosts = Array.from(new Set(
+          relationPlacements
+            .map((placement) => ({
+              placement,
+              landingHostNodeId: getMovementCreatedLandingHostNodeId(placement)
+            }))
+            .filter(({ landingHostNodeId }) => Boolean(landingHostNodeId))
+            .map(({ landingHostNodeId }) => landingHostNodeId)
+        ));
+        const movementPrerequisiteNodeIds = new Set<string>();
+        if (movementCreatedLandingHosts.length === 1) {
+          const landingHostNodeId = movementCreatedLandingHosts[0];
+          const landingPlacements = relationPlacements.filter((placement) =>
+            getMovementCreatedLandingHostNodeId(placement) === landingHostNodeId);
+          const landingHostNode = findNodeByIdInForest(workspaceRoots, landingHostNodeId);
+          const landingTargetNodeIds = new Set(
+            landingPlacements
+              .map((placement) => placement.authoredTargetNodeId)
+              .filter(Boolean)
+          );
+          const addSubtree = (nodeId: string) => {
+            collectSyntaxSubtreeNodeIds(findNodeByIdInForest(workspaceRoots, nodeId))
+              .forEach((subtreeNodeId) => movementPrerequisiteNodeIds.add(subtreeNodeId));
+          };
+
+          (Array.isArray(landingHostNode?.children) ? landingHostNode.children : [])
+            .map((child) => String(child?.id || '').trim())
+            .filter((childNodeId) => Boolean(childNodeId) && !landingTargetNodeIds.has(childNodeId))
+            .forEach(addSubtree);
+          landingPlacements.forEach((placement) => {
+            placement.sourceNodeIds.forEach(addSubtree);
+            getRelationAllAnchorNodeIds(placement.relation)
+              .map((nodeId) => resolveRelationAnchorNodeId(workspaceRoots, nodeId, 'source'))
+              .filter(Boolean)
+              .filter((nodeId) => !landingTargetNodeIds.has(nodeId))
+              .filter((nodeId) => !placement.sourceNodeIds.includes(nodeId))
+              .filter((nodeId) => !collectSyntaxSubtreeNodeIds(
+                findNodeByIdInForest(workspaceRoots, nodeId)
+              ).includes(landingHostNodeId))
+              .forEach(addSubtree);
+          });
+
+          const beforeMovement: typeof pendingStructuralStepEntries = [];
+          const afterMovement: typeof pendingStructuralStepEntries = [];
+          pendingStructuralStepEntries.forEach((entry) => {
+            const stepTargetNodeId = stripSyntheticReplayLeafSuffix(
+              String(entry.step.targetNodeId || '').trim()
+            );
+            (movementPrerequisiteNodeIds.has(stepTargetNodeId) ? beforeMovement : afterMovement).push(entry);
+          });
+          const deferredVisibleNodeIds = new Set(
+            afterMovement.flatMap((entry) => entry.introducedVisibleNodeIds)
+          );
+          const deferredStructuralTargetNodeIds = new Set(
+            afterMovement
+              .map((entry) => stripSyntheticReplayLeafSuffix(
+                String(entry.step.targetNodeId || '').trim()
+              ))
+              .filter(Boolean)
+          );
+          const scrubDeferredVisibility = (entry: (typeof beforeMovement)[number]) => ({
+            ...entry,
+            step: {
+              ...entry.step,
+              replayVisibleNodeIds: (Array.isArray(entry.step.replayVisibleNodeIds)
+                ? entry.step.replayVisibleNodeIds
+                : []).filter((nodeId) => {
+                  const normalizedNodeId = String(nodeId || '').trim();
+                  return !deferredVisibleNodeIds.has(normalizedNodeId)
+                    && !deferredStructuralTargetNodeIds.has(
+                      stripSyntheticReplayLeafSuffix(normalizedNodeId)
+                    );
+                })
+            }
+          });
+          pendingStructuralStepEntries = [
+            ...beforeMovement.map(scrubDeferredVisibility),
+            ...afterMovement
+          ];
+        }
+        const pendingStructuralSteps = pendingStructuralStepEntries.map((entry) => entry.step);
+        const relationInsertionIndex = (
+          placement: NonNullable<ReturnType<typeof resolveRelationPlacement>>
+        ): number => {
+          const landingHostNodeId = getMovementCreatedLandingHostNodeId(placement);
+          if (!landingHostNodeId) return pendingStructuralSteps.length;
+          if (movementCreatedLandingHosts.length === 1) {
+            const firstNonPrerequisiteIndex = pendingStructuralSteps.findIndex((step) => {
+              const stepTargetNodeId = stripSyntheticReplayLeafSuffix(
+                String(step.targetNodeId || '').trim()
+              );
+              return !movementPrerequisiteNodeIds.has(stepTargetNodeId);
+            });
+            return firstNonPrerequisiteIndex >= 0
+              ? firstNonPrerequisiteIndex
+              : pendingStructuralSteps.length;
+          }
+          const firstHigherProjectionIndex = pendingStructuralSteps.findIndex((step) => {
+            const stepTargetNodeId = stripSyntheticReplayLeafSuffix(
+              String(step.targetNodeId || '').trim()
+            );
+            if (!stepTargetNodeId) return false;
+            return collectSyntaxSubtreeNodeIds(
+              findNodeByIdInForest(workspaceRoots, stepTargetNodeId)
+            ).includes(landingHostNodeId);
+          });
+          return firstHigherProjectionIndex >= 0
+            ? firstHigherProjectionIndex
+            : pendingStructuralSteps.length;
+        };
+        const scheduledRelationPlacements = relationPlacements
+          .map((placement) => ({
+            placement,
+            insertionIndex: relationInsertionIndex(placement)
+          }))
+          .sort((left, right) =>
+            left.insertionIndex === right.insertionIndex
+              ? left.placement.relationIndex - right.placement.relationIndex
+              : left.insertionIndex - right.insertionIndex
+          );
+        const stagePlaybackSteps: PlaybackStep[] = [];
+        for (
+          let structuralStepIndex = 0;
+          structuralStepIndex <= pendingStructuralSteps.length;
+          structuralStepIndex += 1
+        ) {
+          scheduledRelationPlacements
+            .filter(({ insertionIndex }) => insertionIndex === structuralStepIndex)
+            .forEach(({ placement }) => {
+              activeRelationIndexes.add(placement.relationIndex);
+              const relationBaseStep =
+                stagePlaybackSteps[stagePlaybackSteps.length - 1]
+                ?? structuralSteps[Math.max(0, structuralStepIndex - 1)]
+                ?? frameSemanticStep;
+              stagePlaybackSteps.push(buildRelationPlaybackStep(
+                placement,
+                activeRelationIndexes,
+                relationBaseStep
+              ));
+            });
+          if (structuralStepIndex >= pendingStructuralSteps.length) continue;
+          stagePlaybackSteps.push(rebuildStructuralStepForActiveRelations(
+            pendingStructuralSteps[structuralStepIndex],
+            activeRelationIndexes
+          ));
+        }
+        const stageStepCount = stagePlaybackSteps.length + 1;
+        let stageStepNumber = 1;
+        const annotateStep = (step: PlaybackStep, replayKind: PlaybackStep['replayKind']): PlaybackStep => ({
+          ...step,
+          replayKind,
+          replayProgressLabel: buildReplayProgressLabel(
+            plannedStage,
+            plannedStageCount,
+            stageStepNumber++,
+            stageStepCount
+          )
+        });
+        const completedStageReplayStep = stagePlaybackSteps[stagePlaybackSteps.length - 1];
+        const fallbackStageCompletionSnapshot = fallbackTreeTransitionRelationIndexes.size > 0
+          ? frameReplaySnapshot
+          : null;
+        return [
+          ...stagePlaybackSteps.map((step) => annotateStep(step, step.replayKind || 'micro')),
+          annotateStep(
+            {
+              ...frameSemanticStep,
+              operation: 'StageRecord' as DerivationStep['operation'],
+              replayKind: 'macro',
+              detailBlocks: mergeReplayDetailBlocks(frameStageRecordBlocks),
+              note: undefined,
+              recipe:
+                String(plannedStage.statement || '').trim()
+                || frameSemanticStep.recipe
+                || `Stage ${plannedStage.stageNumber}`,
+              replayCanvasData:
+                fallbackStageCompletionSnapshot?.canvasData
+                || completedStageReplayStep?.replayCanvasData
+                || frameSemanticStep.replayCanvasData,
+              replayVisibleNodeIds: fallbackStageCompletionSnapshot
+                ? fallbackStageCompletionSnapshot.visibleNodeIds
+                : Array.isArray(completedStageReplayStep?.replayVisibleNodeIds)
+                  ? completedStageReplayStep.replayVisibleNodeIds
+                  : frameSemanticStep.replayVisibleNodeIds,
+              replayRelationLinks: fallbackStageCompletionSnapshot
+                ? fallbackStageCompletionSnapshot.relationLinks
+                : Array.isArray(completedStageReplayStep?.replayRelationLinks)
+                  ? completedStageReplayStep.replayRelationLinks
+                  : frameSemanticStep.replayRelationLinks,
+              replayUsesFutureLayoutScaffold:
+                (fallbackStageCompletionSnapshot ? Boolean(futureLayoutScaffold) : undefined)
+                ?? completedStageReplayStep?.replayUsesFutureLayoutScaffold
+                ?? frameSemanticStep.replayUsesFutureLayoutScaffold
+            },
+            'macro'
+          )
+        ];
+      }
+      if (frameCarriesAuthoredEffect) {
+        return [...structuralSteps, frameSemanticStep];
+      }
+      return structuralSteps;
+    };
+
+    const rootIntroductionMicrosteps =
+      !frameHasMovementPayload &&
+      !isMoveLikeOperation(fallbackOperation) &&
+      structuralWorkspaceRoots.length > 1 &&
+      newlyIntroducedRootIds.size > 0
+        ? buildStructuralDerivationPlaybackSteps(
+            structuralWorkspaceRoots,
+            index,
+            priorVisibleNodeIds,
+            authoredPreviousRelationRelationLinks,
+            newlyIntroducedRootIds,
+            frames,
+            frame,
+            sentence,
+            [],
+            structuralLayoutScaffold || undefined
+          )
+        : [];
+    if (rootIntroductionMicrosteps.length > 1) {
+      previousWorkspaceRootIds = currentWorkspaceRootIds;
+      previousVisibleNodeIds = currentFrameVisibleNodeIds;
+      return finalizeStructuralReplayForFrame(rootIntroductionMicrosteps);
+    }
+
+    const structuralMicrosteps = !frameHasMovementPayload && !isMoveLikeOperation(fallbackOperation)
+      ? buildStructuralDerivationPlaybackSteps(
+          structuralWorkspaceRoots,
+          index,
+          priorVisibleNodeIds,
+          authoredPreviousRelationRelationLinks,
+          undefined,
+          frames,
+          frame,
+          sentence,
+          [],
+          structuralLayoutScaffold || undefined
+        )
+      : [];
+
+    if (frameIsPureVisualTrajectoryStage) {
+      previousWorkspaceRootIds = currentWorkspaceRootIds;
+      previousVisibleNodeIds = currentFrameVisibleNodeIds;
+      return finalizeStructuralReplayForFrame([]);
+    }
+
+    if (String(fallbackOperation || '').trim() === 'LexicalSelect') {
+      const newlySelectedRoots = structuralWorkspaceRoots.filter((root) => {
+        const rootId = String(root?.id || '').trim();
+        return rootId && !previousWorkspaceRootIds.has(rootId);
+      });
+      const packsInternalBaseGeneration = newlySelectedRoots.some((root) =>
+        countOvertLeafSyntaxNodes(root) > 1 || hasBranchingSyntaxSubtree(root)
+      );
+      if (packsInternalBaseGeneration && structuralMicrosteps.length > 1) {
+        previousWorkspaceRootIds = currentWorkspaceRootIds;
+        previousVisibleNodeIds = currentFrameVisibleNodeIds;
+        return finalizeStructuralReplayForFrame(structuralMicrosteps);
+      }
+      if (newlySelectedRoots.length > 0) {
+        const projectedRootIds = new Set(previousWorkspaceRootIds);
+        const projectedRootSubtreeIds = new Set<string>();
+        const lexicalSnapshotRoots = nextFramePendingRootSubtreeIds.size > 0 && Array.isArray(nextFrame?.workspaceForest)
+          ? reorderWorkspaceRootsForReplay(
+              nextFrame.workspaceForest,
+              inferFutureWorkspaceRootOrder(nextFrame.workspaceForest, frames, index + 1)
+            )
+          : structuralWorkspaceRoots;
+        let lexicalStepCursor = 0;
+        const buildWorkspaceLabelsForState = (
+          activeRootId: string,
+          activeLabel: string,
+          mode: 'leaf' | 'projected'
+        ): string[] => structuralWorkspaceRoots
+          .map((candidateRoot) => {
+            const candidateId = String(candidateRoot?.id || '').trim();
+            if (!candidateId) return '';
+            if (candidateId === activeRootId) {
+              return mode === 'leaf'
+                ? activeLabel
+                : String(candidateRoot?.label || '').trim();
+            }
+            if (!projectedRootIds.has(candidateId)) return '';
+            return String(candidateRoot?.label || '').trim();
+          })
+          .filter(Boolean);
+
+        const lexicalReplaySteps = newlySelectedRoots.flatMap((root, rootIndex) => {
+          const rootId = String(root?.id || '').trim() || `__derivation_${index}_lex_${lexicalStepCursor + 1}`;
+          const projectedLabel = String(root?.label || '').trim() || 'Workspace';
+          const leafTarget = getReplayLeafSelectionTarget(root);
+          const rootSubtreeIds = collectSyntaxSubtreeNodeIds(root);
+          const pendingRootSubtreeIds = newlySelectedRoots
+            .slice(rootIndex + 1)
+            .flatMap((pendingRoot) => collectSyntaxSubtreeNodeIds(pendingRoot));
+          const lexicalSteps: PlaybackStep[] = [];
+
+          if (leafTarget) {
+            const leafSurface = getPreFrontingLexicalSurface(leafTarget.surface, index);
+            const selectVisibleNodeIds = new Set<string>(projectedRootIds);
+            selectVisibleNodeIds.add(leafTarget.nodeId);
+            const selectLayoutNodeIds = new Set<string>(selectVisibleNodeIds);
+            projectedRootSubtreeIds.forEach((subtreeNodeId) => selectLayoutNodeIds.add(subtreeNodeId));
+            rootSubtreeIds.forEach((subtreeNodeId) => selectLayoutNodeIds.add(subtreeNodeId));
+            pendingRootSubtreeIds.forEach((subtreeNodeId) => selectLayoutNodeIds.add(subtreeNodeId));
+            nextFramePendingRootSubtreeIds.forEach((subtreeNodeId) => selectLayoutNodeIds.add(subtreeNodeId));
+            const lexicalSelectSnapshot = buildDerivationReplaySnapshot(
+              lexicalSnapshotRoots,
+              index,
+              authoredPreviousRelationRelationLinks,
+              selectVisibleNodeIds,
+              selectLayoutNodeIds,
+              frames,
+              undefined,
+              preferredWorkspaceRootSideHints
+            );
+            lexicalStepCursor += 1;
+            lexicalSteps.push({
+              ...frameSemanticStep,
+              targetNodeId: leafTarget.nodeId,
+              targetLabel: leafSurface,
+              sourceNodeIds: [leafTarget.nodeId],
+              sourceLabels: [leafSurface],
+              recipe: buildStructuralReplayFallback('LexicalSelect', leafSurface, [leafSurface]),
+              workspaceAfter: buildWorkspaceLabelsForState(rootId, leafSurface, 'leaf'),
+              replayCanvasData: lexicalSelectSnapshot.canvasData,
+              replayVisibleNodeIds: lexicalSelectSnapshot.visibleNodeIds,
+              replayRelationLinks: lexicalSelectSnapshot.relationLinks,
+              stepId: frameSemanticStep.stepId ? `${frameSemanticStep.stepId}.${lexicalStepCursor}` : undefined
+            } satisfies PlaybackStep);
+          }
+
+          projectedRootIds.add(rootId);
+          rootSubtreeIds.forEach((subtreeNodeId) => projectedRootSubtreeIds.add(subtreeNodeId));
+          const projectVisibleNodeIds = new Set<string>(projectedRootIds);
+          const projectLayoutNodeIds = new Set<string>(projectVisibleNodeIds);
+          projectedRootSubtreeIds.forEach((subtreeNodeId) => projectLayoutNodeIds.add(subtreeNodeId));
+          pendingRootSubtreeIds.forEach((subtreeNodeId) => projectLayoutNodeIds.add(subtreeNodeId));
+          nextFramePendingRootSubtreeIds.forEach((subtreeNodeId) => projectLayoutNodeIds.add(subtreeNodeId));
+          const lexicalProjectSnapshot = buildDerivationReplaySnapshot(
+            lexicalSnapshotRoots,
+            index,
+            authoredPreviousRelationRelationLinks,
+            projectVisibleNodeIds,
+            projectLayoutNodeIds,
+            frames,
+            undefined,
+            preferredWorkspaceRootSideHints
+          );
+          lexicalStepCursor += 1;
+          lexicalSteps.push({
+            ...frameSemanticStep,
+            operation: 'Project',
+            targetNodeId: rootId,
+            targetLabel: projectedLabel,
+            sourceNodeIds: [rootId],
+            sourceLabels: [projectedLabel],
+            recipe: buildStructuralReplayFallback('Project', projectedLabel, [projectedLabel]),
+            workspaceAfter: buildWorkspaceLabelsForState(rootId, projectedLabel, 'projected'),
+            replayCanvasData: lexicalProjectSnapshot.canvasData,
+            replayVisibleNodeIds: lexicalProjectSnapshot.visibleNodeIds,
+            replayRelationLinks: lexicalProjectSnapshot.relationLinks,
+            stepId: frameSemanticStep.stepId ? `${frameSemanticStep.stepId}.${lexicalStepCursor}` : undefined
+          } satisfies PlaybackStep);
+
+          return lexicalSteps;
+        });
+        previousWorkspaceRootIds = currentWorkspaceRootIds;
+        previousVisibleNodeIds = currentFrameVisibleNodeIds;
+        return finalizeStructuralReplayForFrame(lexicalReplaySteps);
+      }
+    }
+
+    if (structuralMicrosteps.length > 1) {
+      previousWorkspaceRootIds = currentWorkspaceRootIds;
+      previousVisibleNodeIds = currentFrameVisibleNodeIds;
+      return finalizeStructuralReplayForFrame(structuralMicrosteps);
+    }
+
+    if (structuralMicrosteps.length > 0 && frameCarriesAuthoredEffect) {
+      previousWorkspaceRootIds = currentWorkspaceRootIds;
+      previousVisibleNodeIds = currentFrameVisibleNodeIds;
+      return finalizeStructuralReplayForFrame(structuralMicrosteps);
+    }
+
+    previousWorkspaceRootIds = currentWorkspaceRootIds;
+    previousVisibleNodeIds = currentFrameVisibleNodeIds;
+
+    /*
+     * A PLANNED stage with no structural microsteps still owns a reachable
+     * final Stage Record state. Two such shapes exist:
+     * - a relations-only stage, whose authored relation moments must not be
+     *   dropped with the microsteps;
+     * - a stage whose only tree delta is the REMOVAL of material (e.g. an
+     *   anchored node vanishing). A bare 'Other' step for that state would
+     *   be deleted by the overt-loss guard, making the whole stage
+     *   unreachable and leaving the previous stage's relation on screen.
+     * Both route through the finalizer with zero structural steps: relation
+     * moments (if any) place first, then the stage's authoritative macro
+     * carries the stage's own complete canvas. The overt-material guards
+     * already treat a Stage Record as authoritative, so this weakens no
+     * transient-microstep protection — it only makes every authored stage's
+     * final state reachable.
+     */
+    if (plannedStage && (frameRelationSteps.length > 0 || structuralMicrosteps.length === 0)) {
+      return finalizeStructuralReplayForFrame([]);
+    }
+
+    return [frameSemanticStep];
+  });
+
+  const squashedFrameBackedSteps = squashAdjacentStructuralReplayDuplicates(frameBackedSteps);
+  const visibilityStabilizedSteps = stabilizeStructuralReplayVisibility(squashedFrameBackedSteps);
+  const nullSelectionExpandedSteps = splitCollapsedNullSelectionProjectSteps(visibilityStabilizedSteps);
+  const validVisibilitySteps = removeInvalidReplayVisibilityTransitions(nullSelectionExpandedSteps);
+  const relationCarriedSteps = carryReplayRelationLinksForward(validVisibilitySteps);
+  const zeroDeltaCollapsedSteps = collapseZeroDeltaReplaySteps(relationCarriedSteps);
+  const landingMergeExpandedSteps = insertPreMovementLandingMergeSteps(zeroDeltaCollapsedSteps);
+  return normalizeReplaySentenceInitialCasing(landingMergeExpandedSteps, sentenceInitialSurface);
+};
+
+const squashAdjacentStructuralReplayDuplicates = (steps: PlaybackStep[]): PlaybackStep[] => {
+  if (steps.length < 2) return steps;
+
+  const squashed: PlaybackStep[] = [];
+  steps.forEach((step) => {
+    const previous = squashed[squashed.length - 1];
+    const sameVisualFrame =
+      previous &&
+      Number.isInteger(previous.visualFrameIndex) &&
+      Number.isInteger(step.visualFrameIndex) &&
+      previous.visualFrameIndex === step.visualFrameIndex;
+    const sameOperation =
+      previous &&
+      String(previous.operation || '').trim() === String(step.operation || '').trim();
+    const sameTarget =
+      previous &&
+      String(previous.targetNodeId || '').trim() &&
+      String(previous.targetNodeId || '').trim() === String(step.targetNodeId || '').trim();
+    const structuralOnly =
+      !stepRepresentsMovement(previous) &&
+      !stepRepresentsMovement(step) &&
+      !previous?.preserveReplayStep &&
+      !step.preserveReplayStep &&
+      previous?.sourceKind !== 'derivation-effect' &&
+      step.sourceKind !== 'derivation-effect';
+
+    if (sameVisualFrame && sameOperation && sameTarget && structuralOnly && previous) {
+      squashed[squashed.length - 1] = {
+        ...previous,
+        stepId: step.stepId || previous.stepId,
+        recipe: pickPreferredReplayText(previous.recipe, step.recipe) || previous.recipe || step.recipe,
+        note: pickPreferredReplayText(previous.note, step.note) || previous.note || step.note,
+        workspaceAfter:
+          (Array.isArray(step.workspaceAfter) && step.workspaceAfter.length > 0)
+            ? step.workspaceAfter
+            : previous.workspaceAfter,
+        sourceNodeIds:
+          (Array.isArray(previous.sourceNodeIds) ? previous.sourceNodeIds : []).length > 0
+            ? previous.sourceNodeIds
+            : step.sourceNodeIds,
+        sourceLabels:
+          (Array.isArray(previous.sourceLabels) ? previous.sourceLabels : []).length > 0
+            ? previous.sourceLabels
+            : step.sourceLabels,
+        detailBlocks:
+          (Array.isArray(step.detailBlocks) && step.detailBlocks.length > 0)
+            ? step.detailBlocks
+            : previous.detailBlocks,
+      };
+      return;
+    }
+
+    squashed.push(step);
+  });
+
+  return squashed;
+};
+
+const buildReplayVisualStateSignature = (step?: PlaybackStep | null): string => {
+  if (!step) return '';
+  const visibleNodeIds = Array.isArray(step.replayVisibleNodeIds)
+    ? step.replayVisibleNodeIds.map((id) => String(id || '').trim()).filter(Boolean).sort()
+    : [];
+  const relationLinks = (Array.isArray(step.replayRelationLinks) ? step.replayRelationLinks : [])
+    .map((link) => ({
+      relationIndex: String(link?.relationIndex || '').trim(),
+      relation: String(link?.relation || link?.operation || '').trim(),
+      sourceNodeId: String(link?.sourceNodeId || '').trim(),
+      targetNodeId: String(link?.targetNodeId || '').trim(),
+      witnessNodeId: String(link?.witnessNodeId || '').trim(),
+      renderFamily: link?.renderFamily || undefined,
+      trajectoryKind: normalizeTrajectoryKind(link?.trajectoryKind) || undefined,
+      stepIndex: Number.isInteger(link?.stepIndex) ? Number(link.stepIndex) : null,
+      operation: String(link?.operation || '').trim(),
+      chainId: String(link?.chainId || '').trim()
+    }))
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+
+  return JSON.stringify({
+    canvasData: step.replayCanvasData || null,
+    visibleNodeIds,
+    relationLinks
+  });
+};
+
+const collapseZeroDeltaReplaySteps = (steps: PlaybackStep[]): PlaybackStep[] => {
+  if (steps.length < 2) return steps;
+
+  const collapsed: PlaybackStep[] = [];
+  steps.forEach((step) => {
+    const previous = collapsed[collapsed.length - 1];
+    const sameVisualState =
+      previous &&
+      previous.sourceKind !== 'derivation-effect' &&
+      step.sourceKind !== 'derivation-effect' &&
+      !previous.preserveReplayStep &&
+      !step.preserveReplayStep &&
+      String(previous.operation || '').trim() !== 'LexicalSelect' &&
+      String(step.operation || '').trim() !== 'LexicalSelect' &&
+      buildReplayVisualStateSignature(previous) === buildReplayVisualStateSignature(step);
+
+    if (!sameVisualState || !previous) {
+      collapsed.push(step);
+      return;
+    }
+
+    collapsed[collapsed.length - 1] = {
+      ...previous,
+      recipe: pickPreferredReplayText(previous.recipe, step.recipe) || previous.recipe || step.recipe,
+      note: pickPreferredReplayText(previous.note, step.note) || previous.note || step.note,
+      workspaceAfter:
+        (Array.isArray(step.workspaceAfter) && step.workspaceAfter.length > 0)
+          ? step.workspaceAfter
+          : previous.workspaceAfter,
+      detailBlocks: mergeReplayDetailBlocks(previous.detailBlocks, step.detailBlocks)
+    };
+  });
+
+  return collapsed;
+};
+
+export const insertPreMovementLandingMergeSteps = (steps: PlaybackStep[]): PlaybackStep[] => {
+  if (steps.length < 2) return steps;
+
+  const expanded: PlaybackStep[] = [];
+  steps.forEach((step) => {
+    const previous = expanded[expanded.length - 1];
+    const relationLinks = Array.isArray(step.replayRelationLinks) ? step.replayRelationLinks : [];
+    const landingRelation = relationLinks.find((link) => {
+      const operation = String(link?.operation || link?.relation || step.operation || '').trim();
+      if (!isMoveLikeOperation(operation) || isFrontingLikeOperationLabel(operation)) return false;
+      const targetNodeId = String(link?.targetNodeId || '').trim();
+      if (!targetNodeId || !previous?.replayCanvasData) return false;
+      const previousVisibleIds = getReplayVisibleNodeIdSet(previous);
+      if (!previousVisibleIds.has(targetNodeId)) return false;
+      const parentNodeId = findParentNodeIdInForest([previous.replayCanvasData], targetNodeId);
+      if (!parentNodeId || previousVisibleIds.has(parentNodeId)) return false;
+      const currentVisibleIds = getReplayVisibleNodeIdSet(step);
+      return currentVisibleIds.has(parentNodeId);
+    });
+
+    if (previous && landingRelation && previous.replayCanvasData) {
+      const targetNodeId = String(landingRelation.targetNodeId || '').trim();
+      const parentNodeId = findParentNodeIdInForest([previous.replayCanvasData], targetNodeId);
+      const parentNode = parentNodeId
+        ? findNodeByIdInForest([previous.replayCanvasData], parentNodeId)
+        : null;
+      const targetNode = targetNodeId
+        ? findNodeByIdInForest([previous.replayCanvasData], targetNodeId)
+        : null;
+      const parentLabel = String(parentNode?.label || '').trim() || 'Workspace';
+      const targetLabel = String(targetNode?.label || '').trim() || String(previous.targetLabel || '').trim() || 'XP';
+      const visibleNodeIds = getReplayVisibleNodeIdSet(previous);
+      visibleNodeIds.add(parentNodeId);
+      /*
+       * A generated pre-movement landing merge is a STRUCTURAL state: it
+       * must never inherit relation identity from the step it was cloned
+       * from, or it would count as a second played relation moment and
+       * reveal/focus a relation twice.
+       */
+      expanded.push({
+        ...previous,
+        operation: 'ExternalMerge' as DerivationStep['operation'],
+        replayKind: 'micro',
+        replayRelationIdentity: undefined,
+        targetNodeId: parentNodeId,
+        targetLabel: parentLabel,
+        sourceNodeIds: [targetNodeId].filter(Boolean),
+        sourceLabels: [targetLabel].filter(Boolean),
+        recipe: buildStructuralReplayFallback('ExternalMerge', parentLabel, [targetLabel]),
+        workspaceAfter: [parentLabel],
+        replayVisibleNodeIds: Array.from(visibleNodeIds),
+        replayRelationLinks: previous.replayRelationLinks,
+        preserveReplayStep: true
+      });
+    }
+
+    expanded.push(step);
+  });
+
+  return expanded;
+};
+
+const buildVisibleReplayStateSignature = (step?: PlaybackStep | null): string => {
+  if (!step?.replayCanvasData || !Array.isArray(step.replayVisibleNodeIds)) return '';
+  const visibleIds = new Set(
+    step.replayVisibleNodeIds
+      .map((nodeId) => String(nodeId || '').trim())
+      .filter(Boolean)
+  );
+  const serializeNode = (node?: SyntaxNode | null): any => {
+    if (!node || typeof node !== 'object') return null;
+    const nodeId = String(node.id || '').trim();
+    const children = (Array.isArray(node.children) ? node.children : [])
+      .map(serializeNode)
+      .filter(Boolean);
+    if (nodeId && !visibleIds.has(nodeId)) {
+      return children.length > 0 ? { id: '__hidden_parent__', children } : null;
+    }
+    return {
+      id: nodeId,
+      label: String(node.label || '').trim(),
+      word: String(node.word || '').trim(),
+      children
+    };
+  };
+  const relationLinks = (Array.isArray(step.replayRelationLinks) ? step.replayRelationLinks : [])
+    .map((link) => ({
+      relationIndex: String(link?.relationIndex || '').trim(),
+      relation: String(link?.relation || link?.operation || '').trim(),
+      sourceNodeId: String(link?.sourceNodeId || '').trim(),
+      targetNodeId: String(link?.targetNodeId || '').trim(),
+      witnessNodeId: String(link?.witnessNodeId || '').trim(),
+      stepIndex: Number.isInteger(link?.stepIndex) ? Number(link.stepIndex) : null
+    }))
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+  return JSON.stringify({
+    tree: serializeNode(step.replayCanvasData),
+    relationLinks
+  });
+};
+
+const collectVisibleReplayOvertTokenCounts = (step?: PlaybackStep | null): Map<string, number> => {
+  const counts = new Map<string, number>();
+  if (!step?.replayCanvasData || !Array.isArray(step.replayVisibleNodeIds)) return counts;
+  const visibleIds = new Set(
+    step.replayVisibleNodeIds
+      .map((nodeId) => String(nodeId || '').trim())
+      .filter(Boolean)
+  );
+  const countedLeafIds = new Set<string>();
+  step.replayVisibleNodeIds.forEach((nodeIdValue) => {
+    const nodeId = String(nodeIdValue || '').trim();
+    if (!nodeId) return;
+    const node = findNodeByIdInForest([step.replayCanvasData as SyntaxNode], nodeId);
+    if (!node) return;
+    collectLeafSyntaxNodes(node).forEach((leaf) => {
+      const leafId = String(leaf?.id || '').trim();
+      if (leafId && !visibleIds.has(leafId)) return;
+      if (leafId && countedLeafIds.has(leafId)) return;
+      if (leafId) countedLeafIds.add(leafId);
+      const surface = String(leaf?.word || leaf?.label || '').trim();
+      if (
+        !surface
+        || isTraceLike(surface)
+        || isNullLike(surface)
+        || isStructuralCategorySurface(surface)
+      ) {
+        return;
+      }
+      const key = normalizeToken(surface);
+      if (!key) return;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+  });
+  return counts;
+};
+
+const stepDropsVisibleOvertMaterial = (
+  previousStep: PlaybackStep | undefined,
+  step: PlaybackStep
+): boolean => {
+  if (!previousStep) return false;
+  const operation = String(step.operation || '').trim();
+  if (
+    !operation
+    || operation === 'StageRecord'
+  ) {
+    return false;
+  }
+  const previousCounts = collectVisibleReplayOvertTokenCounts(previousStep);
+  if (previousCounts.size === 0) return false;
+  const currentCounts = collectVisibleReplayOvertTokenCounts(step);
+  for (const [token, previousCount] of previousCounts) {
+    if ((currentCounts.get(token) || 0) < previousCount) return true;
+  }
+  return false;
+};
+
+const stepIntroducesVisibleOvertMaterial = (
+  previousStep: PlaybackStep | undefined,
+  step: PlaybackStep
+): boolean => {
+  const currentCounts = collectVisibleReplayOvertTokenCounts(step);
+  if (currentCounts.size === 0) return false;
+  const previousCounts = collectVisibleReplayOvertTokenCounts(previousStep);
+  for (const [token, currentCount] of currentCounts) {
+    if (currentCount > (previousCounts.get(token) || 0)) return true;
+  }
+  return false;
+};
+
+const stepCanIntroduceVisibleOvertMaterial = (
+  previousStep: PlaybackStep | undefined,
+  step: PlaybackStep
+): boolean => {
+  const operation = String(step.operation || '').trim();
+  if (operation !== 'LexicalSelect') return false;
+  const target = String(step.targetLabel || step.recipe || '').trim();
+  if (
+    !target
+    || isTraceLike(target)
+    || isNullLike(target)
+    || isStructuralCategorySurface(target)
+  ) {
+    return false;
+  }
+  const targetKey = normalizeToken(target);
+  if (!targetKey) return false;
+  const previousCounts = collectVisibleReplayOvertTokenCounts(previousStep);
+  const currentCounts = collectVisibleReplayOvertTokenCounts(step);
+  let introducedTarget = false;
+  for (const [token, currentCount] of currentCounts) {
+    const previousCount = previousCounts.get(token) || 0;
+    if (currentCount <= previousCount) continue;
+    if (token !== targetKey) return false;
+    if (currentCount - previousCount > 1) return false;
+    introducedTarget = true;
+  }
+  if (!introducedTarget) return false;
+  return true;
+};
+
+const stepIsRedundantOvertLexicalSelect = (
+  previousStep: PlaybackStep | undefined,
+  step: PlaybackStep
+): boolean => {
+  if (!previousStep || String(step.operation || '').trim() !== 'LexicalSelect') return false;
+  const targetNodeId = String(step.targetNodeId || '').trim();
+  if (!targetNodeId) return false;
+  return getReplayVisibleNodeIdSet(previousStep).has(targetNodeId);
+};
+
+const getReplayVisibleNodeIdSet = (step?: PlaybackStep | null): Set<string> => new Set(
+  (Array.isArray(step?.replayVisibleNodeIds) ? step.replayVisibleNodeIds : [])
+    .map((nodeId) => String(nodeId || '').trim())
+    .filter(Boolean)
+);
+
+const getSyntaxNodeSurface = (node?: SyntaxNode | null): string => {
+  if (!node) return '';
+  return String(node.word || node.label || '').trim();
+};
+
+const findCollapsedNullSelectionInProjectStep = (
+  previousStep: PlaybackStep | undefined,
+  step: PlaybackStep
+): { leafId: string; leafSurface: string } | null => {
+  if (String(step.operation || '').trim() !== 'Project') return null;
+  if (!step.replayCanvasData) return null;
+  const previousVisibleIds = getReplayVisibleNodeIdSet(previousStep);
+  const currentVisibleIds = getReplayVisibleNodeIdSet(step);
+  const newlyVisibleIds = Array.from(currentVisibleIds).filter((nodeId) => !previousVisibleIds.has(nodeId));
+  if (newlyVisibleIds.length < 2) return null;
+
+  const nullLeafIds = newlyVisibleIds.filter((nodeId) => {
+    const node = findNodeByIdInForest([step.replayCanvasData as SyntaxNode], nodeId);
+    if (!node || (Array.isArray(node.children) && node.children.length > 0)) return false;
+    const surface = getSyntaxNodeSurface(node);
+    return isNullLike(surface) || isTraceLike(surface);
+  });
+  if (nullLeafIds.length !== 1) return null;
+
+  const leafId = nullLeafIds[0];
+  const leafParentId = findParentNodeIdInForest([step.replayCanvasData as SyntaxNode], leafId);
+  const targetNodeId = stripSyntheticReplayLeafSuffix(String(step.targetNodeId || '').trim());
+  const leafIsInsideProjectTarget =
+    Boolean(leafParentId && newlyVisibleIds.includes(leafParentId))
+    || Boolean(targetNodeId && leafParentId === targetNodeId);
+  if (!leafIsInsideProjectTarget) return null;
+
+  const leafNode = findNodeByIdInForest([step.replayCanvasData as SyntaxNode], leafId);
+  const leafSurface = getSyntaxNodeSurface(leafNode) || EXPLICIT_NULL_TERMINAL;
+  return { leafId, leafSurface };
+};
+
+const splitCollapsedNullSelectionProjectSteps = (steps: PlaybackStep[]): PlaybackStep[] => {
+  if (steps.length < 2) return steps;
+
+  const expanded: PlaybackStep[] = [];
+  steps.forEach((step) => {
+    const previous = expanded[expanded.length - 1];
+    const collapsedNullSelection = findCollapsedNullSelectionInProjectStep(previous, step);
+    if (!collapsedNullSelection) {
+      expanded.push(step);
+      return;
+    }
+
+    const previousVisibleIds = getReplayVisibleNodeIdSet(previous);
+    previousVisibleIds.add(collapsedNullSelection.leafId);
+    expanded.push({
+      ...step,
+      operation: 'LexicalSelect' as DerivationStep['operation'],
+      targetNodeId: collapsedNullSelection.leafId,
+      targetLabel: collapsedNullSelection.leafSurface,
+      sourceNodeIds: [collapsedNullSelection.leafId],
+      sourceLabels: [collapsedNullSelection.leafSurface],
+      recipe: buildStructuralReplayFallback(
+        'LexicalSelect',
+        collapsedNullSelection.leafSurface,
+        [collapsedNullSelection.leafSurface]
+      ),
+      workspaceAfter: [collapsedNullSelection.leafSurface],
+      replayVisibleNodeIds: Array.from(previousVisibleIds)
+    });
+    expanded.push(step);
+  });
+
+  return expanded;
+};
+
+/**
+ * Exactly a genuine authored relation playback moment: relation kind AND the
+ * exact authored `{stageIndex, relationIndex}` identity. A generic
+ * `preserveReplayStep` flag is NOT proof — synthetic preserved structural
+ * states (pre-movement landing merges, detached placements) carry that flag
+ * and must not bypass overt-material guards.
+ */
+export const isAuthoredRelationReplayMoment = (step: PlaybackStep): boolean =>
+  step.replayKind === 'relation'
+  && Number.isInteger(step.replayRelationIdentity?.stageIndex)
+  && Number.isInteger(step.replayRelationIdentity?.relationIndex);
+
+export const removeInvalidReplayVisibilityTransitions = (steps: PlaybackStep[]): PlaybackStep[] => {
+  const kept: PlaybackStep[] = [];
+  steps.forEach((step) => {
+    const previous = kept[kept.length - 1];
+    const operation = String(step.operation || '').trim();
+    const isPlannedStructuralMicrostep =
+      Boolean(String(step.replayProgressLabel || '').trim())
+      && step.replayKind !== 'macro'
+      && ['LexicalSelect', 'Project', 'ExternalMerge'].includes(operation);
+    if (stepIsRedundantOvertLexicalSelect(previous, step)) {
+      return;
+    }
+    const addsOvert = stepIntroducesVisibleOvertMaterial(previous, step);
+    if (
+      addsOvert
+      && operation !== 'StageRecord'
+      && !isMoveLikeOperation(operation)
+      && !isPlannedStructuralMicrostep
+      // An AUTHORED RELATION MOMENT draws marks, not material: its snapshot
+      // reflects the frame's own structural state, which can legitimately
+      // differ from a mid-assembly neighbor. Only the exact identity-proven
+      // moment is exempt — a generic preserved flag alone never authorizes
+      // an otherwise-invalid overt-material jump.
+      && !isAuthoredRelationReplayMoment(step)
+      && !stepCanIntroduceVisibleOvertMaterial(previous, step)
+    ) {
+      return;
+    }
+    const dropsOvert = stepDropsVisibleOvertMaterial(previous, step);
+    if (dropsOvert && !step.preserveReplayStep && !isPlannedStructuralMicrostep) {
+      return;
+    }
+    const sameVisibleState =
+      previous &&
+      !previous.preserveReplayStep &&
+      !step.preserveReplayStep &&
+      String(previous.operation || '').trim() !== 'StageRecord' &&
+      String(step.operation || '').trim() !== 'StageRecord' &&
+      buildVisibleReplayStateSignature(previous) === buildVisibleReplayStateSignature(step);
+    if (sameVisibleState) return;
+    kept.push(step);
+  });
+  return kept;
+};
+
+const collectReplayCanvasNodes = (root?: SyntaxNode | null): SyntaxNode[] => {
+  if (!root || typeof root !== 'object') return [];
+  const nodes: SyntaxNode[] = [];
+  const visit = (node: SyntaxNode) => {
+    nodes.push(node);
+    const children = Array.isArray(node?.children) ? node.children : [];
+    children.forEach(visit);
+  };
+  visit(root);
+  return nodes;
+};
+
+const resolveCarriedRelationEndpointForCanvas = (
+  canvas: SyntaxNode,
+  link: ResolvedRelationLink,
+  endpointId: string,
+  role: 'source' | 'target' | 'witness'
+): string => {
+  const normalizedEndpointId = String(endpointId || '').trim();
+  if (!normalizedEndpointId) return '';
+  if (findNodeByIdInForest([canvas], normalizedEndpointId)) return normalizedEndpointId;
+  if (!isMoveLikeOperation(link.operation || link.relation)) return normalizedEndpointId;
+
+  const sourceNode = findNodeByIdInForest([canvas], String(link.sourceNodeId || '').trim());
+  const witnessNode = findNodeByIdInForest([canvas], String(link.witnessNodeId || '').trim());
+  const linkLooksHeadLike = isHeadLikeResolvedRelation(link);
+  const linkLooksPhrasal = !linkLooksHeadLike;
+  const lineageId = String(
+    sourceNode?.lineageId
+    || witnessNode?.lineageId
+    || ''
+  ).trim();
+  if (!lineageId) return normalizedEndpointId;
+
+  const excludedIds = new Set([
+    role === 'target' ? String(link.sourceNodeId || '').trim() : '',
+    role === 'target' ? String(link.witnessNodeId || '').trim() : ''
+  ].filter(Boolean));
+  const endpointPrefix = normalizedEndpointId.split(/[_:]/)[0]?.toLowerCase() || '';
+  const candidates = collectReplayCanvasNodes(canvas)
+    .filter((node) => {
+      const nodeId = String(node?.id || '').trim();
+      if (!nodeId || excludedIds.has(nodeId)) return false;
+      if (String(node?.lineageId || '').trim() !== lineageId) return false;
+      if (endpointPrefix && !nodeId.toLowerCase().startsWith(`${endpointPrefix}_`)) return false;
+      return true;
+    })
+    .sort((left, right) => {
+      const score = (node: SyntaxNode): number => {
+        const nodeId = String(node?.id || '').trim().toLowerCase();
+        const overtSurface = getOvertSurfaceFromSyntaxNode(node);
+        const surface = String(node?.word || node?.label || '').trim();
+        const isSilentNode =
+          Boolean((node as any)?.silent)
+          || isTraceLike(surface)
+          || isNullLike(surface)
+          || Boolean(pickTraceLikeLeafNode(node));
+        let value = 0;
+        if ((node as any)?.replayLayoutOnly !== true) value += 4;
+        if (linkLooksPhrasal && role === 'target') {
+          if (overtSurface) value += 20;
+          if (isSilentNode) value -= 8;
+        } else {
+          if (role === 'target' && (node as any)?.silent === true) value += 6;
+          if (nodeId.includes('trace')) value += 2;
+          if (nodeId.includes('final')) value -= 4;
+        }
+        return value;
+      };
+      return score(right) - score(left);
+    });
+
+  return String(candidates[0]?.id || '').trim() || normalizedEndpointId;
+};
+
+const remapCarriedRelationLinkForCanvas = (
+  link: ResolvedRelationLink,
+  canvas: SyntaxNode
+): ResolvedRelationLink => {
+  if (!isResolvedMovementLink(link)) return link;
+  const sourceNodeId = resolveCarriedRelationEndpointForCanvas(
+    canvas,
+    link,
+    String(link.sourceNodeId || '').trim(),
+    'source'
+  );
+  const targetNodeId = resolveCarriedRelationEndpointForCanvas(
+    canvas,
+    link,
+    String(link.targetNodeId || '').trim(),
+    'target'
+  );
+  const witnessNodeId = resolveCarriedRelationEndpointForCanvas(
+    canvas,
+    link,
+    String(link.witnessNodeId || '').trim(),
+    'witness'
+  );
+  const rewriteAnchor = (anchor: ResolvedRelationAnchor): ResolvedRelationAnchor => {
+    const role = String(anchor?.role || '').trim().toLowerCase();
+    if (role === 'source') return { ...anchor, nodeId: sourceNodeId || anchor.nodeId };
+    if (role === 'target') return { ...anchor, nodeId: targetNodeId || anchor.nodeId };
+    if (role === 'witness') return { ...anchor, nodeId: witnessNodeId || anchor.nodeId };
+    return anchor;
+  };
+
+  return {
+    ...link,
+    sourceNodeId,
+    targetNodeId,
+    witnessNodeId: witnessNodeId || undefined,
+    anchors: Array.isArray(link.anchors) ? link.anchors.map(rewriteAnchor) : link.anchors
+  };
+};
+
+const carryReplayRelationLinksForward = (steps: PlaybackStep[]): PlaybackStep[] => {
+  if (steps.length < 2) return steps;
+
+  const activeRelationLinks: ResolvedRelationLink[] = [];
+  const activeRelationKeys = new Set<string>();
+  const normalizedSteps = steps.map((step) => {
+    const canvas = step.replayCanvasData;
+    const currentRelationLinks = Array.isArray(step.replayRelationLinks) ? step.replayRelationLinks : [];
+    currentRelationLinks.forEach((link) => {
+      const key = resolvedRelationLinkKey(link);
+      if (!key || activeRelationKeys.has(key)) return;
+      activeRelationKeys.add(key);
+      activeRelationLinks.push(link);
+    });
+    if (!canvas) return step;
+
+    const linksForStep = activeRelationLinks.map((link) =>
+      remapCarriedRelationLinkForCanvas(link, canvas)
+    ).filter((link) => {
+      const sourceNodeId = String(link?.sourceNodeId || '').trim();
+      const targetNodeId = String(link?.targetNodeId || '').trim();
+      if (isResolvedMovementLink(link) && (sourceNodeId || targetNodeId)) {
+        return Boolean(
+          sourceNodeId
+          && targetNodeId
+          && findNodeByIdInForest([canvas], sourceNodeId)
+          && findNodeByIdInForest([canvas], targetNodeId)
+        );
+      }
+      const anchorNodeIds = (Array.isArray(link?.anchors) ? link.anchors : [])
+        .map((anchor) => String(anchor?.nodeId || '').trim())
+        .filter(Boolean);
+      return anchorNodeIds.length > 0 && anchorNodeIds.every((nodeId) => (
+        Boolean(findNodeByIdInForest([canvas], nodeId))
+      ));
+    });
+    if (linksForStep.length === 0) return step;
+
+    const mergedRelationLinks: ResolvedRelationLink[] = [];
+    const mergedRelationKeys = new Set<string>();
+    linksForStep.forEach((link) => {
+      const key = resolvedRelationLinkKey(link);
+      if (!key || mergedRelationKeys.has(key)) return;
+      mergedRelationKeys.add(key);
+      mergedRelationLinks.push(link);
+    });
+
+    const visibleNodeIds = getReplayVisibleNodeIdSet(step);
+    mergedRelationLinks.forEach((link) => {
+      const automaticallyVisibleAnchorNodeIds = (Array.isArray(link?.anchors)
+        ? link.anchors
+            .map((anchor) => String(anchor?.nodeId || '').trim())
+        : []);
+      [
+        String(link?.sourceNodeId || '').trim(),
+        String(link?.targetNodeId || '').trim(),
+        String(link?.witnessNodeId || '').trim(),
+        ...automaticallyVisibleAnchorNodeIds
+      ].forEach((nodeId) => {
+        if (!nodeId || !findNodeByIdInForest([canvas], nodeId)) return;
+        visibleNodeIds.add(nodeId);
+      });
+    });
+
+    return {
+      ...step,
+      replayVisibleNodeIds: Array.from(visibleNodeIds),
+      replayRelationLinks: mergedRelationLinks
+    };
+  });
+
+  return normalizedSteps;
+};
+
+const SENTENCE_INITIAL_CASE_ADJUSTABLE_PARENT_LABELS = new Set([
+  'A', 'ADV', 'AUX', 'C', 'COORD', 'D', 'DEG', 'DET', 'INFL', 'MOD', 'NEG', 'P', 'Q', 'T', 'V'
+]);
+
+const isSentenceInitialCaseAdjustableParent = (label?: string): boolean =>
+  SENTENCE_INITIAL_CASE_ADJUSTABLE_PARENT_LABELS.has(
+    normalizeStructuralLabel(String(label || '')).toUpperCase()
+  );
+
+const normalizeReplaySentenceInitialCasing = (
+  steps: PlaybackStep[],
+  sentenceInitialSurface: string
+): PlaybackStep[] => {
+  const initialKey = normalizeToken(sentenceInitialSurface);
+  if (!initialKey) return steps;
+
+  const uppercaseInitial = sentenceInitialSurface.charAt(0).toUpperCase() + sentenceInitialSurface.slice(1);
+  const lowercaseInitial = sentenceInitialSurface.charAt(0).toLowerCase() + sentenceInitialSurface.slice(1);
+  if (uppercaseInitial === lowercaseInitial) return steps;
+
+  return steps.map((step) => {
+    if (!step.replayCanvasData) return step;
+    const clonedCanvas = cloneSyntaxTree(step.replayCanvasData);
+    if (!clonedCanvas) return step;
+    if (String(clonedCanvas.label || '').trim() === DERIVATION_WORKSPACE_ROOT_LABEL) return step;
+
+    let changed = false;
+    const currentLeaves = collectOvertLeafNodeIdsInOrder(clonedCanvas)
+      .map((leafId) => {
+        const path = findNodePathInForest([clonedCanvas], leafId);
+        if (!path || path.length === 0) return null;
+        const pathNodes = path.map((_, index) => (
+          getNodeAtForestPath([clonedCanvas], path.slice(0, index + 1))
+        ));
+        if (pathNodes.some((node) => String(node?.id || '').startsWith('__babel_future_layout_'))) return null;
+        const leaf = findNodeByIdInForest([clonedCanvas], leafId);
+        return leaf
+          ? {
+              leaf,
+              silent: pathNodes.some((node) => (node as any)?.silent === true)
+            }
+          : null;
+      })
+      .filter((entry): entry is { leaf: SyntaxNode; silent: boolean } => Boolean(entry));
+    const firstPronouncedLeafId = String(
+      currentLeaves.find((entry) => !entry.silent)?.leaf.id || ''
+    ).trim();
+    const casingByLeafId = new Map<string, string>();
+
+    currentLeaves.forEach(({ leaf }) => {
+      const surface = String(leaf.word || leaf.label || '').trim();
+      if (normalizeToken(surface) !== initialKey) return;
+      const leafId = String(leaf.id || '').trim();
+      const leafPath = findNodePathInForest([clonedCanvas], leafId);
+      const parent = leafPath && leafPath.length > 1
+        ? getNodeAtForestPath([clonedCanvas], leafPath.slice(0, -1))
+        : null;
+      if (!isSentenceInitialCaseAdjustableParent(parent?.label || leaf.label)) return;
+      const nextSurface = leafId && leafId === firstPronouncedLeafId ? uppercaseInitial : lowercaseInitial;
+      casingByLeafId.set(leafId, nextSurface);
+      if (leaf.word && leaf.word !== nextSurface) {
+        leaf.word = nextSurface;
+        changed = true;
+      }
+      if (leaf.label && leaf.label !== nextSurface) {
+        leaf.label = nextSurface;
+        changed = true;
+      }
+    });
+
+    const casingForNodeId = (nodeId?: string): string => {
+      const normalizedNodeId = String(nodeId || '').trim();
+      if (!normalizedNodeId) return '';
+      const exact = casingByLeafId.get(normalizedNodeId);
+      if (exact) return exact;
+      const node = findNodeByIdInForest([clonedCanvas], normalizedNodeId.replace(/::__leaf$/, ''));
+      if (!node) return '';
+      const matchingLeafId = collectOvertLeafNodeIdsInOrder(node).find((leafId) => casingByLeafId.has(leafId));
+      return matchingLeafId ? String(casingByLeafId.get(matchingLeafId) || '') : '';
+    };
+    const rawTargetLabel = String(step.targetLabel || '').trim();
+    const targetCase = normalizeToken(rawTargetLabel) === initialKey
+      ? casingForNodeId(step.targetNodeId)
+      : '';
+    const nextTargetLabel = targetCase || step.targetLabel;
+    const nextSourceLabels = Array.isArray(step.sourceLabels)
+      ? step.sourceLabels.map((label, index) => {
+          if (normalizeToken(String(label || '').trim()) !== initialKey) return label;
+          return casingForNodeId(step.sourceNodeIds?.[index])
+            || (index === 0 ? targetCase : '')
+            || label;
+        })
+      : step.sourceLabels;
+    const labelsChanged =
+      nextTargetLabel !== step.targetLabel
+      || JSON.stringify(nextSourceLabels || []) !== JSON.stringify(step.sourceLabels || []);
+    const nextRecipe = labelsChanged
+      ? buildStructuralReplayFallback(step.operation, nextTargetLabel, nextSourceLabels || [])
+      : step.recipe;
+
+    return changed || labelsChanged
+      ? {
+          ...step,
+          targetLabel: nextTargetLabel,
+          sourceLabels: nextSourceLabels,
+          replayCanvasData: changed ? clonedCanvas : step.replayCanvasData,
+          recipe: nextRecipe
+        }
+      : step;
+  });
+};
+
+const stabilizeStructuralReplayVisibility = (steps: PlaybackStep[]): PlaybackStep[] => {
+  if (steps.length === 0) return steps;
+
+  const persistentProjectedNodeIds = new Set<string>();
+  const persistentVisibleNodeIds = new Set<string>();
+  const persistentVisibleSubtreeSignatures = new Set<string>();
+  return steps.map((step) => {
+    const canvas = step.replayCanvasData;
+    const rawVisibleIds = Array.isArray(step.replayVisibleNodeIds)
+      ? step.replayVisibleNodeIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : [];
+    const suppressedAutoRevealNodeIds = new Set(
+      (Array.isArray(step.replaySuppressAutoRevealNodeIds) ? step.replaySuppressAutoRevealNodeIds : [])
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)
+    );
+    if (!canvas) {
+      if (step.operation === 'Project' && String(step.targetNodeId || '').trim()) {
+        persistentProjectedNodeIds.add(String(step.targetNodeId || '').trim());
+      }
+      return step;
+    }
+
+    const nextVisibleIds = new Set(
+      rawVisibleIds.filter((visibleNodeId) => !suppressedAutoRevealNodeIds.has(visibleNodeId))
+    );
+    persistentVisibleNodeIds.forEach((visibleNodeId) => {
+      if (suppressedAutoRevealNodeIds.has(visibleNodeId)) return;
+      const exactNode = findExactNodeByIdInForest([canvas], visibleNodeId);
+      if (!exactNode || (exactNode as any).replayLayoutOnly === true) return;
+      nextVisibleIds.add(visibleNodeId);
+    });
+    const preserveProjectedNode = (nodeId: string) => {
+      const node = findExactNodeByIdInForest([canvas], nodeId);
+      if (!node || (node as any).replayLayoutOnly === true) return;
+      if (suppressedAutoRevealNodeIds.has(nodeId)) return;
+      nextVisibleIds.add(nodeId);
+    };
+
+    persistentProjectedNodeIds.forEach(preserveProjectedNode);
+    if (persistentVisibleSubtreeSignatures.size > 0) {
+      const signatureBuckets = new Map<string, SyntaxNode[]>();
+      collectReplayCanvasNodes(canvas).forEach((node) => {
+        const signature = getReplayContinuitySubtreeSignature(node);
+        if (!signature || !persistentVisibleSubtreeSignatures.has(signature)) return;
+        const entries = signatureBuckets.get(signature) || [];
+        entries.push(node);
+        signatureBuckets.set(signature, entries);
+      });
+      signatureBuckets.forEach((nodes) => {
+        if (nodes.length !== 1) return;
+        collectSubtreeNodeIds(nodes[0]).forEach((visibleNodeId) => {
+          if (suppressedAutoRevealNodeIds.has(visibleNodeId)) return;
+          nextVisibleIds.add(visibleNodeId);
+        });
+      });
+    }
+    if (step.operation === 'Project' && String(step.targetNodeId || '').trim()) {
+      const targetNodeId = String(step.targetNodeId || '').trim();
+      preserveProjectedNode(targetNodeId);
+      persistentProjectedNodeIds.add(targetNodeId);
+    }
+
+    nextVisibleIds.forEach((visibleNodeId) => persistentVisibleNodeIds.add(visibleNodeId));
+    collectReplayCanvasNodes(canvas).forEach((node) => {
+      const nodeId = String(node?.id || '').trim();
+      if (!nodeId || !nextVisibleIds.has(nodeId)) return;
+      const completeSubtreeIsVisible = collectSubtreeNodeIds(node).every((subtreeNodeId) => {
+        const subtreeNode = findExactNodeByIdInForest([canvas], subtreeNodeId);
+        return (subtreeNode as any)?.replayLayoutOnly === true
+          || nextVisibleIds.has(subtreeNodeId);
+      });
+      if (!completeSubtreeIsVisible) return;
+      const signature = getReplayContinuitySubtreeSignature(node);
+      if (signature) persistentVisibleSubtreeSignatures.add(signature);
+    });
+    return {
+      ...step,
+      replayVisibleNodeIds: Array.from(nextVisibleIds)
+    };
+  });
+};
+
+const dropLowSignalStructuralFrameSummaries = (steps: PlaybackStep[]): PlaybackStep[] => {
+  if (steps.length < 2) return steps;
+
+  const filtered: PlaybackStep[] = [];
+  steps.forEach((step) => {
+    const previous = filtered[filtered.length - 1];
+    const sameVisualFrame =
+      previous &&
+      Number.isInteger(previous.visualFrameIndex) &&
+      Number.isInteger(step.visualFrameIndex) &&
+      previous.visualFrameIndex === step.visualFrameIndex;
+    const structuralOnly =
+      !stepRepresentsMovement(step);
+    const lowSignalSummary =
+      isLowSignalReplayText(step.recipe) &&
+      (!step.note || isLowSignalReplayText(step.note));
+
+    if (sameVisualFrame && structuralOnly && lowSignalSummary && previous) {
+      filtered[filtered.length - 1] = {
+        ...previous,
+        stepId: step.stepId || previous.stepId,
+        workspaceAfter:
+          (Array.isArray(step.workspaceAfter) && step.workspaceAfter.length > 0)
+            ? step.workspaceAfter
+            : previous.workspaceAfter
+      };
+      return;
+    }
+
+    filtered.push(step);
+  });
+
+  return filtered;
+};
+
+const collectForestNodesById = (forest: SyntaxNode[]): Map<string, SyntaxNode> => {
+  const out = new Map<string, SyntaxNode>();
+  const visit = (node: SyntaxNode) => {
+    const id = String(node?.id || '').trim();
+    if (id) out.set(id, node);
+    const children = Array.isArray(node?.children) ? node.children : [];
+    children.forEach(visit);
+  };
+  forest.forEach(visit);
+  return out;
+};
+
+const collectSubtreeNodeIds = (node?: SyntaxNode | null): string[] => {
+  if (!node || typeof node !== 'object') return [];
+  const ids: string[] = [];
+  const visit = (current: SyntaxNode) => {
+    if ((current as any)?.replayLayoutOnly) return;
+    const nodeId = String(current?.id || '').trim();
+    if (nodeId) ids.push(nodeId);
+    const children = Array.isArray(current?.children) ? current.children : [];
+    children.forEach(visit);
+  };
+  visit(node);
+  return ids;
+};
+
+const collectLeafSyntaxNodes = (root?: SyntaxNode | null): SyntaxNode[] => {
+  if (!root || typeof root !== 'object') return [];
+  const leaves: SyntaxNode[] = [];
+  const visit = (node: SyntaxNode) => {
+    const children = Array.isArray(node?.children) ? node.children : [];
+    if (children.length === 0) {
+      leaves.push(node);
+      return;
+    }
+    children.forEach(visit);
+  };
+  visit(root);
+  return leaves;
+};
+
+const countOvertLeafSyntaxNodes = (root?: SyntaxNode | null): number =>
+  collectLeafSyntaxNodes(root).filter((leaf) => {
+    const surface = String(leaf?.word || leaf?.label || '').trim();
+    return Boolean(surface)
+      && !isTraceLike(surface)
+      && !isNullLike(surface)
+      && !isStructuralCategorySurface(surface);
+  }).length;
+
+const collectReplayOvertTokenMultisetKey = (forest: SyntaxNode[] = []): string => {
+  const tokens = forest
+    .flatMap((root) => collectLeafSyntaxNodes(root))
+    .map((leaf) => String(leaf?.word || leaf?.label || '').trim())
+    .filter((surface) =>
+      Boolean(surface)
+      && !isTraceLike(surface)
+      && !isNullLike(surface)
+      && !isStructuralCategorySurface(surface)
+    )
+    .map((surface) => normalizeToken(surface))
+    .filter(Boolean)
+    .sort();
+  return tokens.join('|');
+};
+
+const collectReplayOvertTokenSequence = (root?: SyntaxNode | null): string[] =>
+  collectLeafSyntaxNodes(root)
+    .filter((leaf) => (leaf as any)?.replayLayoutOnly !== true)
+    .map((leaf) => String(leaf?.word || leaf?.label || '').trim())
+    .filter((surface) =>
+      Boolean(surface)
+      && !isTraceLike(surface)
+      && !isNullLike(surface)
+      && !isStructuralCategorySurface(surface)
+    )
+    .map((surface) => normalizeToken(surface))
+    .filter(Boolean);
+
+const collectReplayRootStructuralKey = (forest: SyntaxNode[] = []): string =>
+  forest
+    .map((root) => {
+      const label = String(root?.label || '').trim().toUpperCase();
+      const tokens = collectReplayOvertTokenSequence(root).join(' ');
+      return label && tokens ? `${label}|${tokens}` : '';
+    })
+    .filter(Boolean)
+    .join('||');
+
+const getReplayContinuitySubtreeSignature = (root?: SyntaxNode | null): string => {
+  if (!root || typeof root !== 'object') return '';
+  const label = String(root.label || '').trim().toUpperCase();
+  const tokens = collectReplayOvertTokenSequence(root);
+  if (!label || tokens.length < 2) return '';
+  return `${label}|${tokens.join(' ')}`;
+};
+
+const collectUniqueReplayContinuitySubtrees = (forest: SyntaxNode[] = []): Map<string, SyntaxNode> => {
+  const candidates = new Map<string, SyntaxNode[]>();
+  const visit = (node: SyntaxNode) => {
+    const signature = getReplayContinuitySubtreeSignature(node);
+    if (signature) {
+      const entries = candidates.get(signature) || [];
+      entries.push(node);
+      candidates.set(signature, entries);
+    }
+    const children = Array.isArray(node.children) ? node.children : [];
+    children.forEach(visit);
+  };
+  forest.forEach(visit);
+  const unique = new Map<string, SyntaxNode>();
+  candidates.forEach((nodes, signature) => {
+    if (nodes.length === 1) unique.set(signature, nodes[0]);
+  });
+  return unique;
+};
+
+const hasBranchingSyntaxSubtree = (root?: SyntaxNode | null): boolean => {
+  if (!root || typeof root !== 'object') return false;
+  let branching = false;
+  const visit = (node: SyntaxNode) => {
+    if (branching) return;
+    const children = Array.isArray(node?.children) ? node.children : [];
+    if (children.length > 1) {
+      branching = true;
+      return;
+    }
+    children.forEach(visit);
+  };
+  visit(root);
+  return branching;
+};
+
+const pickTraceLikeLeafNode = (root?: SyntaxNode | null): SyntaxNode | null => {
+  const leaves = collectLeafSyntaxNodes(root);
+  return leaves.find((leaf) => {
+    const surface = String(leaf?.word || leaf?.label || '').trim();
+    return isTraceLike(surface) || isNullLike(surface);
+  }) || null;
+};
+
+const pickOvertLeafNode = (root?: SyntaxNode | null): SyntaxNode | null => {
+  const leaves = collectLeafSyntaxNodes(root);
+  return leaves.find((leaf) => {
+    if ((leaf as any)?.silent === true) return false;
+    const surface = String(leaf?.word || leaf?.label || '').trim();
+    return Boolean(surface)
+      && !isTraceLike(surface)
+      && !isNullLike(surface)
+      && !isStructuralCategorySurface(surface);
+  }) || null;
+};
+
+const pickSingletonLeafNode = (root?: SyntaxNode | null): SyntaxNode | null => {
+  const leaves = collectLeafSyntaxNodes(root);
+  return leaves.length === 1 ? leaves[0] : null;
+};
+
+export const findParentLabelInForest = (
+  forest: SyntaxNode[],
+  targetNodeId: string
+): string => {
+  const normalizedTargetNodeId = String(targetNodeId || '').trim();
+  if (!normalizedTargetNodeId) return '';
+  let resolvedParentLabel = '';
+  const visit = (node: SyntaxNode, parent?: SyntaxNode | null): boolean => {
+    if (String(node?.id || '').trim() === normalizedTargetNodeId) {
+      resolvedParentLabel = String(parent?.label || '').trim();
+      return true;
+    }
+    const children = Array.isArray(node?.children) ? node.children : [];
+    for (const child of children) {
+      if (visit(child, node)) return true;
+    }
+    return false;
+  };
+
+  forest.some((root) => visit(root, null));
+  return resolvedParentLabel;
+};
+
+const findNodePathInForest = (forest: SyntaxNode[], targetNodeId: string): number[] | null => {
+  const visit = (node: SyntaxNode, path: number[]): number[] | null => {
+    if (String(node.id || '').trim() === targetNodeId) return path;
+    const children = Array.isArray(node.children) ? node.children : [];
+    for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
+      const found = visit(children[childIndex], [...path, childIndex]);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  for (let rootIndex = 0; rootIndex < forest.length; rootIndex += 1) {
+    const found = visit(forest[rootIndex], [rootIndex]);
+    if (found) return found;
+  }
+  return null;
+};
+
+const getNodeAtForestPath = (forest: SyntaxNode[], path: number[] | null): SyntaxNode | null => {
+  if (!Array.isArray(path) || path.length === 0) return null;
+  let current: SyntaxNode | null = forest[path[0]] || null;
+  if (!current) return null;
+  for (let index = 1; index < path.length; index += 1) {
+    const children = Array.isArray(current.children) ? current.children : [];
+    current = children[path[index]] || null;
+    if (!current) return null;
+  }
+  return current;
+};
+
+const findNodeByIdInForest = (forest: SyntaxNode[], targetNodeId: string): SyntaxNode | null => {
+  const normalizedTargetNodeId = String(targetNodeId || '').trim();
+  if (!normalizedTargetNodeId) return null;
+  const visit = (node: SyntaxNode): SyntaxNode | null => {
+    if (String(node.id || '').trim() === normalizedTargetNodeId) return node;
+    if ((Array.isArray(node.aliasIds) ? node.aliasIds : []).some((aliasId) => String(aliasId || '').trim() === normalizedTargetNodeId)) {
+      return node;
+    }
+    const children = Array.isArray(node.children) ? node.children : [];
+    for (const child of children) {
+      const found = visit(child);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  for (const root of forest) {
+    const found = visit(root);
+    if (found) return found;
+  }
+  return null;
+};
+
+const findExactNodeByIdInForest = (forest: SyntaxNode[], targetNodeId: string): SyntaxNode | null => {
+  const normalizedTargetNodeId = String(targetNodeId || '').trim();
+  if (!normalizedTargetNodeId) return null;
+  const visit = (node: SyntaxNode): SyntaxNode | null => {
+    if (String(node.id || '').trim() === normalizedTargetNodeId) return node;
+    const children = Array.isArray(node.children) ? node.children : [];
+    for (const child of children) {
+      const found = visit(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  for (const root of forest) {
+    const found = visit(root);
+    if (found) return found;
+  }
+  return null;
+};
+
+const findAliasNodeCandidatesInForest = (forest: SyntaxNode[], aliasNodeId: string): SyntaxNode[] => {
+  const normalizedAliasNodeId = String(aliasNodeId || '').trim();
+  if (!normalizedAliasNodeId) return [];
+  const candidates: SyntaxNode[] = [];
+  const visit = (node: SyntaxNode) => {
+    if ((Array.isArray(node.aliasIds) ? node.aliasIds : []).some((aliasId) => String(aliasId || '').trim() === normalizedAliasNodeId)) {
+      candidates.push(node);
+    }
+    const children = Array.isArray(node.children) ? node.children : [];
+    children.forEach(visit);
+  };
+  forest.forEach(visit);
+  return candidates;
+};
+
+const findParentNodeIdInForest = (forest: SyntaxNode[], targetNodeId: string): string => {
+  const normalizedTargetNodeId = String(targetNodeId || '').trim();
+  if (!normalizedTargetNodeId) return '';
+
+  const visit = (node: SyntaxNode, parentId: string): string => {
+    if (
+      String(node.id || '').trim() === normalizedTargetNodeId
+      || (Array.isArray(node.aliasIds) ? node.aliasIds : []).some((aliasId) => String(aliasId || '').trim() === normalizedTargetNodeId)
+    ) return parentId;
+    const ownId = String(node.id || '').trim();
+    const children = Array.isArray(node.children) ? node.children : [];
+    for (const child of children) {
+      const found = visit(child, ownId || parentId);
+      if (found) return found;
+    }
+    return '';
+  };
+
+  for (const root of forest) {
+    const found = visit(root, '');
+    if (found) return found;
+  }
+  return '';
+};
+
+const stripSyntheticReplayLeafSuffix = (value?: string): string =>
+  String(value || '').trim().replace(/(?:::__[^:]+|__silent)$/, '');
+
+const getOvertSurfaceFromSyntaxNode = (node?: SyntaxNode | null): string => {
+  if (!node || typeof node !== 'object') return '';
+  const directWord = String(node.word || '').trim();
+  if ((node as any)?.silent !== true && directWord && !isTraceLike(directWord) && !isNullLike(directWord)) return directWord;
+  const leaf = pickOvertLeafNode(node);
+  return String(leaf?.word || leaf?.label || '').trim();
+};
+
+const resolvedRelationLinkKey = (link?: ResolvedRelationLink | null): string => [
+  String(link?.relationIndex || '').trim(),
+  String(link?.operation || '').trim(),
+  String(link?.sourceNodeId || '').trim(),
+  String(link?.targetNodeId || '').trim(),
+  String(link?.witnessNodeId || '').trim(),
+  String(link?.chainId || '').trim()
+].join('|');
+
+const filterResolvedRelationLinks = (
+  links: ResolvedRelationLink[] | undefined,
+  suppressedLinks: ResolvedRelationLink[] = []
+): ResolvedRelationLink[] => {
+  const sourceLinks = Array.isArray(links) ? links : [];
+  if (!Array.isArray(suppressedLinks) || suppressedLinks.length === 0) return sourceLinks;
+  const suppressedKeys = new Set(suppressedLinks.map((link) => resolvedRelationLinkKey(link)));
+  const matchesSuppressedLink = (link: ResolvedRelationLink): boolean => {
+    if (suppressedKeys.has(resolvedRelationLinkKey(link))) return true;
+    return suppressedLinks.some((suppressed) => {
+      const sameOperation =
+        normalizeReplayTargetLabel(String(link?.operation || '')) === normalizeReplayTargetLabel(String(suppressed?.operation || ''));
+      const sameTarget = String(link?.targetNodeId || '').trim()
+        && String(link?.targetNodeId || '').trim() === String(suppressed?.targetNodeId || '').trim();
+      if (!sameOperation || !sameTarget) return false;
+      const sameChain = String(link?.chainId || '').trim()
+        && String(link?.chainId || '').trim() === String(suppressed?.chainId || '').trim();
+      const linkSources = new Set([
+        String(link?.sourceNodeId || '').trim(),
+        String(link?.witnessNodeId || '').trim()
+      ].filter(Boolean));
+      const sourceOverlap = [
+        String(suppressed?.sourceNodeId || '').trim(),
+        String(suppressed?.witnessNodeId || '').trim()
+      ].some((sourceId) => sourceId && linkSources.has(sourceId));
+      return sameChain || sourceOverlap;
+    });
+  };
+  return sourceLinks.filter((link) => !matchesSuppressedLink(link));
+};
+
+const isPhrasalMovementLabel = (label?: string): boolean => {
+  const trimmed = String(label || '').trim();
+  if (!trimmed) return false;
+  if (/[’']$/.test(trimmed)) return true;
+  return /P$/i.test(trimmed);
+};
+
+const PRIME_MARK_RE = /[’']/g;
+const PRIME_CATEGORY_LABEL_RE = /[’']$/;
+const normalizeStructuralLabel = (label?: string): string =>
+  String(label || '').trim().replace(PRIME_MARK_RE, '');
+
+const HEAD_LIKE_LABEL_RE = /^(?:C|Q|WH|T|INFL|I|V|D|N|A|P|AUX)$/i;
+
+const isPhraseShellLabel = (label?: string): boolean => {
+  const normalized = normalizeStructuralLabel(label);
+  if (!normalized) return false;
+  return /P$/i.test(normalized);
+};
+
+const isHeadShellLabel = (label?: string): boolean => {
+  const raw = String(label || '').trim();
+  if (!raw || PRIME_CATEGORY_LABEL_RE.test(raw)) return false;
+  const normalized = normalizeStructuralLabel(raw);
+  if (!normalized) return false;
+  return HEAD_LIKE_LABEL_RE.test(normalized);
+};
+
+export const isStructuralCategorySurface = (surface?: string): boolean => {
+  const normalized = normalizeStructuralLabel(surface);
+  if (!normalized) return false;
+  return isHeadShellLabel(normalized) || isPhraseShellLabel(normalized);
+};
+
+export const normalizeTrajectoryKind = (kind?: ResolvedRelationLink['trajectoryKind'] | string): ResolvedRelationLink['trajectoryKind'] | '' => {
+  const normalized = String(kind || '').trim().toLowerCase();
+  if (normalized === 'head' || normalized === 'phrasal') return normalized;
+  return '';
+};
+
+/*
+ * Operation-label kind refinement is exact identity metadata, never a text
+ * pattern. An unlisted name has no kind and no fronting flavor; structure
+ * decides or nothing does.
+ */
+const isHeadLikeOperationLabel = (operation?: string): boolean =>
+  movementIdentityKind(operation) === 'head';
+
+export const isFrontingLikeOperationLabel = (operation?: string): boolean =>
+  isFrontingMovementIdentity(operation);
+
+const isPhrasalTrajectoryOperationLabel = (operation?: string): boolean =>
+  movementIdentityKind(operation) === 'phrasal';
+
+const isNodeOrImmediateParentHeadShellInForest = (
+  forest: SyntaxNode[],
+  nodeId?: string
+): boolean => {
+  const normalizedNodeId = String(nodeId || '').trim();
+  if (!normalizedNodeId) return false;
+  const nodePath = findNodePathInForest(forest, normalizedNodeId);
+  const node = getNodeAtForestPath(forest, nodePath);
+  if (node && isPhraseShellLabel(node.label)) return false;
+  if (node && isHeadShellLabel(node.label)) return true;
+  if (!Array.isArray(nodePath) || nodePath.length < 2) return false;
+  const parent = getNodeAtForestPath(forest, nodePath.slice(0, -1));
+  return Boolean(parent && isHeadShellLabel(parent.label));
+};
+
+const inferHeadLikeTrajectoryKindFromForest = ({
+  forest,
+  operation,
+  sourceNodeId,
+  targetNodeId,
+  traceNodeId
+}: {
+  forest: SyntaxNode[];
+  operation?: string;
+  sourceNodeId?: string;
+  targetNodeId?: string;
+  traceNodeId?: string;
+}): ResolvedRelationLink['trajectoryKind'] => {
+  if (isHeadLikeOperationLabel(operation)) return 'head';
+  if (isPhrasalTrajectoryOperationLabel(operation)) return 'phrasal';
+
+  const targetLooksHeadLike = isNodeOrImmediateParentHeadShellInForest(forest, targetNodeId);
+  const sourceLooksHeadLike =
+    isNodeOrImmediateParentHeadShellInForest(forest, sourceNodeId)
+    || isNodeOrImmediateParentHeadShellInForest(forest, traceNodeId);
+
+  return targetLooksHeadLike && sourceLooksHeadLike ? 'head' : 'phrasal';
+};
+
+const inferHeadLikeTrajectoryKindFromVisibleNodes = (
+  nodeById: Map<string, HierNode>,
+  link?: ResolvedRelationLink | null
+): ResolvedRelationLink['trajectoryKind'] | '' => {
+  if (!link) return '';
+
+  const explicitKind = normalizeTrajectoryKind(link.trajectoryKind);
+  if (explicitKind) return explicitKind;
+  if (isHeadLikeOperationLabel(link.operation)) return 'head';
+
+  const targetId = String(link.targetNodeId || '').trim();
+  const sourceId = String(link.sourceNodeId || '').trim();
+  const traceId = String(link.witnessNodeId || '').trim();
+  const targetNode = targetId ? nodeById.get(targetId) : undefined;
+  const sourceNode = sourceId ? nodeById.get(sourceId) : undefined;
+  const traceNode = traceId ? nodeById.get(traceId) : undefined;
+  const targetLooksHeadLike = Boolean(targetNode && isHeadShellLabel(targetNode.data?.label));
+  const sourceLooksHeadLike = Boolean(
+    (sourceNode && isHeadShellLabel(sourceNode.data?.label))
+    || (traceNode && isHeadShellLabel(traceNode.data?.label))
+    || (sourceNode?.parent && isHeadShellLabel(sourceNode.parent.data?.label))
+    || (traceNode?.parent && isHeadShellLabel(traceNode.parent.data?.label))
+  );
+  if (targetLooksHeadLike && sourceLooksHeadLike) return 'head';
+  return '';
+};
+
+export const isHeadLikeResolvedRelation = (
+  link?: ResolvedRelationLink | null,
+  nodeById?: Map<string, HierNode>
+): boolean => {
+  const explicitKind = normalizeTrajectoryKind(link?.trajectoryKind);
+  if (explicitKind) return explicitKind === 'head';
+  if (nodeById) {
+    const inferredKind = inferHeadLikeTrajectoryKindFromVisibleNodes(nodeById, link);
+    if (inferredKind) return inferredKind === 'head';
+  }
+  return isHeadLikeOperationLabel(link?.operation);
+};
+
+const inferPlaybackStepTrajectoryKind = (step?: PlaybackStep | null): PlaybackStep['trajectoryKind'] | '' => {
+  const explicitKind = normalizeTrajectoryKind(step?.trajectoryKind);
+  if (explicitKind) return explicitKind;
+  const linkKinds = Array.isArray(step?.replayRelationLinks)
+    ? step.replayRelationLinks
+        .map((link) => normalizeTrajectoryKind(link?.trajectoryKind))
+        .filter((kind): kind is NonNullable<ResolvedRelationLink['trajectoryKind']> => Boolean(kind))
+    : [];
+  if (linkKinds.includes('head')) return 'head';
+  if (linkKinds.includes('phrasal')) return 'phrasal';
+  return isHeadLikeOperationLabel(step?.operation) ? 'head' : '';
+};
+
+const isHeadLikePlaybackStep = (step?: PlaybackStep | null): boolean =>
+  inferPlaybackStepTrajectoryKind(step) === 'head';
+
+const normalizeLabel = (label?: string): string =>
+  String(label || '').trim().replace(/\s+/g, '').toUpperCase();
+
+const isTraceOrNullLikeNode = (node?: SyntaxNode | null): boolean => {
+  if (!node) return false;
+  const surface = String(node.word || node.label || '').trim();
+  return isTraceLike(surface) || isNullLike(surface);
+};
+
+const isBroadProjectionLike = (node?: SyntaxNode | null): boolean => {
+  if (!node) return false;
+  const normalized = normalizeLabel(node.label);
+  return Boolean(node.children && node.children.length > 0)
+    && (
+      normalized.endsWith('P') ||
+      normalized.endsWith("'") ||
+      normalized === 'CP' ||
+      normalized === 'INFLP' ||
+      normalized === 'TP' ||
+      normalized === 'IP' ||
+      normalized === 'VP'
+    );
+};
+
+const isPhrasalCategoryLabel = (label?: string): boolean => {
+  const normalized = normalizeLabel(label);
+  return normalized.endsWith('P')
+    || normalized === "C'"
+    || normalized === "T'"
+    || normalized === "V'"
+    || normalized === "N'"
+    || normalized === "D'"
+    || normalized === "P'"
+    || normalized === "A'"
+    || normalized === "ADV'"
+    || normalized === "INFL'";
+};
+
+const subtreeHasOvertYield = (node?: SyntaxNode | null): boolean =>
+  Boolean(pickOvertLeafNode(node));
+
+export const resolveDerivationMovementTransitions = (
+  currentForest: SyntaxNode[],
+  derivationFrames: ReplayDerivationFrame[] | undefined,
+  activeStepIndex: number,
+  resolvedRelationLinks?: ResolvedRelationLink[]
+): DerivationMovementTransition[] => {
+  const frames = Array.isArray(derivationFrames) ? derivationFrames : [];
+  if (frames.length === 0) return [];
+
+  const currentNodeIds = new Set(collectForestNodesById(currentForest).keys());
+  const lastFrameIndex = Math.min(activeStepIndex, frames.length - 1);
+  const transitions: DerivationMovementTransition[] = [];
+  const transitionKeys = new Set<string>();
+
+  (Array.isArray(resolvedRelationLinks) ? resolvedRelationLinks : []).forEach((link) => {
+    if (!isResolvedMovementLink(link)) return;
+
+    const sourceId = String(link?.sourceNodeId || '').trim();
+    const targetId = String(link?.targetNodeId || '').trim();
+    if (!sourceId || !targetId || sourceId === targetId) return;
+
+    const step = Number.isInteger(link?.stepIndex) ? Number(link.stepIndex) : 0;
+    if (step < 0 || step > lastFrameIndex) return;
+    if (!currentNodeIds.has(sourceId) || !currentNodeIds.has(targetId)) return;
+
+    const transitionKey = `${sourceId}->${targetId}@${step}`;
+    if (transitionKeys.has(transitionKey)) return;
+    transitionKeys.add(transitionKey);
+
+    transitions.push({
+      authoredLink: link,
+      sourceId,
+      targetId,
+      traceId: currentNodeIds.has(String(link?.witnessNodeId || '').trim())
+        ? String(link.witnessNodeId).trim()
+        : null,
+      step,
+      index: String(link?.relationIndex || '').trim() || `${transitions.length + 1}`,
+      chainId: String(link?.chainId || '').trim() || null,
+      operation: link?.relation || link?.operation,
+      trajectoryKind: normalizeTrajectoryKind(link?.trajectoryKind) || undefined,
+      note: link?.note
+    });
+  });
+
+  return transitions;
+};
+const resolveNodeLabel = (node: HierNode): string => node.data.label || node.data.word || '';
+export const resolveLeafSurface = (node: HierNode): string => (node.data.word || node.data.label || '').trim();
+const NULL_LIKE_LABEL = /^(∅|Ø|ε|NULL|EPSILON)$/i;
+const EXPLICIT_NULL_TERMINAL = '∅';
+const buildSyntheticReplayLeafId = (parent: SyntaxNode, suffix: string, word?: string): string => {
+  const parentId = typeof parent?.id === 'string' ? parent.id.trim() : '';
+  const parentLabel = String(parent?.label || 'node').trim().replace(/\s+/g, '_') || 'node';
+  const leafWord = String(word || '').trim().replace(/\s+/g, '_');
+  const stem = parentId || `${parentLabel}__${leafWord || 'leaf'}`;
+  return `${stem}::__${suffix}`;
+};
+const SUBSCRIPT_MAP: Record<string, string> = {
+  '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
+  'ᵢ': 'i', 'ⱼ': 'j', 'ₐ': 'a', 'ₑ': 'e', 'ₒ': 'o', 'ₓ': 'x', 'ₕ': 'h', 'ₖ': 'k', 'ₗ': 'l', 'ₘ': 'm',
+  'ₙ': 'n', 'ₚ': 'p', 'ₛ': 's', 'ₜ': 't', 'ᵥ': 'v'
+};
+const DIGIT_TO_SUBSCRIPT: Record<string, string> = {
+  '0': '₀',
+  '1': '₁',
+  '2': '₂',
+  '3': '₃',
+  '4': '₄',
+  '5': '₅',
+  '6': '₆',
+  '7': '₇',
+  '8': '₈',
+  '9': '₉'
+};
+const INDEX_TO_SUBSCRIPT: Record<string, string> = Object.fromEntries(
+  Object.entries(SUBSCRIPT_MAP).map(([subscript, plain]) => [plain, subscript])
+);
+
+export const isTraceLike = (label: string): boolean => {
+  const text = label.trim();
+  if (!text) return false;
+  const sourceUnwrapped = text.replace(/^[\s([{<⟨"']+|[\s)\]}>⟩"']+$/g, '');
+  const normalized = [...text].map((ch) => SUBSCRIPT_MAP[ch] || ch).join('');
+  const unwrapped = normalized.replace(/^[\s([{<⟨"']+|[\s)\]}>⟩"']+$/g, '');
+  if (isStructuralCategorySurface(unwrapped) && unwrapped === unwrapped.toUpperCase()) {
+    return false;
+  }
+  return (
+    /^t\d*$/.test(unwrapped) ||
+    /^t[ᵢⱼₐₑₒₓₕₖₗₘₙₚₛₜᵥ]+$/u.test(sourceUnwrapped) ||
+    /^t(?:[_-](?:\{?[A-Za-z0-9]+\}?|\[[A-Za-z0-9]+\]|\([A-Za-z0-9]+\)))+$/.test(unwrapped) ||
+    /^trace\b/i.test(unwrapped) ||
+    /^copy$/i.test(unwrapped) ||
+    /^<[^>]+>$/.test(normalized) ||
+    /^⟨[^⟩]+⟩$/.test(normalized)
+  );
+};
+
+export const normalizeToken = (value: string): string => {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^<|>$/g, '')
+    .replace(/^⟨|⟩$/g, '')
+    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+};
+
+export const tokenizeReplaySentenceSurface = (sentence: string): string[] =>
+  tokenizeSentenceSurfaceOrder(sentence);
+
+export const extractMovementIndex = (label: string): string | null => {
+  const text = [...label.trim()].map((ch) => SUBSCRIPT_MAP[ch] || ch).join('');
+  const braced = text.match(/_(?:\{|\[|\()([A-Za-z0-9]+)(?:\}|\]|\))$/);
+  if (braced?.[1]) return braced[1].toLowerCase();
+  const plain = text.match(/_([A-Za-z0-9]+)$/);
+  if (plain?.[1]) return plain[1].toLowerCase();
+  const traceDigits = text.match(/^t(\d+)$/i);
+  if (traceDigits?.[1]) return traceDigits[1];
+  const danglingSubscript = label.trim().match(/([₀-₉ᵢⱼₐₑₒₓₕₖₗₘₙₚₛₜᵥ]+)$/);
+  return danglingSubscript?.[1]
+    ? [...danglingSubscript[1]].map((ch) => SUBSCRIPT_MAP[ch] || ch).join('').toLowerCase()
+    : null;
+};
+
+const toSubscriptDigits = (value: string): string =>
+  value
+    .split('')
+    .map((ch) => DIGIT_TO_SUBSCRIPT[ch] || INDEX_TO_SUBSCRIPT[ch.toLowerCase()] || ch)
+    .join('');
+
+export const normalizeTraceIndexForDisplay = (index?: string | null): string => {
+  const normalized = [...String(index || '').trim()]
+    .map((ch) => SUBSCRIPT_MAP[ch] || ch)
+    .join('')
+    .toLowerCase();
+  if (!normalized) return '';
+  const numeric = /^\d+$/.test(normalized)
+    ? Number(normalized)
+    : NaN;
+  if (Number.isFinite(numeric)) return numeric >= 1 ? String(numeric) : '';
+  return /^[a-z]+$/.test(normalized) ? normalized : '';
+};
+
+export const buildTraceDisplayLabel = (index?: string | null): string => {
+  const normalized = normalizeTraceIndexForDisplay(index);
+  const suffix = /^\d+$/.test(normalized) ? normalized : '';
+  return suffix ? `t${toSubscriptDigits(suffix)}` : 't';
+};
+
+export const formatIndexedSurfaceForDisplayValue = (
+  surface: string,
+  index?: string | null
+): string => {
+  const suffix = normalizeTraceIndexForDisplay(index);
+  return suffix ? `${surface}${toSubscriptDigits(suffix)}` : surface;
+};
+
+export const formatTraceSurfaceForDisplayValue = (
+  surface: string,
+  fallbackIndex?: string | null
+): string => {
+  const raw = String(surface || '').trim();
+  if (!raw) return buildTraceDisplayLabel(fallbackIndex);
+  if (!isTraceLike(raw)) return raw;
+  return buildTraceDisplayLabel(fallbackIndex || extractMovementIndex(raw));
+};
+
+const DISPLAY_TRACE_LABEL_RE = /^t(?:[₀₁₂₃₄₅₆₇₈₉]+)?$/;
+
+/**
+ * The authored-witness formatter is additive only: an authored trace surface
+ * (`t`, `t₁`, …) may gain its derived index, while authored `∅` and lexical
+ * material keep their surface. Occupant-as-authored ruling: silent movement
+ * copies also keep their authored words — resolveLexicalMovementTraceDisplayIndex
+ * supplies only the chain index for their subscript, never a trace conversion.
+ * Trace display belongs solely to occupants the model authored as traces.
+ */
+export const formatAuthoredWitnessSurface = (
+  surface: string,
+  inheritedTraceIndex?: string | null,
+  aliasedTraceIndex?: string | null
+): string => {
+  const resolvedIndex = normalizeTraceIndexForDisplay(
+    inheritedTraceIndex || aliasedTraceIndex || extractMovementIndex(surface)
+  );
+  if (isTraceLike(surface)) {
+    return formatTraceSurfaceForDisplayValue(surface, resolvedIndex || extractMovementIndex(surface));
+  }
+  return surface;
+};
+
+export const isDisplayTraceLabel = (value?: string): boolean =>
+  DISPLAY_TRACE_LABEL_RE.test(String(value || '').trim());
+
+export const resolveLexicalMovementTraceDisplayIndex = (
+  node: HierNode,
+  surface: string,
+  traceIndex?: string | null
+): string => {
+  const trimmed = String(surface || '').trim();
+  if (
+    !trimmed
+    || isTraceLike(trimmed)
+    || isNullLike(trimmed)
+    || isStructuralCategorySurface(trimmed)
+  ) {
+    return '';
+  }
+
+  let current: HierNode | null = node;
+  while (current) {
+    if ((current.data as SyntaxNode)?.silent === true || (current.data as any)?.ghost === true) {
+      return normalizeTraceIndexForDisplay(traceIndex);
+    }
+    current = current.parent;
+  }
+  return '';
+};
+
+export const isNullLike = (label: string): boolean => NULL_LIKE_LABEL.test(label.trim());
+
+/** A rendered leaf is terminal material even when `t` also resembles T. */
+export const isDisplayTerminalSurface = (surface?: string): boolean => {
+  const trimmed = String(surface || '').trim();
+  return Boolean(trimmed)
+    && (isTraceLike(trimmed) || isNullLike(trimmed) || !isStructuralCategorySurface(trimmed));
+};
+const isIndexedSurface = (label: string): boolean => {
+  const trimmed = label.trim();
+  return Boolean(trimmed) && !isTraceLike(trimmed) && !isNullLike(trimmed) && Boolean(extractMovementIndex(trimmed));
+};
+
+export const isRenderableTerminalSurface = (surface: string, overtSurfaceSet: Set<string> | null): boolean => {
+  const trimmed = surface.trim();
+  if (!trimmed || isTraceLike(trimmed) || isIndexedSurface(trimmed)) {
+    return false;
+  }
+  if (isNullLike(trimmed)) return true;
+  const normalized = normalizeToken(trimmed);
+  if (!normalized) return false;
+  if (overtSurfaceSet) return overtSurfaceSet.has(normalized);
+  return true;
+};
+
+export const collectOvertLeafNodeIdsInOrder = (root?: SyntaxNode | null): string[] => {
+  if (!root || typeof root !== 'object') return [];
+  const overtIds: string[] = [];
+  const visit = (node: SyntaxNode) => {
+    const children = Array.isArray(node?.children) ? node.children : [];
+    if (children.length === 0) {
+      const nodeId = String(node?.id || '').trim();
+      const surface = String(node?.word || node?.label || '').trim();
+      if (
+        nodeId &&
+        surface &&
+        !isTraceLike(surface) &&
+        !isNullLike(surface) &&
+        !isStructuralCategorySurface(surface)
+      ) {
+        overtIds.push(nodeId);
+      }
+      return;
+    }
+    children.forEach(visit);
+  };
+  visit(root);
+  return overtIds;
+};
+
+export const collectPronouncedLeafNodeIdsInOrder = (root?: SyntaxNode | null): string[] => {
+  if (!root || typeof root !== 'object') return [];
+  const pronouncedIds: string[] = [];
+  const visit = (node: SyntaxNode, silentAncestor: boolean) => {
+    const silent = silentAncestor || node?.silent === true || (node as any)?.ghost === true;
+    const children = Array.isArray(node?.children) ? node.children : [];
+    if (children.length === 0) {
+      const nodeId = String(node?.id || '').trim();
+      const surface = String(node?.word || node?.label || '').trim();
+      if (
+        !silent
+        && nodeId
+        && surface
+        && !isTraceLike(surface)
+        && !isNullLike(surface)
+        && !isStructuralCategorySurface(surface)
+      ) {
+        pronouncedIds.push(nodeId);
+      }
+      return;
+    }
+    children.forEach((child) => visit(child, silent));
+  };
+  visit(root, false);
+  return pronouncedIds;
+};
+
+const collectSyntaxSubtreeNodeIds = (root?: SyntaxNode | null): string[] => {
+  if (!root || typeof root !== 'object') return [];
+  const ids: string[] = [];
+  const visit = (node: SyntaxNode) => {
+    const nodeId = String(node?.id || '').trim();
+    if (nodeId) ids.push(nodeId);
+    const children = Array.isArray(node?.children) ? node.children : [];
+    children.forEach(visit);
+  };
+  visit(root);
+  return ids;
+};
+
+export const maybeLowercaseSentenceInitialFunctionSurface = ({
+  surface,
+  sentenceInitialSurface,
+  nodeId,
+  parentLabel,
+  tokenIndex,
+  visibleOvertLeafIds,
+  isWorkspaceForest = false,
+  hasNominalComplement = false
+}: {
+  surface: string;
+  sentenceInitialSurface?: string;
+  nodeId?: string;
+  parentLabel?: string;
+  tokenIndex?: number;
+  visibleOvertLeafIds?: string[];
+  isWorkspaceForest?: boolean;
+  hasNominalComplement?: boolean;
+}): string => {
+  const trimmed = String(surface || '').trim();
+  if (!trimmed) return '';
+
+  const normalizedNodeId = String(nodeId || '').trim();
+  const normalizedParentLabel = String(parentLabel || '').trim().toUpperCase();
+  const normalizedSentenceInitialSurface = String(sentenceInitialSurface || '').trim();
+  if (isWorkspaceForest) return trimmed;
+  if (!isSentenceInitialCaseAdjustableParent(normalizedParentLabel)) return trimmed;
+  if (
+    !normalizedSentenceInitialSurface
+    || normalizeToken(trimmed) !== normalizeToken(normalizedSentenceInitialSurface)
+    || !/^\p{Lu}\p{Ll}/u.test(normalizedSentenceInitialSurface)
+  ) {
+    return trimmed;
+  }
+
+  const hasAuthoredTokenIndex = Number.isFinite(tokenIndex);
+  // A bare D can also be a pronoun or proper name. Without authored surface
+  // position evidence, preserve its spelling instead of guessing from English.
+  if (!hasAuthoredTokenIndex && normalizedParentLabel === 'D' && !hasNominalComplement) return trimmed;
+
+  const visibleIds = Array.isArray(visibleOvertLeafIds) ? visibleOvertLeafIds.map((id) => String(id || '').trim()).filter(Boolean) : [];
+  const firstVisibleOvertLeafId = visibleIds[0] || '';
+  const isSentenceInitialInVisibleReplay = normalizedNodeId && normalizedNodeId === firstVisibleOvertLeafId;
+  if (isSentenceInitialInVisibleReplay) return trimmed;
+
+  return trimmed.charAt(0).toLowerCase() + trimmed.slice(1);
+};
+
+export const isOvertLeafNode = (node: HierNode, overtSurfaceSet: Set<string> | null): boolean =>
+  isRenderableTerminalSurface(resolveLeafSurface(node), overtSurfaceSet);
+
+export const resolveTraceIndexFromNodeContext = (
+  node: HierNode,
+  primaryMap: Map<string, string>,
+  secondaryMap?: Map<string, string>
+): string | undefined => {
+  let current: HierNode | null = node;
+  while (current) {
+    const nodeId = getNodeId(current);
+    const primary = primaryMap.get(nodeId);
+    if (primary) return primary;
+    const secondary = secondaryMap?.get(nodeId);
+    if (secondary) return secondary;
+    current = current.parent;
+  }
+  return undefined;
+};
+
+export const buildResolvedLinkTraceIndexMap = (
+  currentForest: SyntaxNode[],
+  resolvedRelationLinks: ResolvedRelationLink[] | undefined,
+  activeStepIndex: number
+): Map<string, string> => {
+  const traceIndexByNodeId = new Map<string, string>();
+  const links = Array.isArray(resolvedRelationLinks) ? resolvedRelationLinks : [];
+  const partialDeletionNodeIds = new Set<string>();
+  links.forEach((link) => {
+    const relationName = String(link?.relation || link?.operation || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z]/g, '');
+    if (relationName !== 'partialcopydeletion') return;
+    (Array.isArray(link?.anchors) ? link.anchors : []).forEach((anchor) => {
+      const role = String(anchor?.role || '').trim().toLowerCase();
+      if (role !== 'deletedsubconstituent' && role !== 'deleted') return;
+      const deletedNode = findNodeByIdInForest(currentForest, String(anchor?.nodeId || '').trim());
+      collectSubtreeNodeIds(deletedNode).forEach((nodeId) => partialDeletionNodeIds.add(nodeId));
+    });
+  });
+  /*
+   * An index marks chain membership, so the first chain to claim a position
+   * keeps it. Chains are processed in authored order, and a chain that vacated
+   * a position is always authored before a later chain whose moved constituent
+   * merely contains that position (the object leaves before the remnant VP
+   * fronts). Without this guard the later, larger constituent repaints the
+   * inner gap with its own index — the accidental all-t₂ remnant display.
+   */
+  const assignIndexIfUnclaimed = (rawId: string, index: string) => {
+    const id = String(rawId || '').trim();
+    if (!id || traceIndexByNodeId.has(id)) return;
+    traceIndexByNodeId.set(id, index);
+  };
+  const assignIndexToNodeAndLeaves = (nodeId: string, index: string) => {
+    const normalizedNodeId = String(nodeId || '').trim();
+    const normalizedIndex = String(index || '').trim();
+    if (!normalizedNodeId || !normalizedIndex) return;
+    assignIndexIfUnclaimed(normalizedNodeId, normalizedIndex);
+    const node = findNodeByIdInForest(currentForest, normalizedNodeId);
+    if (!node) return;
+    collectLeafSyntaxNodes(node)
+      .map((leaf) => String(leaf?.id || '').trim())
+      .filter(Boolean)
+      .forEach((leafId) => assignIndexIfUnclaimed(leafId, normalizedIndex));
+  };
+  const assignIndexToMovementSource = (nodeId: string, index: string) => {
+    const normalizedNodeId = String(nodeId || '').trim();
+    const normalizedIndex = String(index || '').trim();
+    if (!normalizedNodeId || !normalizedIndex) return;
+    const node = findNodeByIdInForest(currentForest, normalizedNodeId);
+    if (!node) return;
+    const sourceContainsPartialDeletion = collectSubtreeNodeIds(node)
+      .some((sourceNodeId) => partialDeletionNodeIds.has(sourceNodeId));
+    if (!sourceContainsPartialDeletion) {
+      assignIndexToNodeAndLeaves(normalizedNodeId, normalizedIndex);
+      return;
+    }
+    collectLeafSyntaxNodes(node)
+      .map((leaf) => String(leaf?.id || '').trim())
+      .filter((leafId) => Boolean(leafId) && !partialDeletionNodeIds.has(leafId))
+      .forEach((leafId) => assignIndexIfUnclaimed(leafId, normalizedIndex));
+  };
+  const resolveAuthoredMovementIndex = (...nodeIds: string[]): string => {
+    for (const nodeId of nodeIds) {
+      const node = findNodeByIdInForest(currentForest, String(nodeId || '').trim());
+      if (!node) continue;
+      for (const candidate of [node, ...collectLeafSyntaxNodes(node)]) {
+        const surface = String(candidate?.word || candidate?.label || '').trim();
+        const authoredIndex = normalizeTraceIndexForDisplay(extractMovementIndex(surface));
+        if (/^\d+$/.test(authoredIndex)) return authoredIndex;
+      }
+    }
+    return '';
+  };
+  /*
+   * Multi-source trajectories (across-the-board, and any authored array of
+   * source/witness anchors) carry only their first pair in the scalar
+   * sourceNodeId/witnessNodeId fields. The full authored anchor list travels
+   * on the link, so chain indexing reads every source and witness from it —
+   * one dependency, one index, every conjunct.
+   */
+  const linkAnchorIdsByRoles = (
+    link: ResolvedRelationLink,
+    roles: readonly string[]
+  ): string[] => {
+    const wanted = new Set(roles.map((role) => role.toLowerCase()));
+    const anchors = (link as ReplayAuthoredRelationLink)?.anchors;
+    if (!Array.isArray(anchors)) return [];
+    return anchors
+      .filter((anchor) => wanted.has(String((anchor as { role?: string })?.role || '').trim().toLowerCase()))
+      .map((anchor) => String((anchor as { nodeId?: string })?.nodeId || '').trim())
+      .filter(Boolean);
+  };
+  const activeMovementLinks = links.filter((link) =>
+    isResolvedMovementLink(link)
+    && (!Number.isInteger(link?.stepIndex) || Number(link.stepIndex) <= activeStepIndex));
+  const movementParent = new Map<string, string>();
+  const findMovementRoot = (nodeId: string): string => {
+    const currentParent = movementParent.get(nodeId);
+    if (!currentParent) {
+      movementParent.set(nodeId, nodeId);
+      return nodeId;
+    }
+    if (currentParent === nodeId) return nodeId;
+    const root = findMovementRoot(currentParent);
+    movementParent.set(nodeId, root);
+    return root;
+  };
+  const unionMovementNodes = (left: string, right: string) => {
+    if (!left || !right) return;
+    const leftRoot = findMovementRoot(left);
+    const rightRoot = findMovementRoot(right);
+    if (leftRoot !== rightRoot) movementParent.set(rightRoot, leftRoot);
+  };
+  activeMovementLinks.forEach((link) => {
+    const nodeIds = Array.from(new Set([
+      link.sourceNodeId,
+      link.targetNodeId,
+      link.witnessNodeId,
+      ...linkAnchorIdsByRoles(link, TRAJECTORY_SOURCE_ROLES),
+      ...linkAnchorIdsByRoles(link, TRAJECTORY_WITNESS_ROLES)
+    ].map((nodeId) => String(nodeId || '').trim()).filter(Boolean)));
+    nodeIds.forEach((nodeId) => findMovementRoot(nodeId));
+    nodeIds.slice(1).forEach((nodeId) => unionMovementNodes(nodeIds[0], nodeId));
+  });
+  const componentIndices = new Map<string, string>();
+  activeMovementLinks.forEach((link) => {
+    const nodeIds = [link.sourceNodeId, link.targetNodeId, link.witnessNodeId]
+      .map((nodeId) => String(nodeId || '').trim())
+      .filter(Boolean);
+    const root = nodeIds[0] ? findMovementRoot(nodeIds[0]) : '';
+    if (!root) return;
+    const authoredIndex = resolveAuthoredMovementIndex(...nodeIds);
+    const fallbackIndex = String(link?.relationIndex || '').trim();
+    const candidate = authoredIndex || fallbackIndex;
+    if (!candidate) return;
+    const existing = componentIndices.get(root);
+    if (!existing || (Number.isFinite(Number(candidate)) && Number(candidate) < Number(existing))) {
+      componentIndices.set(root, candidate);
+    }
+  });
+  links.forEach((link) => {
+    /* A resolved relation is not automatically a movement chain. */
+    if (!isResolvedMovementLink(link)) return;
+
+    const traceId = String(link?.witnessNodeId || '').trim();
+    const sourceId = String(link?.sourceNodeId || '').trim();
+    const movedId = String(link?.targetNodeId || '').trim();
+    const componentNodeId = sourceId || movedId || traceId;
+    const componentIndex = componentNodeId
+      ? componentIndices.get(findMovementRoot(componentNodeId))
+      : '';
+    const index = resolveAuthoredMovementIndex(traceId, sourceId)
+      || componentIndex
+      || String(link?.relationIndex || '').trim();
+    const stepIndex = Number.isInteger(link?.stepIndex) ? Number(link.stepIndex) : 0;
+    if (!index || stepIndex > activeStepIndex) return;
+
+    if (traceId) assignIndexToNodeAndLeaves(traceId, index);
+    if (sourceId) assignIndexToMovementSource(sourceId, index);
+    // Every additional authored source/witness of a multi-source trajectory
+    // shares the same chain index as the first pair.
+    linkAnchorIdsByRoles(link, TRAJECTORY_WITNESS_ROLES)
+      .filter((nodeId) => nodeId !== traceId)
+      .forEach((nodeId) => assignIndexToNodeAndLeaves(nodeId, index));
+    linkAnchorIdsByRoles(link, TRAJECTORY_SOURCE_ROLES)
+      .filter((nodeId) => nodeId !== sourceId)
+      .forEach((nodeId) => assignIndexToMovementSource(nodeId, index));
+    if (movedId) {
+      const movedNode = findNodeByIdInForest(currentForest, movedId);
+      const movedSurface = movedNode ? String(movedNode.word || movedNode.label || '').trim() : '';
+      if (movedNode && (isTraceLike(movedSurface) || isNullLike(movedSurface))) {
+        assignIndexToNodeAndLeaves(movedId, index);
+      }
+    }
+  });
+  return traceIndexByNodeId;
+};
+
+export const buildResolvedLinkOperatorVariableIndexMap = (
+  currentForest: SyntaxNode[],
+  resolvedRelationLinks: ResolvedRelationLink[] | undefined,
+  activeStepIndex: number
+): Map<string, string> => {
+  const indexByNodeId = new Map<string, string>();
+  const assignIndexToNodeAndLeaves = (nodeId: string, index: string) => {
+    const normalizedNodeId = String(nodeId || '').trim();
+    const normalizedIndex = normalizeTraceIndexForDisplay(index);
+    if (!normalizedNodeId || !normalizedIndex) return;
+    indexByNodeId.set(normalizedNodeId, normalizedIndex);
+    const node = findNodeByIdInForest(currentForest, normalizedNodeId);
+    if (!node) return;
+    collectLeafSyntaxNodes(node)
+      .map((leaf) => String(leaf?.id || '').trim())
+      .filter(Boolean)
+      .forEach((leafId) => indexByNodeId.set(leafId, normalizedIndex));
+  };
+
+  (Array.isArray(resolvedRelationLinks) ? resolvedRelationLinks : []).forEach((link) => {
+    const relation = String(link?.relation || link?.operation || '').trim();
+    const stepIndex = Number.isInteger(link?.stepIndex) ? Number(link.stepIndex) : 0;
+    if (!/operator\s*[-\s]?variable\s*[-\s]?binding/i.test(relation) || stepIndex > activeStepIndex) {
+      return;
+    }
+    const index = String(link?.relationIndex || '').trim();
+    assignIndexToNodeAndLeaves(String(link?.targetNodeId || '').trim(), index);
+    assignIndexToNodeAndLeaves(String(link?.witnessNodeId || '').trim(), index);
+  });
+
+  return indexByNodeId;
+};
+
+export const buildResolvedLinkRawTraceAliasMap = (
+  currentForest: SyntaxNode[],
+  resolvedRelationLinks: ResolvedRelationLink[] | undefined,
+  activeStepIndex: number
+): Map<string, string> => {
+  const rawAliasByIndex = new Map<string, string>();
+  const links = Array.isArray(resolvedRelationLinks) ? resolvedRelationLinks : [];
+  const assignFromNode = (nodeId?: string, index?: string) => {
+    const normalizedNodeId = String(nodeId || '').trim();
+    const normalizedIndex = normalizeTraceIndexForDisplay(index);
+    if (!normalizedNodeId || !normalizedIndex) return;
+    const node = findNodeByIdInForest(currentForest, normalizedNodeId);
+    if (!node) return;
+    collectLeafSyntaxNodes(node).forEach((leaf) => {
+      const rawSurface = String(leaf?.word || leaf?.label || '').trim();
+      const rawAlias = extractMovementIndex(rawSurface);
+      if (!rawAlias) return;
+      const normalizedAlias = String(rawAlias).trim().toLowerCase();
+      if (!normalizedAlias || rawAliasByIndex.has(normalizedAlias)) return;
+      rawAliasByIndex.set(normalizedAlias, normalizedIndex);
+    });
+  };
+
+  links.forEach((link) => {
+    const stepIndex = Number.isInteger(link?.stepIndex) ? Number(link.stepIndex) : 0;
+    if (stepIndex > activeStepIndex) return;
+    assignFromNode(link?.witnessNodeId, link?.relationIndex);
+    assignFromNode(link?.sourceNodeId, link?.relationIndex);
+  });
+
+  return rawAliasByIndex;
+};
+
+const getReadyNodePriority = (node: HierNode): number => {
+  const hasChildren = Boolean(node.children && node.children.length > 0);
+  if (hasChildren) return 1;
+  const leaf = resolveLeafSurface(node);
+  if (!leaf) return 2;
+  if (isIndexedSurface(leaf)) return 2;
+  if (isTraceLike(leaf)) return 3;
+  if (isNullLike(leaf)) return 4;
+  return 0;
+};
+
+const normalizeReplayCategoryKeyForOrdering = (value?: string | null): string => {
+  const raw = String(value || '')
+    .trim()
+    .replace(/[’′']/g, '')
+    .replace(/[â€™â€²']/g, '')
+    .replace(/[^A-Za-z]/g, '');
+  if (/^vP$/.test(raw)) return 'vP';
+  if (/^v$/.test(raw)) return 'v';
+  return raw.toUpperCase();
+};
+
+const getDerivationalChildRankForOrdering = (parent: HierNode, child: HierNode, childIndex: number): number => {
+  const parentLabel = String(parent.data?.label || '').trim();
+  const childLabel = String(child.data?.label || '').trim();
+  const parentKey = normalizeReplayCategoryKeyForOrdering(parent.data?.label);
+  const childKey = normalizeReplayCategoryKeyForOrdering(child.data?.label);
+  const childHasChildren = Boolean(child.children && child.children.length > 0);
+  const childHasOvert = subtreeHasOvertYield(child.data);
+  const childSurface = resolveLeafSurface(child);
+  const childIsSilent = isTraceLike(childSurface) || isNullLike(childSurface);
+  const childIsPredicateCore =
+    childKey === 'vP'
+    || childKey === 'v'
+    || childKey === 'VP'
+    || childKey === 'VOICEP'
+    || childKey === 'AP'
+    || childKey === 'PP'
+    || childKey === 'CP';
+
+  const parentIsBarProjection = /[’′']+$/.test(parentLabel);
+  const childIsMatchingHead =
+    parentIsBarProjection
+    && !/[’′']+$/.test(childLabel)
+    && childKey === parentKey;
+  if (parentIsBarProjection) {
+    // Complete the complement before selecting/projecting the head that will
+    // merge with it. Selecting every head first leaves illegal hanging
+    // branches across a right-branching X-bar spine.
+    return childIsMatchingHead ? 3 : 0;
+  }
+
+  if (parentKey === 'CP') {
+    if (childKey === 'C' || childKey === 'TP' || childKey === 'IP' || childKey === 'INFLP') return 0;
+    return 4;
+  }
+
+  if (parentKey === 'C') {
+    if (childKey === 'TP' || childKey === 'IP' || childKey === 'INFLP' || childKey === 'VP' || childKey === 'VOICEP') return 0;
+    return 3;
+  }
+
+  if (parentKey === 'TP' || parentKey === 'IP' || parentKey === 'INFLP') {
+    if (childIsPredicateCore || childKey === 'VPASS' || childKey === 'VPASSIVE') return 0;
+    if (childKey === 'T' || childKey === 'I' || childKey === 'INFL') return 3;
+    if (childKey === 'DP' || childKey === 'NP') return 4;
+  }
+
+  if (parentKey === 'VOICEP' || parentKey === 'VOICE') {
+    if (childKey === 'vP' || childKey === 'v' || childKey === 'VP') return 0;
+    if (childKey === 'PP') return 1;
+    if (childKey === 'VOICE') return 3;
+    if (childKey === 'DP' || childKey === 'NP') return 4;
+  }
+
+  if (parentKey === 'vP') {
+    if (childKey === 'v' || childKey === 'VP') return 0;
+    if (childKey === 'DP' || childKey === 'NP') return 4;
+  }
+
+  if (parentKey === 'v' || parentKey === 'V') {
+    if (childKey === 'VP') return 0;
+    if (childKey === 'v' || childKey === 'V') return 2;
+    if (childKey === 'DP' || childKey === 'NP') return 4;
+  }
+
+  if (parentKey === 'VP') {
+    if (childKey === 'V') return 0;
+    return childHasOvert && !childIsSilent ? 1 : 2;
+  }
+
+  if (parentKey === 'DP') {
+    if (childKey === 'D') return 0;
+    if (childKey === 'NP' || childKey === 'N') return 1;
+  }
+
+  if (parentKey === 'PP') {
+    if (childKey === 'P') return 0;
+    if (childKey === 'DP' || childKey === 'NP') return 1;
+  }
+
+  if (childHasChildren && childHasOvert) return 0;
+  if (childIsSilent) return 3;
+  return childIndex;
+};
+
+const buildBottomUpSequence = (root: HierNode, visibleIds: Set<string>): HierNode[] => {
+  const sequence: HierNode[] = [];
+
+  const visit = (node: HierNode) => {
+    const syntheticWorkspaceRoot = isSyntheticWorkspaceRootNode(node);
+    if (!syntheticWorkspaceRoot && !visibleIds.has(getNodeId(node))) return;
+    const visibleChildren = (node.children || [])
+      .filter((child) => visibleIds.has(getNodeId(child)))
+      .map((child, index) => ({ child, index }))
+      .sort((left, right) => {
+        const leftRank = getDerivationalChildRankForOrdering(node, left.child, left.index);
+        const rightRank = getDerivationalChildRankForOrdering(node, right.child, right.index);
+        return leftRank === rightRank ? left.index - right.index : leftRank - rightRank;
+      })
+      .map(({ child }) => child);
+    visibleChildren.forEach(visit);
+    if (!syntheticWorkspaceRoot && visibleIds.has(getNodeId(node))) {
+      sequence.push(node);
+    }
+  };
+
+  visit(root);
+  return sequence.filter((node) => visibleIds.has(getNodeId(node)));
+};
+
+const mapProvidedStepsToNodes = (
+  visibleNodes: HierNode[],
+  derivationSteps?: DerivationStep[]
+): Map<string, DerivationStep> => {
+  if (!derivationSteps || derivationSteps.length === 0) return new Map();
+
+  const nodeById = new Map(visibleNodes.map((node) => [getNodeId(node), node]));
+  const used = new Set<string>();
+  const mapped = new Map<string, DerivationStep>();
+
+  for (const step of derivationSteps) {
+    if (String(step.operation || '').trim() === 'SpellOut') continue;
+    if (isMoveLikeOperation(step.operation) || String(step.chainId || '').trim()) continue;
+    if (!step.targetNodeId) continue;
+    const chosen = nodeById.get(step.targetNodeId);
+    if (!chosen) continue;
+    const targetNodeId = getNodeId(chosen);
+    if (used.has(targetNodeId)) continue;
+    used.add(targetNodeId);
+    mapped.set(targetNodeId, step);
+  }
+
+  return mapped;
+};
+
+export const buildStructuralDerivationPlaybackSteps = (
+  forest: SyntaxNode[],
+  frameIndex: number,
+  previousVisibleNodeIds: Set<string>,
+  resolvedRelationLinks?: ResolvedRelationLink[],
+  revealRootIds?: Set<string>,
+  derivationFrames?: ReplayDerivationFrame[],
+  frame?: ReplayDerivationFrame,
+  sentence?: string,
+  suppressedRelationLinks?: ResolvedRelationLink[],
+  layoutScaffoldForest?: SyntaxNode[]
+): PlaybackStep[] => {
+  const sentenceInitialSurface = String(tokenizeReplaySentenceSurface(sentence)[0] || '').trim();
+  const effectiveRelationLinks = resolvedRelationLinks || [];
+  const structuralRelationLinks = filterResolvedRelationLinks(effectiveRelationLinks, suppressedRelationLinks);
+  const snapshotResolvedRelationLinks = Array.isArray(suppressedRelationLinks) && suppressedRelationLinks.length > 0
+    ? structuralRelationLinks
+    : resolvedRelationLinks;
+  const canvas = buildRenderableDerivationCanvasData(forest, structuralRelationLinks);
+  const cloned = cloneSyntaxTree(canvas);
+  if (!cloned) return [];
+  const hierarchy: HierNode = d3.hierarchy<SyntaxNode>(cloned);
+  applyVizIds(hierarchy);
+  const visibleNodes: HierNode[] = hierarchy
+    .descendants()
+    .filter((node) => !isSyntheticWorkspaceRootNode(node));
+  const visibleNodeById = new Map<string, HierNode>(visibleNodes.map((node) => [getNodeId(node), node] as const));
+  const visibleIds = new Set<string>(visibleNodes.map((node) => getNodeId(node)));
+  const rawNodeById = collectForestNodesById(forest);
+  const continuityVisibleNodeIds = (() => {
+    const seeded = new Set(previousVisibleNodeIds);
+    const hasOvertReplayDescendant = (node: HierNode): boolean =>
+      node.descendants().some((descendant) => {
+        if (isSyntheticWorkspaceRootNode(descendant)) return false;
+        const surface = resolveLeafSurface(descendant);
+        return Boolean(surface)
+          && !isTraceLike(surface)
+          && !isNullLike(surface)
+          && !isStructuralCategorySurface(surface);
+      });
+
+    visibleNodes.forEach((node) => {
+      const nodeId = getNodeId(node);
+      const lineageId = String(
+        (node.data as SyntaxNode)?.lineageId
+        || rawNodeById.get(nodeId)?.lineageId
+        || ''
+      ).trim();
+      if (!lineageId || !previousVisibleNodeIds.has(lineageId)) return;
+      if (!hasOvertReplayDescendant(node)) return;
+      node.descendants().forEach((descendant) => {
+        if (!isSyntheticWorkspaceRootNode(descendant)) {
+          seeded.add(getNodeId(descendant));
+        }
+      });
+    });
+
+    const previousFrameForest = frameIndex > 0 && Array.isArray(derivationFrames?.[frameIndex - 1]?.workspaceForest)
+      ? derivationFrames?.[frameIndex - 1]?.workspaceForest || []
+      : [];
+    const previousContinuitySubtrees = collectUniqueReplayContinuitySubtrees(previousFrameForest);
+    const currentContinuitySubtrees = new Map<string, HierNode[]>();
+    visibleNodes.forEach((node) => {
+      const signature = getReplayContinuitySubtreeSignature(node.data as SyntaxNode);
+      if (!signature || !previousContinuitySubtrees.has(signature)) return;
+      const entries = currentContinuitySubtrees.get(signature) || [];
+      entries.push(node);
+      currentContinuitySubtrees.set(signature, entries);
+    });
+    currentContinuitySubtrees.forEach((nodes, signature) => {
+      if (nodes.length !== 1) return;
+      const previousNode = previousContinuitySubtrees.get(signature);
+      const previousSubtreeIds = new Set(collectSubtreeNodeIds(previousNode));
+      const previousSubtreeWasVisible = Array.from(previousSubtreeIds).some((nodeId) =>
+        previousVisibleNodeIds.has(nodeId)
+      );
+      if (!previousSubtreeWasVisible) return;
+      nodes[0].descendants().forEach((descendant) => {
+        if (!isSyntheticWorkspaceRootNode(descendant)) {
+          seeded.add(getNodeId(descendant));
+        }
+      });
+    });
+
+    return seeded;
+  })();
+  const traceIndexByNodeId = buildResolvedLinkTraceIndexMap(
+    forest,
+    structuralRelationLinks,
+    frameIndex
+  );
+  const getReplayNodeLabel = (node: HierNode): string => {
+    const surface = resolveLeafSurface(node);
+    if (!isTraceLike(surface)) return resolveNodeLabel(node);
+    const inheritedTraceIndex = resolveTraceIndexFromNodeContext(node, traceIndexByNodeId);
+    return formatTraceSurfaceForDisplayValue(
+      surface,
+      inheritedTraceIndex || extractMovementIndex(surface)
+    );
+  };
+  const sequence = buildBottomUpSequence(hierarchy, visibleIds)
+    .filter((node) => !isSyntheticWorkspaceRootNode(node));
+  const nodesToReveal = sequence.filter((node) =>
+    (frameIndex === 0 || !continuityVisibleNodeIds.has(getNodeId(node)))
+    && (
+      !revealRootIds ||
+      revealRootIds.size === 0 ||
+      (() => {
+        let current: HierNode | null = node;
+        while (current) {
+          if (revealRootIds.has(getNodeId(current))) return true;
+          current = current.parent;
+        }
+        return false;
+      })()
+    )
+  );
+  const cumulativeVisibleNodeIds = new Set(continuityVisibleNodeIds);
+  const isUnrevealedClauseProjectionRoot = (
+    node: HierNode | null | undefined,
+    visibleNodeIdsForStep: Set<string>
+  ): boolean => {
+    if (!node || isSyntheticWorkspaceRootNode(node)) return false;
+    const nodeId = getNodeId(node);
+    if (!nodeId || visibleNodeIdsForStep.has(nodeId)) return false;
+    const label = String(node.data?.label || '').trim();
+    const children = Array.isArray(node.children) ? node.children : [];
+    const hasCHead = children.some((child) => String(child.data?.label || '').trim() === 'C');
+    const hasInflComplement = children.some((child) => /^(Infl|InflP|TP|IP|T)$/i.test(String(child.data?.label || '').trim()));
+    return (
+      /^cp(?:_|$)/i.test(nodeId)
+      || (label === 'C' && hasCHead && hasInflComplement)
+    );
+  };
+  const addReplayLayoutForNode = (
+    layoutVisibleNodeIds: Set<string>,
+    node: HierNode,
+    visibleNodeIdsForStep: Set<string>
+  ) => {
+    let topRenderableAncestor: HierNode = node;
+    while (
+      topRenderableAncestor.parent
+      && !isSyntheticWorkspaceRootNode(topRenderableAncestor.parent)
+    ) {
+      topRenderableAncestor = topRenderableAncestor.parent;
+    }
+
+    if (isUnrevealedClauseProjectionRoot(topRenderableAncestor, visibleNodeIdsForStep)) {
+      if (topRenderableAncestor === node && !visibleNodeIdsForStep.has(getNodeId(node))) return;
+      layoutVisibleNodeIds.add(getNodeId(topRenderableAncestor));
+      node.descendants().forEach((descendant) => {
+        if (!isSyntheticWorkspaceRootNode(descendant)) {
+          layoutVisibleNodeIds.add(getNodeId(descendant));
+        }
+      });
+      let current: HierNode | null = node.parent || null;
+      while (current && current !== topRenderableAncestor) {
+        if (!isSyntheticWorkspaceRootNode(current) && visibleNodeIdsForStep.has(getNodeId(current))) {
+          layoutVisibleNodeIds.add(getNodeId(current));
+        }
+        current = current.parent;
+      }
+      return;
+    }
+
+    topRenderableAncestor
+      .descendants()
+      .forEach((descendant) => {
+        if (!isSyntheticWorkspaceRootNode(descendant)) {
+          layoutVisibleNodeIds.add(getNodeId(descendant));
+        }
+      });
+  };
+  const playbackSteps: PlaybackStep[] = nodesToReveal.flatMap((node) => {
+    const nodeId = getNodeId(node);
+    cumulativeVisibleNodeIds.add(nodeId);
+    const surface = resolveLeafSurface(node);
+    const layoutVisibleNodeIds = new Set(cumulativeVisibleNodeIds);
+    Array.from(cumulativeVisibleNodeIds).forEach((visibleNodeId) => {
+      const visibleNode = visibleNodeById.get(visibleNodeId);
+      if (!visibleNode) return;
+      addReplayLayoutForNode(layoutVisibleNodeIds, visibleNode, cumulativeVisibleNodeIds);
+    });
+    const currentRevealIndex = nodesToReveal.findIndex((candidate) => getNodeId(candidate) === nodeId);
+    const pendingRevealNodes = currentRevealIndex >= 0
+      ? nodesToReveal.slice(currentRevealIndex + 1)
+      : [];
+    pendingRevealNodes.forEach((pendingNode) => {
+      addReplayLayoutForNode(layoutVisibleNodeIds, pendingNode, cumulativeVisibleNodeIds);
+    });
+    const childNodes = (node.children || []).filter((child) => visibleIds.has(getNodeId(child)));
+    const operation: DerivationStep['operation'] = childNodes.length === 0
+      ? 'LexicalSelect'
+      : (childNodes.length === 1 ? 'Project' : 'ExternalMerge');
+    const snapshotVisibleNodeIds = new Set(cumulativeVisibleNodeIds);
+
+    const visibleWorkspaceSnapshot = buildVisibleSyntaxSnapshotFromHierarchy(
+      hierarchy,
+      snapshotVisibleNodeIds
+    );
+    const activeLayoutScaffold = layoutScaffoldForest
+      && forestCanUseCurrentMaterialLayoutScaffold(forest, layoutScaffoldForest)
+        ? layoutScaffoldForest
+        : undefined;
+    const frameReplaySnapshot = buildDerivationReplaySnapshot(
+      forest,
+      frameIndex,
+      snapshotResolvedRelationLinks,
+      snapshotVisibleNodeIds,
+      layoutVisibleNodeIds,
+      derivationFrames,
+      undefined,
+      undefined,
+      activeLayoutScaffold
+    );
+    const workspaceAfter = extractReplayWorkspaceLabels(visibleWorkspaceSnapshot);
+    const visibleOvertLeafIds = collectPronouncedLeafNodeIdsInOrder(visibleWorkspaceSnapshot);
+    const rawTargetLabel = getReplayNodeLabel(node);
+    const targetLabel = childNodes.length === 0 && !isTraceLike(surface) && !isNullLike(surface)
+      ? maybeLowercaseSentenceInitialFunctionSurface({
+          surface: rawTargetLabel,
+          sentenceInitialSurface,
+          nodeId,
+          parentLabel: String(node.parent?.data?.label || '').trim(),
+          tokenIndex: Number(node.data?.tokenIndex),
+          visibleOvertLeafIds,
+          isWorkspaceForest: String(visibleWorkspaceSnapshot?.label || '').trim() === DERIVATION_WORKSPACE_ROOT_LABEL
+        })
+      : rawTargetLabel;
+    const preFrontingLexicalTargetLabel = targetLabel;
+    const sourceNodeIds = childNodes.map((child) => getNodeId(child));
+    const sourceLabels = childNodes.length > 0
+      ? childNodes.map((child) => getReplayNodeLabel(child)).filter(Boolean)
+      : [
+          isTraceLike(surface)
+            ? preFrontingLexicalTargetLabel
+            : maybeLowercaseSentenceInitialFunctionSurface({
+                surface: String(node.data.word || preFrontingLexicalTargetLabel || '').trim(),
+                sentenceInitialSurface,
+                nodeId,
+                parentLabel: String(node.parent?.data?.label || '').trim(),
+                tokenIndex: Number(node.data?.tokenIndex),
+                visibleOvertLeafIds,
+                isWorkspaceForest: String(visibleWorkspaceSnapshot?.label || '').trim() === DERIVATION_WORKSPACE_ROOT_LABEL
+              })
+        ].filter(Boolean);
+
+    return [{
+      operation,
+      sourceFrameIndex: frameIndex,
+      visualFrameIndex: frameIndex,
+      targetNodeId: nodeId,
+      targetLabel: preFrontingLexicalTargetLabel,
+      sourceNodeIds,
+      sourceLabels,
+      recipe: buildStructuralReplayFallback(operation, preFrontingLexicalTargetLabel, sourceLabels),
+      workspaceAfter,
+      replayFrameIndex: frameIndex,
+      replayCanvasData: frameReplaySnapshot.canvasData,
+      replayVisibleNodeIds: frameReplaySnapshot.visibleNodeIds,
+      replayRelationLinks: frameReplaySnapshot.relationLinks,
+      replayUsesFutureLayoutScaffold: Boolean(activeLayoutScaffold),
+      preserveReplayStep: undefined
+    }];
+  });
+
+  return playbackSteps;
+};
+
+const normalizeLabelKey = (label?: string): string => (label || "").trim().toUpperCase();
+/*
+ * Exact folded-identity movement classification. The substring/regex fallback
+ * that used to live here drew movement arrows for authored non-movement
+ * relations (an authored `CliticCluster` or `FocusShift` matched the
+ * pattern). Classification now consults the declared exact identity set and
+ * nothing else. Unlisted names are not movement — they dispatch through the
+ * exact registry and, when unregistered, take the neutral fallback
+ * presentation.
+ */
+const isMoveLikeOperation = (operation?: DerivationStep['operation'] | string): boolean =>
+  isMovementIdentity(String(operation || ''));
+
+const isResolvedMovementLink = (link?: ResolvedRelationLink | null): boolean => {
+  if (!link) return false;
+  if (link.renderFamily === 'trajectory') return true;
+  if (normalizeTrajectoryKind(link.trajectoryKind)) return true;
+  if (String((link as ReplayAuthoredRelationLink).authoredRelationKey || '').trim()) {
+    return isRegisteredTrajectoryRelation(link.relation, link.anchors);
+  }
+  return isMoveLikeOperation(link.relation || link.operation);
+};
+
+const getActiveReplayRelationLinks = (step?: PlaybackStep | null): ResolvedRelationLink[] => {
+  const links = Array.isArray(step?.replayRelationLinks) ? step.replayRelationLinks : [];
+  if (links.length === 0) return [];
+
+  const stageIndex = step?.replayRelationIdentity?.stageIndex;
+  const relationIndex = step?.replayRelationIdentity?.relationIndex;
+  if (Number.isInteger(stageIndex) && Number.isInteger(relationIndex)) {
+    const authoredRelationKey = `${stageIndex}:${relationIndex}`;
+    const exactLinks = links.filter((link) => (
+      String((link as ReplayAuthoredRelationLink).authoredRelationKey || '').trim()
+      === authoredRelationKey
+    ));
+    if (exactLinks.length > 0) return exactLinks;
+  }
+
+  if (step?.replayKind === 'relation') {
+    const authoredName = String(step.operation || '').trim();
+    return links.filter((link) => String(link?.relation || '').trim() === authoredName);
+  }
+
+  return !step?.replayKind ? links : [];
+};
+
+export const stepRepresentsMovement = (step?: PlaybackStep | null): boolean => {
+  if (!step) return false;
+  if (isMoveLikeOperation(step.operation)) return true;
+  if (getActiveReplayRelationLinks(step).some(isResolvedMovementLink)) return true;
+  if (String(step.chainId || '').trim()) return true;
+  if (isTraceLike(step.targetLabel)) return true;
+  return (Array.isArray(step.sourceLabels) ? step.sourceLabels : []).some((label) => isTraceLike(label));
+};
+
+const relationMomentUsesMovementSupport = (step: PlaybackStep): boolean => {
+  if (step.replayKind !== 'relation') return true;
+  return getActiveReplayRelationLinks(step).some(isResolvedMovementLink);
+};
+
+const stepMatchesSourceLabel = (step: PlaybackStep, sourceLabel: string): boolean => {
+  const normalizedSource = normalizeLabelKey(sourceLabel);
+  if (!normalizedSource) return false;
+  if (normalizeLabelKey(step.targetLabel) === normalizedSource) return true;
+
+  const recipe = (step.recipe || "").trim().toUpperCase();
+  if (!recipe) return false;
+  return recipe.startsWith(`SELECT ${normalizedSource}`);
+};
+
+const getMovementDependencyIndex = (steps: PlaybackStep[], stepIndex: number): number => {
+  const step = steps[stepIndex];
+  if (!step) return stepIndex;
+  if (!stepRepresentsMovement(step)) return stepIndex;
+
+  const sourceNodeIds = (step.sourceNodeIds || []).filter((id) => id && id !== step.targetNodeId);
+  if (sourceNodeIds.length > 0) {
+    let dependencyById = -1;
+    sourceNodeIds.forEach((sourceId) => {
+      steps.forEach((candidate, idx) => {
+        if (idx === stepIndex) return;
+        if (candidate.targetNodeId !== sourceId) return;
+        dependencyById = Math.max(dependencyById, idx);
+      });
+    });
+    if (dependencyById >= 0) return dependencyById;
+  }
+
+  const normalizedTarget = normalizeLabelKey(step.targetLabel);
+  const sourceLabels = (step.sourceLabels || [])
+    .map((label) => label.trim())
+    .filter((label) => label.length > 0)
+    .filter((label) => normalizeLabelKey(label) !== normalizedTarget);
+
+  if (sourceLabels.length === 0) return stepIndex;
+
+  let dependencyIndex = -1;
+  sourceLabels.forEach((sourceLabel) => {
+    steps.forEach((candidate, idx) => {
+      if (idx === stepIndex) return;
+      if (!stepMatchesSourceLabel(candidate, sourceLabel)) return;
+      dependencyIndex = Math.max(dependencyIndex, idx);
+    });
+  });
+
+  return dependencyIndex;
+};
+
+const getTraceDependencyIndex = (steps: PlaybackStep[], stepIndex: number): number => {
+  const step = steps[stepIndex];
+  if (!step) return stepIndex;
+  if (step.operation !== 'LexicalSelect') return stepIndex;
+  if (!isTraceLike(step.targetLabel)) return stepIndex;
+
+  const traceIndex = extractMovementIndex(step.targetLabel);
+  if (!traceIndex) return stepIndex;
+
+  let dependencyIndex = -1;
+
+  steps.forEach((candidate, idx) => {
+    if (idx === stepIndex) return;
+    if (!stepRepresentsMovement(candidate)) return;
+
+    const sourceMentionsIndex = (candidate.sourceLabels || []).some((label) => extractMovementIndex(label) === traceIndex);
+    const targetMentionsIndex = extractMovementIndex(candidate.targetLabel) === traceIndex;
+    const recipeMentionsIndex = (candidate.recipe || '').toLowerCase().includes(`_${traceIndex}`);
+
+    if (sourceMentionsIndex || targetMentionsIndex || recipeMentionsIndex) {
+      dependencyIndex = Math.max(dependencyIndex, idx);
+    }
+  });
+
+  if (dependencyIndex >= 0) return dependencyIndex;
+
+  steps.forEach((candidate, idx) => {
+    if (idx === stepIndex) return;
+    if (candidate.operation !== 'LexicalSelect') return;
+    const labelIndex = extractMovementIndex(candidate.targetLabel);
+    if (!labelIndex || labelIndex !== traceIndex) return;
+    if (isTraceLike(candidate.targetLabel)) return;
+    dependencyIndex = Math.max(dependencyIndex, idx);
+  });
+
+  return dependencyIndex;
+};
+
+const reorderMovementSteps = (steps: PlaybackStep[]): PlaybackStep[] => {
+  if (steps.length < 2) return steps;
+  const reordered = [...steps];
+
+  let changed = true;
+  let safety = 0;
+  while (changed && safety < reordered.length * reordered.length) {
+    changed = false;
+    safety += 1;
+
+    for (let idx = 0; idx < reordered.length; idx += 1) {
+      const step = reordered[idx];
+      if (stepRepresentsMovement(step)) {
+        const dependencyIndex = getMovementDependencyIndex(reordered, idx);
+        if (dependencyIndex >= idx) {
+          const [current] = reordered.splice(idx, 1);
+          const insertAt = Math.min(dependencyIndex, reordered.length - 1) + 1;
+          reordered.splice(insertAt, 0, current);
+          changed = true;
+          break;
+        }
+      }
+
+      if (step.operation === 'LexicalSelect' && isTraceLike(step.targetLabel)) {
+        const traceDependencyIndex = getTraceDependencyIndex(reordered, idx);
+        if (traceDependencyIndex >= idx) {
+          const [current] = reordered.splice(idx, 1);
+          const insertAt = Math.min(traceDependencyIndex, reordered.length - 1) + 1;
+          reordered.splice(insertAt, 0, current);
+          changed = true;
+          break;
+        }
+      }
+    }
+  }
+
+  return reordered;
+};
+
+const finalizeReplayStepOrder = (steps: PlaybackStep[]): PlaybackStep[] => {
+  if (steps.length < 2) return steps;
+  return reorderMovementSteps(steps);
+};
+
+export const buildPlaybackSteps = (
+  root: HierNode,
+  visibleNodes: HierNode[],
+  derivationSteps?: DerivationStep[],
+  labelResolver: (node: HierNode) => string = resolveNodeLabel
+): PlaybackStep[] => {
+  if (!derivationSteps || derivationSteps.length === 0) return [];
+
+  const mappedProvidedSteps = mapProvidedStepsToNodes(visibleNodes, derivationSteps);
+  const withProvided = Array.from(mappedProvidedSteps.values()).map((provided) => ({
+    operation: provided.operation || 'Other',
+    targetNodeId: provided.targetNodeId || '',
+    targetLabel: provided.targetLabel || '',
+    sourceNodeIds: provided.sourceNodeIds,
+    sourceLabels: provided.sourceLabels || [],
+    recipe: provided.recipe,
+    workspaceAfter: provided.workspaceAfter,
+    detailBlocks: provided.detailBlocks,
+    note: provided.note
+  }));
+  const mappedIds = new Set(withProvided.map((step) => step.targetNodeId));
+  const supplementalProvided = derivationSteps
+    .filter((step) => isMoveLikeOperation(step.operation) || String(step.chainId || '').trim())
+    .filter((step) => !step.targetNodeId || mappedIds.has(step.targetNodeId))
+    .map((step, index) => ({
+      operation: step.operation || 'Other',
+      targetNodeId: step.targetNodeId || `__derived_${index}`,
+      targetLabel: step.targetLabel || 'Derivation',
+      sourceNodeIds: step.sourceNodeIds,
+      sourceLabels: step.sourceLabels || [],
+      recipe: step.recipe || 'Derivation',
+      workspaceAfter: step.workspaceAfter,
+      detailBlocks: step.detailBlocks,
+      note: step.note
+    }));
+
+  return finalizeReplayStepOrder([...withProvided, ...supplementalProvided]);
+};
+
+export const decoratePlaybackStepsWithTraceIndices = (
+  steps: PlaybackStep[],
+  traceIndexByNodeId: Map<string, string>
+): PlaybackStep[] => {
+  if (steps.length === 0 || traceIndexByNodeId.size === 0) return steps;
+
+  const formatIndexedTraceLabel = (label?: string, nodeId?: string): string => {
+    const rawLabel = String(label || '').trim();
+    if (!rawLabel || !isTraceLike(rawLabel)) return rawLabel;
+    const fallbackIndex = nodeId ? traceIndexByNodeId.get(String(nodeId || '').trim()) : undefined;
+    return formatTraceSurfaceForDisplayValue(rawLabel, fallbackIndex || extractMovementIndex(rawLabel));
+  };
+
+  return steps.map((step) => {
+    const nextTargetLabel = formatIndexedTraceLabel(step.targetLabel, step.targetNodeId) || step.targetLabel;
+    const nextSourceLabels = Array.isArray(step.sourceLabels)
+      ? step.sourceLabels.map((label, index) =>
+          formatIndexedTraceLabel(label, step.sourceNodeIds?.[index]) || label
+        )
+      : step.sourceLabels;
+    const labelsChanged =
+      nextTargetLabel !== step.targetLabel
+      || JSON.stringify(nextSourceLabels || []) !== JSON.stringify(step.sourceLabels || []);
+    const nextRecipe = labelsChanged
+      ? buildStructuralReplayFallback(step.operation, nextTargetLabel, nextSourceLabels || [])
+      : step.recipe;
+
+    return {
+      ...step,
+      targetLabel: nextTargetLabel,
+      sourceLabels: nextSourceLabels,
+      recipe: nextRecipe
+    };
+  });
+};
+
+export const applyPreFrontingSentenceInitialCasing = (
+  steps: PlaybackStep[],
+  sentence: string
+): PlaybackStep[] => {
+  const firstSentenceToken = String(tokenizeReplaySentenceSurface(sentence)[0] || '').trim();
+  return firstSentenceToken
+    ? normalizeReplaySentenceInitialCasing(steps, firstSentenceToken)
+    : steps;
+};
+export const buildNodeStepIndex = (steps: PlaybackStep[]): Map<string, number> => {
+  return new Map(steps.map((step, idx) => [step.targetNodeId, idx]));
+};
+
+export const buildFirstRevealNodeStepIndex = (steps: PlaybackStep[]): Map<string, number> => {
+  const stepIndex = new Map<string, number>();
+  steps.forEach((step, idx) => {
+    const nodeId = String(step?.targetNodeId || '').trim();
+    if (!nodeId || stepIndex.has(nodeId)) return;
+    stepIndex.set(nodeId, idx);
+  });
+  return stepIndex;
+};
+
+const resolveMovementStepForLink = (
+  link: ResolvedRelationLink,
+  nodeStepIndex: Map<string, number>,
+  lastStep: number
+): number | undefined => {
+  const sourceNodeId = String(link.sourceNodeId || '').trim();
+  const targetNodeId = String(link.targetNodeId || '').trim();
+  const traceNodeId = String(link.witnessNodeId || '').trim();
+  const sourceStep = sourceNodeId ? nodeStepIndex.get(sourceNodeId) : undefined;
+  const targetStep = targetNodeId ? nodeStepIndex.get(targetNodeId) : undefined;
+  const traceStep = traceNodeId ? nodeStepIndex.get(traceNodeId) : undefined;
+
+  const rawStep = Number(link.stepIndex);
+  const explicitStep = Number.isInteger(rawStep) && rawStep >= 0 ? Math.min(rawStep, lastStep) : undefined;
+  const anchoredCandidates = [sourceStep, targetStep, traceStep].filter((step): step is number => step !== undefined);
+  const anchoredStep = anchoredCandidates.length > 0 ? Math.max(...anchoredCandidates) : undefined;
+
+  if (anchoredStep !== undefined && explicitStep !== undefined) {
+    return Math.max(explicitStep, anchoredStep);
+  }
+  if (anchoredStep !== undefined) return anchoredStep;
+  if (explicitStep !== undefined) return explicitStep;
+
+  return undefined;
+};
+
+const resolveVisibleMovementTargetNode = (
+  nodeById: Map<string, HierNode>,
+  link: ResolvedRelationLink
+): HierNode | undefined => nodeById.get(String(link?.targetNodeId || '').trim());
+
+export const buildDisplayRelationLinks = (
+  resolvedRelationLinks: ResolvedRelationLink[] | undefined
+): ResolvedRelationLink[] =>
+  (resolvedRelationLinks || []).map((link) => ({
+    ...link,
+    relationIndex: String(link?.relationIndex || '').trim(),
+    relation: String(link?.relation || link?.operation || '').trim() || undefined,
+    sourceNodeId: String(link?.sourceNodeId || '').trim(),
+    targetNodeId: String(link?.targetNodeId || '').trim(),
+    witnessNodeId: String(link?.witnessNodeId || '').trim() || undefined,
+    renderFamily: link?.renderFamily || 'trajectory',
+    trajectoryKind: normalizeTrajectoryKind(link?.trajectoryKind) || undefined,
+    chainId: String(link?.chainId || '').trim() || undefined
+  }));
+
+export const buildMovementArrowsFromLinks = (
+  visibleNodes: HierNode[],
+  resolvedRelationLinks: ResolvedRelationLink[] | undefined,
+  nodeStepIndex: Map<string, number>,
+  playbackSteps: PlaybackStep[]
+): MovementArrow[] => {
+  if (!resolvedRelationLinks || resolvedRelationLinks.length === 0) return [];
+
+  const nodeById = new Map(visibleNodes.map((node) => [getNodeId(node), node]));
+  const pickTraceLikeLeafDescendant = (node?: HierNode): HierNode | undefined => {
+    if (!node) return undefined;
+    return node
+      .descendants()
+      .find((candidate) => {
+        const children = candidate.children || [];
+        if (children.length > 0) return false;
+        const surface = resolveLeafSurface(candidate);
+        return isTraceLike(surface) || isNullLike(surface);
+      });
+  };
+  /*
+   * The fail-closed endpoint law, preserving Babel's established head-versus-
+   * phrasal endpoint convention.
+   *
+   * - Phrasal movement departs from the authored lower trace TERMINAL (the
+   *   witness's display leaf) and lands on the authored landing PHRASE SHELL.
+   *   A phrasal link without a resolvable witness draws nothing — no other
+   *   leaf or shell is ever substituted.
+   * - Head movement (including reverse-direction head lowering) runs
+   *   terminal-to-terminal: from the trace terminal to the pronounced head
+   *   terminal, never a C/T/V preterminal shell.
+   *
+   * The only descent permitted is display resolution *inside the anchored
+   * node's own subtree*: an authored anchor often names a preterminal whose
+   * visible word replay materialized as a terminal child, and resolving that
+   * child is deterministic interpretation of the same authored anchor. The
+   * old ladder — any trace-like leaf anywhere, else any overt leaf, else an
+   * ancestor phrase shell — chose endpoints the analysis never pointed at,
+   * and is gone.
+   */
+  const pickOvertLeafDescendant = (node?: HierNode): HierNode | undefined => {
+    if (!node) return undefined;
+    return node
+      .descendants()
+      .find((candidate) => {
+        const children = candidate.children || [];
+        if (children.length > 0) return false;
+        const surface = resolveLeafSurface(candidate);
+        return Boolean(surface)
+          && !isTraceLike(surface)
+          && !isNullLike(surface)
+          && !isStructuralCategorySurface(surface);
+      });
+  };
+  const resolveWitnessDisplayLeaf = (node?: HierNode): HierNode | undefined => {
+    if (!node) return undefined;
+    return pickTraceLikeLeafDescendant(node) || node;
+  };
+  const resolveHeadTerminalDisplayLeaf = (
+    node?: HierNode,
+    preferTrace = false
+  ): HierNode | undefined => {
+    if (!node) return undefined;
+    if (!(node.children || []).length) return node;
+    return preferTrace
+      ? (pickTraceLikeLeafDescendant(node) || pickOvertLeafDescendant(node))
+      : (pickOvertLeafDescendant(node) || pickTraceLikeLeafDescendant(node));
+  };
+  const displayLinks = buildDisplayRelationLinks(resolvedRelationLinks);
+  const arrows: MovementArrow[] = [];
+  const seen = new Set<string>();
+  const lastStep = playbackSteps.length > 0 ? playbackSteps.length - 1 : 0;
+
+  displayLinks.filter(isResolvedMovementLink).forEach((link) => {
+    const rawSource = nodeById.get(String(link.sourceNodeId || '').trim());
+    const rawTarget = resolveVisibleMovementTargetNode(nodeById, link);
+    const authoredWitnessId = String(link.witnessNodeId || '').trim();
+    const rawTraceNode = authoredWitnessId
+      ? nodeById.get(authoredWitnessId) || undefined
+      : undefined;
+    // An authored witness that does not resolve fails the arrow closed.
+    if (authoredWitnessId && !rawTraceNode) return;
+    const traceLeaf = rawTraceNode ? pickTraceLikeLeafDescendant(rawTraceNode) : undefined;
+    const traceNode = traceLeaf || rawTraceNode;
+    const linkLooksHeadLike = isHeadLikeResolvedRelation(link, nodeById);
+    /*
+     * Head movement runs terminal-to-terminal: the trace terminal (witness
+     * first, else the source anchor's own display terminal) to the pronounced
+     * head terminal inside the authored target — never a preterminal shell.
+     * Phrasal movement departs from the witness's trace terminal and lands on
+     * the authored landing phrase shell; without a resolvable witness the
+     * phrasal drawing is refused rather than repaired from another node.
+     */
+    const displaySource = linkLooksHeadLike
+      ? (resolveWitnessDisplayLeaf(rawTraceNode) || resolveHeadTerminalDisplayLeaf(rawSource, true))
+      : resolveWitnessDisplayLeaf(rawTraceNode);
+    const displayTarget = linkLooksHeadLike
+      ? resolveHeadTerminalDisplayLeaf(rawTarget)
+      : rawTarget;
+    if (!displaySource || !displayTarget) return;
+    const sourceId = getNodeId(displaySource);
+    const targetId = getNodeId(displayTarget);
+    if (sourceId === targetId) return;
+
+    const key = `${sourceId}->${targetId}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    const step = resolveMovementStepForLink(
+      {
+        ...link,
+        sourceNodeId: sourceId,
+        targetNodeId: targetId,
+        witnessNodeId: traceNode ? getNodeId(traceNode) : undefined
+      },
+      nodeStepIndex,
+      lastStep
+    );
+    if (step === undefined) return;
+    arrows.push({
+      source: displaySource,
+      sourceOccurrence: rawSource,
+      target: displayTarget,
+      traceNode: traceNode || undefined,
+      step,
+      index: null,
+      operation: link.operation,
+      trajectoryKind: normalizeTrajectoryKind(link.trajectoryKind) || (linkLooksHeadLike ? 'head' : 'phrasal')
+    });
+  });
+
+  const arrowsByDisplayOrder = [...arrows].sort((a, b) => {
+    if (a.step !== b.step) return a.step - b.step;
+    const aSourceY = Number(a.source?.y || 0);
+    const bSourceY = Number(b.source?.y || 0);
+    if (aSourceY !== bSourceY) return bSourceY - aSourceY;
+    const aSourceX = Number(a.source?.x || 0);
+    const bSourceX = Number(b.source?.x || 0);
+    if (aSourceX !== bSourceX) return aSourceX - bSourceX;
+    const aTargetX = Number(a.target?.x || 0);
+    const bTargetX = Number(b.target?.x || 0);
+    return aTargetX - bTargetX;
+  });
+  const arrowParent = new Map<string, string>();
+  const findArrowRoot = (nodeId: string): string => {
+    const currentParent = arrowParent.get(nodeId);
+    if (!currentParent) {
+      arrowParent.set(nodeId, nodeId);
+      return nodeId;
+    }
+    if (currentParent === nodeId) return nodeId;
+    const root = findArrowRoot(currentParent);
+    arrowParent.set(nodeId, root);
+    return root;
+  };
+  const unionArrowNodes = (left: string, right: string) => {
+    if (!left || !right) return;
+    const leftRoot = findArrowRoot(left);
+    const rightRoot = findArrowRoot(right);
+    if (leftRoot !== rightRoot) arrowParent.set(rightRoot, leftRoot);
+  };
+  arrowsByDisplayOrder.forEach((arrow) => {
+    const sourceOccurrenceId = arrow.sourceOccurrence
+      ? getNodeId(arrow.sourceOccurrence)
+      : getNodeId(arrow.source);
+    unionArrowNodes(sourceOccurrenceId, getNodeId(arrow.target));
+  });
+  const displayIndexByComponent = new Map<string, string>();
+  /*
+   * Chain indices express authored relation order, not where a source happens
+   * to land on the canvas. Keep the spatial sort for painting only; assigning
+   * numbers from it reverses nested remnant, roll-up, and smuggling chains.
+   */
+  arrows.forEach((arrow) => {
+    const sourceOccurrenceId = arrow.sourceOccurrence
+      ? getNodeId(arrow.sourceOccurrence)
+      : getNodeId(arrow.source);
+    const root = findArrowRoot(sourceOccurrenceId);
+    if (!displayIndexByComponent.has(root)) {
+      displayIndexByComponent.set(root, String(displayIndexByComponent.size + 1));
+    }
+    arrow.index = displayIndexByComponent.get(root) || '1';
+  });
+
+  return arrows;
+};
+
+const collectHierarchyLineageIds = (root?: HierNode): Set<string> => new Set(
+  (root ? root.descendants() : [])
+    .map((candidate) => String(candidate.data?.lineageId || '').trim())
+    .filter(Boolean)
+);
+
+const collectHierarchyLineageContext = (node: HierNode): Set<string> => {
+  const lineageIds = new Set<string>();
+  let current: HierNode | null = node;
+  while (current) {
+    const lineageId = String(current.data?.lineageId || '').trim();
+    if (lineageId) lineageIds.add(lineageId);
+    current = current.parent;
+  }
+  return lineageIds;
+};
+
+/**
+ * Resolve each silent terminal to the smallest moved constituent that owns its
+ * lineage. A larger remnant/carrier movement must not overwrite a nested
+ * object's chain number, while a later movement of that nested object must
+ * update every occurrence of its own lineage.
+ */
+export const buildMovementCopyTraceIndexByTerminalId = (
+  movementArrows: MovementArrow[]
+): Map<string, string> => {
+  const traceIndexByTerminalId = new Map<string, string>();
+  const phrasalArrows = movementArrows.filter((arrow) =>
+    normalizeTrajectoryKind(arrow.trajectoryKind) === 'phrasal'
+  );
+  const candidates: MovementCopyTraceCandidate[] = [];
+
+  phrasalArrows.forEach((arrow, authoredOrder) => {
+    const sourceOccurrence = arrow.sourceOccurrence;
+    if (!sourceOccurrence || !(sourceOccurrence.children || []).length) return;
+    const lexicalLeaves = sourceOccurrence.descendants().filter((candidate) => {
+      if ((candidate.children || []).length > 0) return false;
+      const surface = resolveLeafSurface(candidate);
+      return Boolean(surface)
+        && !isTraceLike(surface)
+        && !isNullLike(surface)
+        && !isStructuralCategorySurface(surface);
+    });
+    if (lexicalLeaves.length === 0) return;
+    const whollySilentLexicalCopy = lexicalLeaves.every((leaf) => {
+      let current: HierNode | null = leaf;
+      while (current) {
+        if ((current.data as SyntaxNode)?.silent === true || (current.data as any)?.ghost === true) {
+          return true;
+        }
+        if (current === sourceOccurrence) break;
+        current = current.parent;
+      }
+      return false;
+    });
+    if (!whollySilentLexicalCopy) return;
+
+    const sourceLineageIds = collectHierarchyLineageIds(sourceOccurrence);
+    const targetLineageIds = collectHierarchyLineageIds(arrow.target);
+    const commonLineageIds = new Set(
+      Array.from(sourceLineageIds).filter((lineageId) => targetLineageIds.has(lineageId))
+    );
+    candidates.push({
+      arrow,
+      authoredOrder,
+      commonLineageIds,
+      sourceNodeCount: sourceOccurrence.descendants().length,
+      lexicalLeaves
+    });
+  });
+
+  const eligibleLeaves = new Map<string, HierNode>();
+  candidates.forEach((candidate) => {
+    candidate.lexicalLeaves.forEach((leaf) => eligibleLeaves.set(getNodeId(leaf), leaf));
+  });
+  eligibleLeaves.forEach((leaf, leafId) => {
+    const lineageContext = collectHierarchyLineageContext(leaf);
+    const matchingCandidates = candidates.filter((candidate) => (
+      candidate.lexicalLeaves.some((candidateLeaf) => getNodeId(candidateLeaf) === leafId)
+      || Array.from(lineageContext).some((lineageId) => candidate.commonLineageIds.has(lineageId))
+    ));
+    matchingCandidates.sort((left, right) => (
+      left.sourceNodeCount - right.sourceNodeCount
+      || left.commonLineageIds.size - right.commonLineageIds.size
+      || left.authoredOrder - right.authoredOrder
+    ));
+    const chosen = matchingCandidates[0];
+    const index = normalizeTraceIndexForDisplay(chosen?.arrow.index) || '';
+    if (chosen && index) traceIndexByTerminalId.set(leafId, index);
+  });
+
+  return traceIndexByTerminalId;
+};
+
+export const formatOperationLabel = (operation?: DerivationStep['operation']): string => {
+  if (!operation) return 'Derivation';
+  if (operation === 'Other') return 'Derivation';
+  if (operation === 'LexicalSelect') return 'Select';
+  if (operation === 'HeadMove') return 'Head Movement';
+  if (operation === 'A-Move') return 'A-Movement';
+  if (operation === 'AbarMove') return 'A-bar Move';
+  return String(operation)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (ch) => ch.toUpperCase())
+    .trim();
+};
+
+export const formatPlaybackOperationTitle = (step?: PlaybackStep | null): string => {
+  const baseLabel = formatOperationLabel(step?.operation);
+  const recipe = String(step?.recipe || '').trim();
+  if (step?.replayKind === 'macro') {
+    return recipe || baseLabel;
+  }
+  if (!recipe || isLowSignalReplayText(recipe) || stepRepresentsMovement(step)) {
+    return baseLabel;
+  }
+  const operation = String(step?.operation || '').trim();
+  if (operation === 'LexicalSelect' || operation === 'Project') {
+    return recipe;
+  }
+  return baseLabel;
+};
+
+const REPLAY_IDENTIFIER_OVERRIDES: Record<string, string> = {
+  chain_wh: 'Wh',
+  chain_subj: 'Subject',
+  chain_v_to_c: 'V to C',
+  dp_obj: 'object DP',
+  dp_subj: 'subject DP',
+  infl_p: 'InflP',
+  foc_p: 'FocP',
+  phase_edge: 'Phase edge',
+  'phase-edge': 'Phase edge'
+};
+
+const REPLAY_STRUCTURAL_IDENTIFIER_MAP: Record<string, string> = {
+  c: 'C',
+  cp: 'CP',
+  d: 'D',
+  dp: 'DP',
+  foc: 'Foc',
+  focp: 'FocP',
+  infl: 'Infl',
+  inflp: 'InflP',
+  ip: 'IP',
+  n: 'N',
+  np: 'NP',
+  prt: 'Prt',
+  t: 'T',
+  tp: 'TP',
+  v: 'v',
+  vp: 'vP',
+  wh: 'Wh'
+};
+
+const toReplayTitleCase = (value?: string): string =>
+  String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => {
+      if (/^[A-Z]{2,}$/.test(word)) return word;
+      const lower = word.toLowerCase();
+      return `${lower.charAt(0).toUpperCase()}${lower.slice(1)}`;
+    })
+    .join(' ');
+
+const splitReplayPrimeSuffix = (value?: string): { core: string; suffix: string } => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return { core: '', suffix: '' };
+  const match = trimmed.match(/^(.*?)(['′]+)$/);
+  if (!match) return { core: trimmed, suffix: '' };
+  return {
+    core: String(match[1] || '').trim(),
+    suffix: match[2]
+  };
+};
+
+const preserveCommittedReplayLabelCasing = (value?: string): string => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  if (/^[A-Z]$/.test(trimmed)) return trimmed;
+  if (/^[A-Z]{2,}$/.test(trimmed)) return trimmed;
+  if (/[A-Z]/.test(trimmed.slice(1))) return trimmed;
+  return '';
+};
+
+const formatReplayIdentifierWord = (value?: string): string => {
+  const { core, suffix } = splitReplayPrimeSuffix(value);
+  const trimmed = core;
+  if (!trimmed) return suffix;
+  const preserved = preserveCommittedReplayLabelCasing(trimmed);
+  if (preserved) return `${preserved}${suffix}`;
+  const normalized = trimmed.toLowerCase();
+  if (REPLAY_IDENTIFIER_OVERRIDES[normalized]) return `${REPLAY_IDENTIFIER_OVERRIDES[normalized]}${suffix}`;
+  if (REPLAY_STRUCTURAL_IDENTIFIER_MAP[normalized]) return `${REPLAY_STRUCTURAL_IDENTIFIER_MAP[normalized]}${suffix}`;
+  if (/^\d+$/.test(trimmed)) return `${trimmed}${suffix}`;
+  if (normalized === 'obj') return `object${suffix}`;
+  if (normalized === 'subj') return `subject${suffix}`;
+  if (normalized === 'wh') return `wh${suffix}`;
+  if (normalized === 'to') return `to${suffix}`;
+  if (trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed)) return `${trimmed}${suffix}`;
+  if (/^[A-Z][a-z]+$/.test(trimmed)) return `${trimmed}${suffix}`;
+  return `${trimmed.toLowerCase()}${suffix}`;
+};
+
+const formatReplayIdentifier = (value?: string): string => {
+  const { core, suffix } = splitReplayPrimeSuffix(value);
+  const trimmed = core;
+  if (!trimmed) return suffix;
+  const preserved = preserveCommittedReplayLabelCasing(trimmed);
+  if (preserved) return `${preserved}${suffix}`;
+  const normalized = trimmed.toLowerCase();
+  if (REPLAY_IDENTIFIER_OVERRIDES[normalized]) return `${REPLAY_IDENTIFIER_OVERRIDES[normalized]}${suffix}`;
+  if (REPLAY_STRUCTURAL_IDENTIFIER_MAP[normalized]) return `${REPLAY_STRUCTURAL_IDENTIFIER_MAP[normalized]}${suffix}`;
+  const parts = trimmed.split(/[_-]+/).filter(Boolean);
+  if (parts.length === 1) return formatReplayIdentifierWord(`${trimmed}${suffix}`);
+  const joined = parts.map((part) => formatReplayIdentifierWord(part)).join(' ');
+  const cased = /^[a-z]/.test(joined) ? joined : toReplayTitleCase(joined);
+  return `${cased}${suffix}`;
+};
+
+const replaceReplayIdentifiersInText = (value?: string): string => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  return trimmed.replace(/\b[A-Za-z][A-Za-z0-9_-]*\b/g, (token) => {
+    const replacement = formatReplayIdentifier(token);
+    return replacement || token;
+  });
+};
+
+export const formatReplayBlockTitle = (title?: string): string => {
+  const trimmed = String(title || '').trim();
+  if (!trimmed) return '';
+  return toReplayTitleCase(trimmed.replace(/[_-]+/g, ' ').toLowerCase());
+};
+
+export const formatReplayBlockLine = (
+  title: string,
+  line: string,
+  steps: PlaybackStep[] = []
+): string => {
+  const trimmed = normalizeReplayTextForCommittedInventory(line, steps).trim();
+  if (!trimmed) return '';
+  const normalizedTitle = String(title || '').trim().toUpperCase();
+  if (normalizedTitle === 'SELECTION') {
+    return trimmed.replace(
+      /^(.+?)\s+selects\s+([A-Za-z][A-Za-z0-9_-]*)$/i,
+      (_match, selector, target) => `${replaceReplayIdentifiersInText(selector)} selects ${formatReplayIdentifier(target)}`
+    );
+  }
+  if (normalizedTitle === 'LOCALITY') {
+    return replaceReplayIdentifiersInText(trimmed);
+  }
+  return replaceReplayIdentifiersInText(trimmed);
+};
+
+const normalizeReplayBlockTitleKey = (title?: string): string =>
+  String(title || '').trim().toUpperCase();
+
+const normalizeReplayTargetLabel = (label?: string): string =>
+  String(label || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '');
+
+const isGenericReplayStructuralLabel = (label?: string): boolean => {
+  const normalized = normalizeReplayTargetLabel(label);
+  if (!normalized) return true;
+  return new Set([
+    'WORKSPACE',
+    'CP',
+    'C',
+    'TP',
+    'T',
+    "T'",
+    'TBAR',
+    'VP',
+    'V',
+    "V'",
+    'VBAR',
+    'DP',
+    'D',
+    "D'",
+    'DBAR',
+    'NP',
+    'N',
+    "N'",
+    'NBAR',
+    'PP',
+    'P',
+    "P'",
+    'PBAR',
+    'IP',
+    'FP',
+    'XP'
+  ]).has(normalized);
+};
+
+const formatReplaySupportValue = (value?: string): string =>
+  replaceReplayIdentifiersInText(
+    String(value || '')
+      .replace(/[_]+/g, ' ')
+      .trim()
+  );
+
+const normalizeReplayInventoryLabel = (value?: string): string =>
+  normalizeReplayTargetLabel(value).replace(/['′]+/g, '');
+
+const detectReplayInflectionInventory = (steps: PlaybackStep[] = []): 't' | 'infl' | null => {
+  const labels = new Set<string>();
+  steps.forEach((step) => {
+    [step?.targetLabel, ...(Array.isArray(step?.sourceLabels) ? step.sourceLabels : [])]
+      .map((label) => normalizeReplayInventoryLabel(label))
+      .filter(Boolean)
+      .forEach((label) => labels.add(label));
+  });
+  const usesT = labels.has('T') || labels.has('TP');
+  const usesInfl = labels.has('INFL') || labels.has('INFLP') || labels.has('IP');
+  if (usesT && !usesInfl) return 't';
+  if (usesInfl && !usesT) return 'infl';
+  return null;
+};
+
+const normalizeReplayTextForCommittedInventory = (
+  value?: string,
+  steps: PlaybackStep[] = []
+): string => {
+  const text = String(value || '');
+  if (!text) return '';
+  const inventory = detectReplayInflectionInventory(steps);
+  if (inventory === 't') {
+    return text
+      .replace(/\bInflP\b/gi, 'TP')
+      .replace(/\bIP\b/g, 'TP')
+      .replace(/\bInfl\b/gi, 'T');
+  }
+  if (inventory === 'infl') {
+    return text
+      .replace(/\bTP\b/g, 'InflP')
+      .replace(/\bT\b/g, 'Infl');
+  }
+  return text;
+};
+
+const findReplayNodePathById = (
+  root: SyntaxNode | null | undefined,
+  nodeId: string,
+  trail: SyntaxNode[] = []
+): SyntaxNode[] | null => {
+  if (!root || !nodeId) return null;
+  const currentTrail = [...trail, root];
+  if (String(root.id || '').trim() === nodeId) return currentTrail;
+  const children = Array.isArray(root.children) ? root.children : [];
+  for (const child of children) {
+    const match = findReplayNodePathById(child, nodeId, currentTrail);
+    if (match) return match;
+  }
+  return null;
+};
+
+const describeReplayNodePosition = (
+  root: SyntaxNode | null | undefined,
+  nodeId?: string
+): string => {
+  const normalizedNodeId = String(nodeId || '').trim();
+  if (!root || !normalizedNodeId) return '';
+  const path = findReplayNodePathById(root, normalizedNodeId);
+  if (!path || path.length === 0) return '';
+
+  let node = path[path.length - 1];
+  let parent = path[path.length - 2];
+  const grandparent = path[path.length - 3];
+  const parentLabelRaw = String(parent?.label || '').trim();
+  const nodeLabelRaw = String(node?.label || '').trim();
+  if (
+    parent
+    && grandparent
+    && parentLabelRaw
+    && nodeLabelRaw
+    && normalizeReplayTargetLabel(parentLabelRaw) === normalizeReplayTargetLabel(nodeLabelRaw)
+  ) {
+    node = parent;
+    parent = grandparent;
+  }
+  const nodeLabel = formatReplaySupportValue(node?.label);
+  if (!parent) return nodeLabel;
+
+  const parentLabel = formatReplaySupportValue(parent?.label);
+  const parentChildren = Array.isArray(parent?.children) ? parent.children : [];
+  const childIndex = parentChildren.findIndex((child) => String(child?.id || '').trim() === normalizedNodeId);
+  const sibling = childIndex >= 0
+    ? parentChildren.find((_, index) => index !== childIndex)
+    : null;
+  const siblingLabel = formatReplaySupportValue(sibling?.label);
+  const { core: parentCore, suffix: parentSuffix } = splitReplayPrimeSuffix(parentLabel);
+  const parentHasPrime = Boolean(parentSuffix);
+  const parentIsMaxProjection = /P$/i.test(parentCore);
+  const siblingLooksLikeProjection = Boolean(siblingLabel) && (/[P]$/i.test(splitReplayPrimeSuffix(siblingLabel).core) || /['′]+$/.test(siblingLabel));
+
+  if (childIndex === 0 && parentIsMaxProjection && siblingLooksLikeProjection) {
+    return `Spec,${parentLabel}`;
+  }
+  if (childIndex === 1 && parentHasPrime) {
+    return `complement of ${parentCore}`;
+  }
+  if (childIndex === 0 && parentHasPrime) {
+    return nodeLabel || `head of ${parentCore}`;
+  }
+  return parentLabel ? `${nodeLabel || 'node'} in ${parentLabel}` : nodeLabel;
+};
+
+const formatReplayInputsValue = (labels?: string[]): string =>
+  (Array.isArray(labels) ? labels : [])
+    .map((label) => formatReplaySupportValue(label))
+    .filter(Boolean)
+    .join(' + ');
+
+const getReplayNodeDisplayFromCanvas = (
+  root: SyntaxNode | null | undefined,
+  nodeId?: string
+): string => {
+  const normalizedNodeId = String(nodeId || '').trim();
+  if (!root || !normalizedNodeId) return '';
+  const node = findNodeByIdInForest([root], normalizedNodeId);
+  if (!node) return '';
+  const label = formatReplaySupportValue(String(node.label || '').trim());
+  if (isTraceOrNullLikeNode(node)) return label;
+  const overtYield: string[] = [];
+  const collectSurfaceLeaves = (candidate?: SyntaxNode | null) => {
+    if (!candidate || typeof candidate !== 'object') return;
+    if ((candidate as any).silent === true) return;
+    const children = Array.isArray(candidate.children) ? candidate.children : [];
+    if (children.length === 0) {
+      if (isTraceOrNullLikeNode(candidate)) return;
+      const rawWord = String((candidate as any).word || '').trim();
+      const rawLabel = String(candidate.label || '').trim();
+      const fallbackLeafSurface = rawWord
+        || ((/[a-z\u00C0-\uFFFF]/.test(rawLabel) && !/^[A-Z][A-Z'0-9,-]*$/.test(rawLabel)) ? rawLabel : '');
+      const surface = formatReplaySupportValue(fallbackLeafSurface);
+      if (surface) overtYield.push(surface);
+      return;
+    }
+    children.forEach((child) => collectSurfaceLeaves(child));
+  };
+  collectSurfaceLeaves(node);
+  const uniqueYield = Array.from(new Set(overtYield));
+  if (uniqueYield.length === 1 && label && normalizeReplayTargetLabel(uniqueYield[0]) !== normalizeReplayTargetLabel(label)) {
+    return `${uniqueYield[0]} (${label})`;
+  }
+  return uniqueYield[0] || label;
+};
+
+const getReplayNodeOvertYieldFromCanvas = (
+  root: SyntaxNode | null | undefined,
+  nodeId?: string
+): string => {
+  const normalizedNodeId = String(nodeId || '').trim();
+  if (!root || !normalizedNodeId) return '';
+  const node = findNodeByIdInForest([root], normalizedNodeId);
+  if (!node || isTraceOrNullLikeNode(node)) return '';
+  const overtYield: string[] = [];
+  const collectSurfaceLeaves = (candidate?: SyntaxNode | null) => {
+    if (!candidate || typeof candidate !== 'object') return;
+    if ((candidate as any).silent === true) return;
+    const children = Array.isArray(candidate.children) ? candidate.children : [];
+    if (children.length === 0) {
+      if (isTraceOrNullLikeNode(candidate)) return;
+      const rawWord = String((candidate as any).word || '').trim();
+      const rawLabel = String(candidate.label || '').trim();
+      const fallbackLeafSurface = rawWord
+        || ((/[a-z\u00C0-\uFFFF]/.test(rawLabel) && !/^[A-Z][A-Z'0-9,-]*$/.test(rawLabel)) ? rawLabel : '');
+      const surface = formatReplaySupportValue(fallbackLeafSurface);
+      if (surface) overtYield.push(surface);
+      return;
+    }
+    children.forEach((child) => collectSurfaceLeaves(child));
+  };
+  collectSurfaceLeaves(node);
+  return overtYield.join(' ').trim();
+};
+
+const getReplayNodeAuthoredYieldFromCanvas = (
+  root: SyntaxNode | null | undefined,
+  nodeId?: string
+): string => {
+  const normalizedNodeId = String(nodeId || '').trim();
+  if (!root || !normalizedNodeId) return '';
+  const node = findNodeByIdInForest([root], normalizedNodeId);
+  if (!node || isTraceOrNullLikeNode(node)) return '';
+  const surfaces: string[] = [];
+  const seenLineages = new Set<string>();
+  const collectSurfaceLeaves = (candidate?: SyntaxNode | null) => {
+    if (!candidate || typeof candidate !== 'object') return;
+    const children = Array.isArray(candidate.children) ? candidate.children : [];
+    if (children.length > 0) {
+      children.forEach((child) => collectSurfaceLeaves(child));
+      return;
+    }
+    if (isTraceOrNullLikeNode(candidate)) return;
+    const lineageId = String(candidate.lineageId || '').trim();
+    if (lineageId && seenLineages.has(lineageId)) return;
+    const rawWord = String((candidate as any).word || '').trim();
+    const rawLabel = String(candidate.label || '').trim();
+    const fallbackLeafSurface = rawWord
+      || ((/[a-z\u00C0-\uFFFF]/.test(rawLabel) && !/^[A-Z][A-Z'0-9,-]*$/.test(rawLabel)) ? rawLabel : '');
+    const surface = formatReplaySupportValue(fallbackLeafSurface);
+    if (!surface) return;
+    if (lineageId) seenLineages.add(lineageId);
+    surfaces.push(surface);
+  };
+  collectSurfaceLeaves(node);
+  return surfaces.join(' ').trim();
+};
+
+const getReplayNodeCategoryFromCanvas = (
+  root: SyntaxNode | null | undefined,
+  nodeId?: string
+): string => {
+  const normalizedNodeId = String(nodeId || '').trim();
+  if (!root || !normalizedNodeId) return '';
+  const node = findNodeByIdInForest([root], normalizedNodeId);
+  if (!node) return '';
+  return formatReplaySupportValue(String(node.label || '').trim());
+};
+
+const getFrameDetailsRecord = (frame?: ReplayDerivationFrame | null): Record<string, unknown> => (
+  frame?.change?.details && typeof frame.change.details === 'object' && !Array.isArray(frame.change.details)
+    ? frame.change.details as Record<string, unknown>
+    : {}
+);
+
+const getFrameStageRecordText = (
+  frame?: ReplayDerivationFrame | null,
+  plannedStage?: DerivationReplayPlanStage | null
+): string => {
+  const details = getFrameDetailsRecord(frame);
+  return String(
+    plannedStage?.stageRecord
+    || details.stageRecord
+    || ''
+  ).trim();
+};
+
+export const getFrameRelations = (
+  frame?: ReplayDerivationFrame | null,
+  plannedStage?: DerivationReplayPlanStage | null
+): DerivationReplayPlanStep[] => {
+  const plannedRelations = Array.isArray(plannedStage?.relationSteps) ? plannedStage.relationSteps : [];
+  if (plannedRelations.length > 0) return plannedRelations;
+  const details = getFrameDetailsRecord(frame);
+  const workspaceForest = Array.isArray(frame?.workspaceForest)
+    ? frame.workspaceForest
+    : Array.isArray(frame?.after?.workspaceForest)
+      ? frame.after.workspaceForest
+      : [];
+  const relations = Array.isArray(details.derivationStageRelations)
+    ? details.derivationStageRelations
+    : [];
+  return relations
+    .map<DerivationReplayPlanStep | null>((relation, authoredRelationIndex) => {
+      if (!relation || typeof relation !== 'object') return null;
+      const relationRecord = relation as Record<string, unknown>;
+      const label = String(relationRecord.relation || '').trim();
+      const anchors = relationRecord.anchors && typeof relationRecord.anchors === 'object' && !Array.isArray(relationRecord.anchors)
+        ? relationRecord.anchors as Record<string, unknown>
+        : {};
+      if (!label) return null;
+      const priorAnchors = relationRecord.priorAnchors && typeof relationRecord.priorAnchors === 'object' && !Array.isArray(relationRecord.priorAnchors)
+        ? relationRecord.priorAnchors as Record<string, string | string[]>
+        : undefined;
+      const values = relationRecord.values && typeof relationRecord.values === 'object' && !Array.isArray(relationRecord.values)
+        ? relationRecord.values as Record<string, string | string[]>
+        : undefined;
+      return {
+        kind: 'relation',
+        relation: label,
+        anchors,
+        ...(priorAnchors ? { priorAnchors } : {}),
+        ...(values ? { values } : {}),
+        authoredRelationIndex,
+        resolvedAnchors: resolveRelationAnchors(
+          anchors,
+          workspaceForest
+        )
+      } satisfies DerivationReplayPlanStep;
+    })
+    .filter((relation): relation is DerivationReplayPlanStep => relation !== null);
+};
+
+export const isRenderableReplayRelation = (
+  relation?: DerivationReplayPlanStep | null
+): boolean => (
+  Boolean(String(relation?.relation || '').trim())
+  && Array.isArray(relation?.resolvedAnchors)
+  && relation.resolvedAnchors.length >= 1
+);
+
+const getResolvedReplayRelationAnchors = (
+  relation?: DerivationReplayPlanStep | null
+): ReplayResolvedRelationAnchor[] => (
+  Array.isArray(relation?.resolvedAnchors)
+    ? relation.resolvedAnchors
+        .filter((anchor) => Boolean(String(anchor?.nodeId || '').trim()))
+        .map((anchor) => ({
+          ...anchor,
+          role: String(anchor.role || ''),
+          nodeId: String(anchor.nodeId || '').trim()
+        }))
+    : []
+);
+
+const getRelationTargetNodeId = (
+  relation?: DerivationReplayPlanStep | null
+): string => String(relation?.targetNodeId || '').trim();
+
+const getRelationSourceNodeIds = (
+  relation?: DerivationReplayPlanStep | null
+): string[] => (
+  Array.isArray(relation?.sourceNodeIds)
+    ? relation.sourceNodeIds
+        .map((nodeId) => String(nodeId || '').trim())
+        .filter(Boolean)
+    : []
+);
+
+export const getRelationAllAnchorNodeIds = (
+  relation?: DerivationReplayPlanStep | null
+): string[] => getResolvedReplayRelationAnchors(relation)
+  .map((anchor) => String(anchor.nodeId || '').trim())
+  .filter(Boolean);
+
+const findResolvedReplayAnchorByRoles = (
+  anchors: ReplayResolvedRelationAnchor[],
+  roles: readonly string[]
+): ReplayResolvedRelationAnchor | undefined => {
+  const wantedRoles = new Set(roles.map((role) => role.toLowerCase()));
+  return anchors.find((anchor) => wantedRoles.has(String(anchor.role || '').trim().toLowerCase()));
+};
+
+const findResolvedReplayAnchorsByRoles = (
+  anchors: ReplayResolvedRelationAnchor[],
+  roles: readonly string[]
+): ReplayResolvedRelationAnchor[] => {
+  const wantedRoles = new Set(roles.map((role) => role.toLowerCase()));
+  return anchors.filter((anchor) => wantedRoles.has(String(anchor.role || '').trim().toLowerCase()));
+};
+
+const relationAnchorsExistInForest = (
+  forest: SyntaxNode[],
+  targetNodeId: string,
+  sourceNodeId: string
+): boolean => (
+  Boolean(targetNodeId)
+  && Boolean(sourceNodeId)
+  && Boolean(findExactNodeByIdInForest(forest, targetNodeId))
+  && Boolean(findExactNodeByIdInForest(forest, sourceNodeId))
+);
+
+export const resolveRelationAnchorNodeId = (
+  forest: SyntaxNode[],
+  rawNodeId: string,
+  _role: 'source' | 'target'
+): string => {
+  const requestedNodeId = String(rawNodeId || '').trim();
+  if (!requestedNodeId) return '';
+  const exactNode = findExactNodeByIdInForest(forest, requestedNodeId);
+  return exactNode ? String(exactNode.id || requestedNodeId).trim() : '';
+};
+
+const getSharedAuthoredLineageIdentity = (
+  forest: SyntaxNode[],
+  anchorNodeIds: string[]
+): string => {
+  if (anchorNodeIds.length < 2) return '';
+  const lineageSets = anchorNodeIds.map((nodeId) => {
+    const lineageIds = new Set<string>();
+    const visit = (node?: SyntaxNode | null) => {
+      if (!node) return;
+      const lineageId = String(node.lineageId || '').trim();
+      if (lineageId) lineageIds.add(lineageId);
+      (Array.isArray(node.children) ? node.children : []).forEach(visit);
+    };
+    visit(findExactNodeByIdInForest(forest, nodeId));
+    return lineageIds;
+  });
+  const [firstLineages, ...remainingLineages] = lineageSets;
+  const sharedLineages = Array.from(firstLineages)
+    .filter((lineageId) => (
+      remainingLineages.every((lineages) => lineages.has(lineageId))
+    ))
+    .sort();
+  return sharedLineages.length > 0
+    ? `identity:lineage:${sharedLineages.join('|')}`
+    : '';
+};
+
+export const buildAuthoredRelationLinksForFrames = (
+  frames: ReplayDerivationFrame[],
+  replayPlan: DerivationReplayPlan | null | undefined,
+  activeFrameIndex: number,
+  forest: SyntaxNode[],
+  currentFrameRelationLimit: number = Number.POSITIVE_INFINITY
+): ResolvedRelationLink[] => {
+  if (!Array.isArray(frames) || activeFrameIndex < 0) return [];
+  const links: ResolvedRelationLink[] = [];
+
+  for (let frameIndex = 0; frameIndex <= Math.min(activeFrameIndex, frames.length - 1); frameIndex += 1) {
+    const plannedStage = getReplayPlanStage(replayPlan, frameIndex);
+    const relations = getFrameRelations(frames[frameIndex], plannedStage);
+    const relationLimit = frameIndex === activeFrameIndex
+      ? currentFrameRelationLimit
+      : Number.POSITIVE_INFINITY;
+
+    relations.forEach((relation, relationIndex) => {
+      if (relationIndex > relationLimit || !isRenderableReplayRelation(relation)) return;
+      const relationLabel = String(relation.relation || '').trim();
+      const resolvedAnchors = getResolvedReplayRelationAnchors(relation)
+        .filter((anchor) => (
+          Boolean(findExactNodeByIdInForest(forest, String(anchor.nodeId || '').trim()))
+        ));
+      if (resolvedAnchors.length === 0) return;
+      const [firstAnchor, secondAnchor] = resolvedAnchors;
+      const trajectoryKind = registeredTrajectoryDisplayKind(relationLabel, resolvedAnchors);
+      const registeredTrajectoryCapability = Boolean(registeredTrajectoryDisplayKind(relationLabel));
+      const registryEntry = findRelationRegistryEntry(productionRelationRegistry, relationLabel);
+      const operatorVariableBinding = registryEntry?.id === 'scope.operator-variable';
+      const movementRelation = Boolean(trajectoryKind);
+      const registeredEndpointRoles = movementRelation
+        || registeredTrajectoryCapability
+        || operatorVariableBinding;
+      const sourceAnchor = registeredEndpointRoles
+        ? findResolvedReplayAnchorByRoles(resolvedAnchors, TRAJECTORY_SOURCE_ROLES) || firstAnchor
+        : firstAnchor;
+      const targetAnchor = registeredEndpointRoles
+        ? findResolvedReplayAnchorByRoles(resolvedAnchors, TRAJECTORY_TARGET_ROLES) || secondAnchor
+        : secondAnchor;
+      const witnessAnchor = movementRelation || operatorVariableBinding
+        ? findResolvedReplayAnchorByRoles(resolvedAnchors, TRAJECTORY_WITNESS_ROLES)
+        : undefined;
+      const authoredRelationIndex = Number.isInteger(relation.authoredRelationIndex)
+        ? Number(relation.authoredRelationIndex)
+        : relationIndex;
+      const identityKey = getSharedAuthoredLineageIdentity(
+        forest,
+        resolvedAnchors.map((anchor) => String(anchor.nodeId || '').trim())
+      );
+      const link: ReplayAuthoredRelationLink = {
+        relationIndex: String(links.length + 1),
+        relationIndexProvenance: 'derived-presentation',
+        relation: relationLabel,
+        anchors: resolvedAnchors.map((anchor) => ({
+          role: anchor.role,
+          nodeId: anchor.nodeId
+        })),
+        // Authored optional blocks travel verbatim on the link.
+        ...(relation.priorAnchors && typeof relation.priorAnchors === 'object'
+          ? { priorAnchors: structuredClone(relation.priorAnchors) }
+          : {}),
+        ...(relation.values && typeof relation.values === 'object'
+          ? { values: structuredClone(relation.values) }
+          : {}),
+        authoredRelationIndex,
+        authoredRelationKey: `${frameIndex}:${authoredRelationIndex}`,
+        ...(targetAnchor
+          ? {
+              sourceNodeId: sourceAnchor.nodeId,
+              targetNodeId: targetAnchor.nodeId,
+              ...(witnessAnchor ? { witnessNodeId: witnessAnchor.nodeId } : {}),
+              endpointOrderProvenance: registeredEndpointRoles
+                ? 'registered-role-order'
+                : 'authored-anchor-order'
+            }
+          : {}),
+        renderFamily: movementRelation
+          ? 'trajectory'
+          : operatorVariableBinding
+            ? 'operator-variable-binding'
+            : (targetAnchor ? 'authored-anchor-link' : 'authored-anchor-evidence'),
+        ...(trajectoryKind ? { trajectoryKind } : {}),
+        stepIndex: frameIndex,
+        operation: 'Relation',
+        ...(identityKey
+          ? {
+              identityKey,
+              identityProvenance: 'authored-shared-lineage'
+            }
+          : {})
+      };
+      links.push(link);
+    });
+  }
+
+  return links;
+};
+
+const mergeResolvedRelationLinkLinks = (
+  committedLinks: ResolvedRelationLink[] = [],
+  activeLinks: ResolvedRelationLink[] = []
+): ResolvedRelationLink[] => {
+  const merged = new Map<string, ResolvedRelationLink>();
+  const buildKey = (link: ResolvedRelationLink): string => {
+    const chainId = String(link?.chainId || '').trim();
+    if (chainId) return `chain:${chainId}`;
+    return [
+      'link',
+      String(link?.relationIndex || '').trim(),
+      String(link?.relation || link?.operation || '').trim(),
+      String(link?.sourceNodeId || '').trim(),
+      String(link?.targetNodeId || '').trim(),
+      String(link?.witnessNodeId || '').trim()
+    ].join(':');
+  };
+
+  committedLinks.forEach((link) => merged.set(buildKey(link), link));
+  activeLinks.forEach((link) => merged.set(buildKey(link), link));
+  return Array.from(merged.values());
+};
+
+const formatRelationAnchorValue = (
+  value: unknown,
+  replayCanvasData?: SyntaxNode | null,
+  role = ''
+): string => {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .map((item) => {
+      const nodeId = String(item || '').trim();
+      if (!nodeId) return '';
+      return formatRelationParticipantValue(
+        { role, nodeId, value: nodeId } as ResolvedRelationAnchor,
+        replayCanvasData
+      ) || formatReplayIdentifier(nodeId);
+    })
+    .filter(Boolean)
+    .join(', ');
+};
+
+const formatRelationAnchorRole = (role: string): string =>
+  toReplayTitleCase(
+    String(role || '')
+      .trim()
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/[_-]+/g, ' ')
+  );
+
+const getRegisteredRelationAnchorRoleOrder = (relationName: string): string[] => {
+  const entry = findRelationRegistryEntry(productionRelationRegistry, relationName);
+  if (!entry) return [];
+  return [
+    ...Object.keys(entry.signature.anchors.required),
+    ...Object.keys(entry.signature.anchors.optional)
+  ];
+};
+
+const STRUCTURAL_RELATION_ANCHOR_ROLES = new Set([
+  'adjunctDomain',
+  'boundary',
+  'complement',
+  'domain',
+  'forbiddenRegion',
+  'interpretationDomain',
+  'licensedLandingHosts',
+  'phase',
+  'rejectedLandingHosts',
+  'roof',
+  'scopeDomain',
+  'searchDomain',
+  'spellOutDomain'
+]);
+
+const AUTHORED_WITNESS_RELATION_ANCHOR_ROLES = new Set([
+  'traceWitness',
+  'traceWitnesses',
+  'variable'
+]);
+
+const getReplayNodeAuthoredWitnessYieldFromCanvas = (
+  root: SyntaxNode | null | undefined,
+  nodeId?: string
+): string => {
+  const node = findNodeByIdInForest([root].filter(Boolean) as SyntaxNode[], String(nodeId || '').trim());
+  if (!node) return '';
+  const surfaces: string[] = [];
+  const collect = (candidate: SyntaxNode) => {
+    const children = Array.isArray(candidate.children) ? candidate.children : [];
+    if (children.length > 0) {
+      children.forEach(collect);
+      return;
+    }
+    const surface = String(candidate.word || candidate.label || '').trim();
+    if (surface) surfaces.push(formatAuthoredWitnessSurface(surface));
+  };
+  collect(node);
+  return surfaces.join(' ').trim();
+};
+
+const formatRelationParticipantValue = (
+  anchor: ResolvedRelationAnchor,
+  replayCanvasData?: SyntaxNode | null
+): string => {
+  const nodeId = String(anchor?.nodeId || '').trim();
+  if (nodeId) {
+    const role = String(anchor?.role || '').trim();
+    if (STRUCTURAL_RELATION_ANCHOR_ROLES.has(role)) {
+      return getReplayNodeCategoryFromCanvas(replayCanvasData, nodeId) || '';
+    }
+    if (AUTHORED_WITNESS_RELATION_ANCHOR_ROLES.has(role)) {
+      return getReplayNodeAuthoredWitnessYieldFromCanvas(replayCanvasData, nodeId)
+        || getReplayNodeCategoryFromCanvas(replayCanvasData, nodeId)
+        || '';
+    }
+    return (
+      getReplayNodeOvertYieldFromCanvas(replayCanvasData, nodeId)
+      || getReplayNodeAuthoredYieldFromCanvas(replayCanvasData, nodeId)
+      || getReplayNodeDisplayFromCanvas(replayCanvasData, nodeId)
+      || getReplayNodeCategoryFromCanvas(replayCanvasData, nodeId)
+      || ''
+    );
+  }
+  return formatReplaySupportValue(String(anchor?.value || '').trim());
+};
+
+const buildRelationParticipantSupportLines = (step: PlaybackStep): ReplaySupportLine[] => {
+  if (step.replayKind !== 'relation') return [];
+  const activeLinks = getActiveReplayRelationLinks(step);
+  if (activeLinks.length === 0) return [];
+
+  const relationName = String(activeLinks[0]?.relation || step.operation || '').trim();
+  const roleValues = new Map<string, string[]>();
+  activeLinks.forEach((link) => {
+    (Array.isArray(link?.anchors) ? link.anchors : []).forEach((anchor) => {
+      const role = String(anchor?.role || '').trim();
+      const display = formatRelationParticipantValue(anchor, step.replayCanvasData);
+      if (!role || !display) return;
+      const values = roleValues.get(role) || [];
+      if (!values.includes(display)) values.push(display);
+      roleValues.set(role, values);
+    });
+  });
+
+  const registeredOrder = getRegisteredRelationAnchorRoleOrder(relationName);
+  const roleOrder = [
+    ...registeredOrder.filter((role) => roleValues.has(role)),
+    ...Array.from(roleValues.keys()).filter((role) => !registeredOrder.includes(role))
+  ];
+  const lines = roleOrder.map((role) => ({
+    label: formatRelationAnchorRole(role),
+    value: (roleValues.get(role) || []).join(', ')
+  })).filter((line) => line.label && line.value);
+
+  const authoredValues = activeLinks.find((link) => (
+    link?.values && typeof link.values === 'object'
+  ))?.values;
+  Object.entries(authoredValues || {}).forEach(([role, value]) => {
+    const values = (Array.isArray(value) ? value : [value])
+      .map((item) => formatReplaySupportValue(String(item ?? '')))
+      .filter(Boolean);
+    const label = formatRelationAnchorRole(role);
+    if (label && values.length > 0) lines.push({ label, value: values.join(', ') });
+  });
+
+  return lines;
+};
+
+const buildRelationReplayLine = (
+  relation: DerivationReplayPlanStep,
+  replayCanvasData?: SyntaxNode | null
+): string => {
+  const relationLabel = formatReplaySupportValue(String(relation?.relation || '').trim());
+  const anchors = relation?.anchors && typeof relation.anchors === 'object' && !Array.isArray(relation.anchors)
+    ? relation.anchors
+    : {};
+  const anchorParts = Object.entries(anchors)
+    .map(([role, value]) => {
+      const display = formatRelationAnchorValue(value, replayCanvasData, role);
+      if (!display) return '';
+      const roleLabel = formatRelationAnchorRole(role);
+      return roleLabel ? `${roleLabel}: ${display}` : display;
+    })
+    .filter(Boolean);
+  if (!relationLabel) return anchorParts.join('; ');
+  return anchorParts.length > 0 ? `${relationLabel}: ${anchorParts.join('; ')}` : relationLabel;
+};
+
+const buildStageRecordReplayBlocks = (
+  frame?: ReplayDerivationFrame | null,
+  plannedStage?: DerivationReplayPlanStage | null
+): ReplayDetailBlock[] | undefined => {
+  const stageRecord = getFrameStageRecordText(frame, plannedStage);
+  if (!stageRecord) return undefined;
+  return [{ title: 'Stage Record', lines: [stageRecord] }];
+};
+
+const buildRelationReplayBlocks = (
+  relations: DerivationReplayPlanStep[] = [],
+  replayCanvasData?: SyntaxNode | null
+): ReplayDetailBlock[] | undefined => {
+  const lines = relations
+    .filter(isRenderableReplayRelation)
+    .map((relation) => buildRelationReplayLine(relation, replayCanvasData))
+    .filter(Boolean);
+  if (lines.length === 0) return undefined;
+  return [{ title: 'Relations', lines }];
+};
+
+const buildFrameReplayBlocks = (
+  frame?: ReplayDerivationFrame | null,
+  replayCanvasData?: SyntaxNode | null,
+  plannedStage?: DerivationReplayPlanStage | null
+): ReplayDetailBlock[] | undefined => (
+  mergeReplayDetailBlocks(
+    buildStageRecordReplayBlocks(frame, plannedStage),
+    buildRelationReplayBlocks(getFrameRelations(frame, plannedStage), replayCanvasData)
+  )
+);
+
+const combineReplayNodeDisplayWithPosition = (nodeDisplay: string, positionDisplay: string): string => {
+  if (!positionDisplay) return nodeDisplay;
+  if (!nodeDisplay) return positionDisplay;
+  const normalizedNodeDisplay = normalizeReplayTargetLabel(nodeDisplay);
+  const normalizedPosition = normalizeReplayTargetLabel(positionDisplay);
+  if (normalizedNodeDisplay === normalizedPosition) return nodeDisplay;
+  if (/^spec,/i.test(positionDisplay)) return positionDisplay;
+  const inHostMatch = positionDisplay.match(/^[^ ]+\s+in\s+(.+)$/i);
+  if (inHostMatch?.[1]) {
+    return `${nodeDisplay} in ${formatReplaySupportValue(inHostMatch[1])}`;
+  }
+  return positionDisplay;
+};
+
+const getReplayMoveTargetLabel = (step: PlaybackStep | null): string => {
+  if (!step) return '';
+  if (!stepRepresentsMovement(step)) return formatReplaySupportValue(step.targetLabel);
+  return (
+    getReplayNodeDisplayFromCanvas(step.replayCanvasData, step.targetNodeId)
+    || formatReplaySupportValue(step.targetLabel)
+  );
+};
+
+const inferReplayLandingValue = (step: PlaybackStep | null): string => {
+  if (!step) return '';
+  const diagnostics = Array.isArray(step.movementDiagnostics)
+    ? step.movementDiagnostics.filter(Boolean)
+    : [];
+  if (diagnostics.some((message) => /landing omitted/i.test(String(message || '')))) {
+    return '';
+  }
+  const targetDisplay = getReplayMoveTargetLabel(step);
+  const positionFromTree = describeReplayNodePosition(step.replayCanvasData, step.targetNodeId);
+  if (isHeadLikePlaybackStep(step)) {
+    return targetDisplay && !isGenericReplayStructuralLabel(targetDisplay)
+      ? combineReplayNodeDisplayWithPosition(targetDisplay, positionFromTree)
+      : (positionFromTree || '');
+  }
+  if (positionFromTree) return positionFromTree;
+  const fallbackTarget = targetDisplay || formatReplaySupportValue(step.targetLabel);
+  return fallbackTarget && !isGenericReplayStructuralLabel(fallbackTarget)
+    ? fallbackTarget
+    : '';
+};
+
+const inferReplaySourceValue = (step: PlaybackStep | null, landingValue: string): string => {
+  if (!step) return '';
+  const diagnostics = Array.isArray(step.movementDiagnostics)
+    ? step.movementDiagnostics.filter(Boolean)
+    : [];
+  if (diagnostics.some((message) => /source omitted/i.test(String(message || '')))) {
+    return '';
+  }
+  if (isHeadLikePlaybackStep(step)) {
+    const sourceFromCanvas = (Array.isArray(step.sourceNodeIds) ? step.sourceNodeIds : [])
+      .map((nodeId) => String(nodeId || '').trim())
+      .filter((nodeId) => nodeId && nodeId !== String(step.targetNodeId || '').trim())
+      .map((nodeId) => getReplayNodeDisplayFromCanvas(step.replayCanvasData, nodeId))
+      .find(Boolean);
+    if (sourceFromCanvas) return sourceFromCanvas;
+    const labelSources = (Array.isArray(step.sourceLabels) ? step.sourceLabels : [])
+      .map((label) => formatReplaySupportValue(label))
+      .filter(Boolean);
+    const labelSource = labelSources.find((label) => normalizeReplayTargetLabel(label) !== normalizeReplayTargetLabel(landingValue)) || labelSources[0];
+    if (labelSource && !isGenericReplayStructuralLabel(labelSource)) return labelSource;
+    return '';
+  }
+  const structuralSources = (Array.isArray(step.sourceNodeIds) ? step.sourceNodeIds : [])
+    .filter((nodeId) => String(nodeId || '').trim() && String(nodeId || '').trim() !== String(step.targetNodeId || '').trim())
+    .map((nodeId) => describeReplayNodePosition(step.replayCanvasData, nodeId))
+    .filter(Boolean);
+  const normalizedLanding = normalizeReplayTargetLabel(landingValue);
+  const structuralSource = structuralSources.find((label) => normalizeReplayTargetLabel(label) !== normalizedLanding);
+  if (structuralSource) return structuralSource;
+
+  const movedSurface = formatReplaySupportValue(step.targetLabel);
+  if (movedSurface && !isGenericReplayStructuralLabel(movedSurface)) return movedSurface;
+
+  const labelSources = (Array.isArray(step.sourceLabels) ? step.sourceLabels : [])
+    .map((label) => formatReplaySupportValue(label))
+    .filter(Boolean);
+  const labelSource = labelSources.find((label) => normalizeReplayTargetLabel(label) !== normalizedLanding) || labelSources[0];
+  if (labelSource && !isGenericReplayStructuralLabel(labelSource)) return labelSource;
+
+  return '';
+};
+
+export const buildReplaySupportLines = (
+  step: PlaybackStep | null,
+  sentence?: string
+): ReplaySupportLine[] => {
+  if (!step) return [];
+
+  const operation = String(step.operation || '').trim();
+  const inputValue = formatReplayInputsValue(step.sourceLabels);
+  const workspaceValue = formatReplayInputsValue(step.workspaceAfter);
+  const resultValue = formatReplaySupportValue(step.targetLabel);
+
+  if (operation === 'StageRecord') {
+    return [];
+  }
+
+  if (operation === 'LexicalSelect') {
+    return (workspaceValue || inputValue)
+      ? [{ label: 'Result', value: workspaceValue || inputValue }]
+      : [];
+  }
+
+  if (operation === 'Project') {
+    const lines: ReplaySupportLine[] = [];
+    if (inputValue) lines.push({ label: 'Input', value: inputValue });
+    if (workspaceValue || resultValue) lines.push({ label: 'Result', value: workspaceValue || resultValue });
+    return lines;
+  }
+
+  if (operation === 'ExternalMerge') {
+    const lines: ReplaySupportLine[] = [];
+    if (inputValue) lines.push({ label: step.sourceLabels.length > 1 ? 'Inputs' : 'Input', value: inputValue });
+    if (resultValue) lines.push({ label: 'Result', value: resultValue });
+    return lines;
+  }
+
+  if (stepRepresentsMovement(step) && relationMomentUsesMovementSupport(step)) {
+    const landingValue = inferReplayLandingValue(step);
+    const sourceValue = inferReplaySourceValue(step, landingValue);
+    const lines: ReplaySupportLine[] = [];
+    const diagnostics = Array.isArray(step.movementDiagnostics)
+      ? step.movementDiagnostics.filter(Boolean)
+      : [];
+    const mentionsMissingSource = diagnostics.some((message) => /source omitted/i.test(String(message || '')));
+    const mentionsMissingLanding = diagnostics.some((message) => /landing omitted/i.test(String(message || '')));
+    if (sourceValue) lines.push({ label: 'Source', value: sourceValue });
+    else if (mentionsMissingSource) lines.push({ label: 'Source', value: 'not serialized' });
+    if (landingValue) lines.push({ label: 'Landing', value: landingValue });
+    else if (mentionsMissingLanding) lines.push({ label: 'Landing', value: 'not serialized' });
+    diagnostics
+      .filter((message) => !/source omitted|landing omitted/i.test(String(message || '')))
+      .forEach((message) => lines.push({ label: 'Audit', value: String(message) }));
+    return lines;
+  }
+
+  if (step.replayKind === 'relation') {
+    return buildRelationParticipantSupportLines(step);
+  }
+
+  const fallbackLines: ReplaySupportLine[] = [];
+  if (inputValue) fallbackLines.push({ label: step.sourceLabels.length > 1 ? 'Inputs' : 'Input', value: inputValue });
+  if (resultValue) fallbackLines.push({ label: 'Result', value: resultValue });
+  return fallbackLines;
+};
+
+const stepTargetsAnyLabel = (step: PlaybackStep, labels: string[]): boolean => {
+  const normalizedTarget = normalizeReplayTargetLabel(step.targetLabel);
+  return labels.some((label) => normalizedTarget === normalizeReplayTargetLabel(label));
+};
+
+const findReplayDisplayStepIndex = (
+  steps: PlaybackStep[],
+  sourceIndex: number,
+  predicate: (step: PlaybackStep, index: number) => boolean
+): number => {
+  for (let index = Math.min(sourceIndex, steps.length - 1); index >= 0; index -= 1) {
+    if (predicate(steps[index], index)) return index;
+  }
+  return sourceIndex;
+};
+
+const findReplayCaseDisplayStepIndex = (
+  steps: PlaybackStep[],
+  sourceIndex: number,
+  line: string
+): number => {
+  const normalizedLine = normalizeReplayTextForCommittedInventory(line, steps);
+  if (/\bby\s+infl\b/i.test(normalizedLine) || /\bby\s+t\b/i.test(normalizedLine)) {
+    return findReplayDisplayStepIndex(
+      steps,
+      sourceIndex,
+      (step) =>
+        stepTargetsAnyLabel(step, ['Infl', "Infl'", 'InflP', 'T', "T'", 'TP']) &&
+        !stepRepresentsMovement(step)
+    );
+  }
+  if (/\bby\s+v\b/i.test(normalizedLine)) {
+    return findReplayDisplayStepIndex(
+      steps,
+      sourceIndex,
+      (step) =>
+        stepTargetsAnyLabel(step, ['V', "V'", 'VP', 'v', "v'", 'vP']) &&
+        !stepRepresentsMovement(step)
+    );
+  }
+  return sourceIndex;
+};
+
+const findReplaySelectionDisplayStepIndex = (
+  steps: PlaybackStep[],
+  sourceIndex: number,
+  line: string
+): number => {
+  const normalizedLine = normalizeReplayTextForCommittedInventory(line, steps);
+  if (/^\s*v\b/i.test(normalizedLine)) {
+    return findReplayDisplayStepIndex(
+      steps,
+      sourceIndex,
+      (step) =>
+        stepTargetsAnyLabel(step, ['V', "V'", 'VP', 'v', "v'", 'vP']) &&
+        !stepRepresentsMovement(step)
+    );
+  }
+  if (/^\s*infl\b/i.test(normalizedLine) || /^\s*t\b/i.test(normalizedLine)) {
+    return findReplayDisplayStepIndex(
+      steps,
+      sourceIndex,
+      (step) =>
+        stepTargetsAnyLabel(step, ['Infl', "Infl'", 'InflP', 'T', "T'", 'TP']) &&
+        !stepRepresentsMovement(step)
+    );
+  }
+  if (/^\s*c\b/i.test(normalizedLine)) {
+    return findReplayDisplayStepIndex(
+      steps,
+      sourceIndex,
+      (step) =>
+        stepTargetsAnyLabel(step, ['C', "C'", 'CP', 'Foc', "Foc'", 'FocP']) &&
+        !stepRepresentsMovement(step)
+    );
+  }
+  return sourceIndex;
+};
+
+export const buildReplayDisplayDetailBlocks = (
+  steps: PlaybackStep[]
+): Map<number, ReplayDetailBlock[]> => {
+  const byStep = new Map<number, ReplayDetailBlock[]>();
+  const pushBlockLine = (stepIndex: number, title: string, line: string) => {
+    if (!line) return;
+    const bucket = byStep.get(stepIndex) || [];
+    const normalizedTitle = normalizeReplayBlockTitleKey(title);
+    const existing = bucket.find((block) => normalizeReplayBlockTitleKey(block.title) === normalizedTitle);
+    if (existing) {
+      existing.lines.push(line);
+    } else {
+      bucket.push({ title, lines: [line] });
+    }
+    byStep.set(stepIndex, bucket);
+  };
+
+  steps.forEach((step, sourceIndex) => {
+    const blocks = Array.isArray(step.detailBlocks) ? step.detailBlocks : [];
+    blocks.forEach((block) => {
+      const title = String(block?.title || '').trim();
+      const lines = Array.isArray(block?.lines) ? block.lines.filter(Boolean) : [];
+      if (!title || lines.length === 0) return;
+      const normalizedTitle = normalizeReplayBlockTitleKey(title);
+
+      if (normalizedTitle === 'CASE ASSIGNMENT') {
+        lines.forEach((line) => {
+          const targetIndex = findReplayCaseDisplayStepIndex(steps, sourceIndex, line);
+          pushBlockLine(targetIndex, title, line);
+        });
+        return;
+      }
+
+      if (normalizedTitle === 'THETA ROLES') {
+        const targetIndex = findReplayDisplayStepIndex(
+          steps,
+          sourceIndex,
+          (candidate) =>
+            stepTargetsAnyLabel(candidate, ['VP', "V'", 'vP', "v'"]) &&
+            !stepRepresentsMovement(candidate)
+        );
+        lines.forEach((line) => pushBlockLine(targetIndex, title, line));
+        return;
+      }
+
+      if (normalizedTitle === 'SELECTION') {
+        lines.forEach((line) => {
+          const targetIndex = findReplaySelectionDisplayStepIndex(steps, sourceIndex, line);
+          pushBlockLine(targetIndex, title, line);
+        });
+        return;
+      }
+
+      if (normalizedTitle === 'LINEARIZATION') {
+        const targetIndex = findReplayDisplayStepIndex(
+          steps,
+          sourceIndex,
+          (candidate) => stepRepresentsMovement(candidate)
+        );
+        lines.forEach((line) => pushBlockLine(targetIndex, title, line));
+        return;
+      }
+
+      if (normalizedTitle === 'LOCALITY') {
+        const targetIndex = findReplayDisplayStepIndex(
+          steps,
+          sourceIndex,
+          (candidate) => stepRepresentsMovement(candidate)
+        );
+        lines.forEach((line) => pushBlockLine(targetIndex, title, line));
+        return;
+      }
+
+      lines.forEach((line) => pushBlockLine(sourceIndex, title, line));
+    });
+  });
+
+  return byStep;
+};
+
+const getTerminalWords = (node: SyntaxNode): string[] => {
+  if (!node.children || node.children.length === 0) {
+    return node.word ? [node.word] : [node.label];
+  }
+  return node.children.flatMap(getTerminalWords);
+};
+
+export const buildMovementProtectedNodeIds = (
+  resolvedRelationLinks?: ResolvedRelationLink[]
+): Set<string> => {
+  const protectedIds = new Set<string>();
+  (resolvedRelationLinks || []).forEach((link) => {
+    const sourceId = String(link.sourceNodeId || '').trim();
+    const movedId = String(link.targetNodeId || '').trim();
+    const traceId = String(link.witnessNodeId || '').trim();
+    if (sourceId) protectedIds.add(sourceId);
+    if (movedId) protectedIds.add(movedId);
+    if (traceId) protectedIds.add(traceId);
+  });
+  return protectedIds;
+};
+
+export const markTriangulatedNodes = (rootHierarchy: HierNode, protectedNodeIds?: Set<string>) => {
+  rootHierarchy.each((d) => {
+    const label = (d.data.label || "").trim().toUpperCase();
+    const isBackbone =
+      label.startsWith('CP') ||
+      label.startsWith('INFLP') ||
+      label.startsWith('TP') ||
+      label.startsWith('VP') ||
+      label.includes("'") ||
+      label.includes("BAR") ||
+      label === 'C' ||
+      label === 'INFL' ||
+      label === 'V' ||
+      label === 'T' ||
+      label === 'v';
+
+    const isPhrase = label.endsWith('P');
+    const terminals = getTerminalWords(d.data);
+    const containsProtectedMovementNode = (protectedNodeIds?.size || 0) > 0
+      ? d.descendants().some((descendant) => protectedNodeIds.has(getNodeId(descendant)))
+      : false;
+
+    if (isPhrase && !isBackbone && !containsProtectedMovementNode && terminals.length >= 2) {
+      (d as any).isTriangulated = true;
+      (d as any).triangulatedWords = terminals.join(' ');
+    }
+  });
+};
+
+export const isUnderTriangulation = (d: HierNode) => {
+  let current = d.parent;
+  while (current) {
+    if ((current as any).isTriangulated) return true;
+    current = current.parent;
+  }
+  return false;
+};
+
+export const shouldExpandPreterminalLeaf = (node: SyntaxNode): boolean => {
+  if (Array.isArray(node.children) && node.children.length > 0) return false;
+  const label = String(node.label || '').trim();
+  const word = typeof node.word === 'string' ? node.word.trim() : '';
+  if (!label || !word) return false;
+  if (isTraceLike(label)) return false;
+  if (normalizeToken(label) === normalizeToken(word)) return false;
+  return true;
+};
+
+const materializeNullBearingLeaves = materializeReplayPreterminals;
+const materializeCanopyPreterminals = materializeReplayPreterminals;
+
+export const __TEST_ONLY__ = {
+  buildDerivationCanvasData,
+  resolveDerivationMovementTransitions,
+  buildPlaybackStepsFromDerivationFrames,
+  buildDisplayRelationLinks,
+  buildMovementArrowsFromLinks,
+  buildRenderableDerivationCanvasData,
+  buildStructuralDerivationPlaybackSteps,
+  collectVisibleDerivationNodeIds,
+  buildDerivationReplaySnapshot,
+  formatPlaybackOperationTitle,
+  maybeLowercaseSentenceInitialFunctionSurface,
+  getFrameRelations,
+  getRelationAllAnchorNodeIds,
+  isRenderableReplayRelation,
+  resolveRelationAnchorNodeId,
+  materializeReplayPreterminals,
+  materializeNullBearingLeaves,
+  materializeCanopyPreterminals
+};

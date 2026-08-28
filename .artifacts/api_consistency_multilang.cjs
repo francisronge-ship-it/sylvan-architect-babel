@@ -1,5 +1,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  collectMovementRelations,
+  collectResolvedVisualRelations,
+  collectStageRecords,
+  countUnresolvedAnchors
+} = require('./helpers/currentContract.cjs');
 
 const BASE_URL = process.env.BABEL_BASE_URL || 'http://127.0.0.1:5177';
 const OUT = path.resolve('.artifacts/api-consistency-multilang.json');
@@ -33,15 +39,6 @@ const HEDGE_RE = /\b(or|may|can|possibly|might)\b/i;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const collectNodeIds = (node, out = new Set()) => {
-  if (!node || typeof node !== 'object') return out;
-  const id = String(node.id || '').trim();
-  if (id) out.add(id);
-  const children = Array.isArray(node.children) ? node.children : [];
-  children.forEach((child) => collectNodeIds(child, out));
-  return out;
-};
-
 const countMoveSteps = (analysis) => {
   const steps = Array.isArray(analysis?.derivationSteps) ? analysis.derivationSteps : [];
   return steps.filter((step) => {
@@ -55,7 +52,7 @@ async function parseSentence(sentence, framework) {
   const response = await fetch(`${BASE_URL}/api/parse`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sentence, framework, modelRoute: 'flash-lite' })
+    body: JSON.stringify({ sentence, framework, modelRoute: 'gemini' })
   });
 
   let payload = null;
@@ -85,38 +82,21 @@ function analyze(framework, testCase, parsed) {
   }
 
   const analysis = parsed.payload.analyses[0];
-  const nodeIds = collectNodeIds(analysis.tree, new Set());
-  const movementEvents = Array.isArray(analysis.movementEvents) ? analysis.movementEvents : [];
+  const visualRelations = collectResolvedVisualRelations(analysis);
+  const movementRelations = collectMovementRelations(analysis);
+  const stageRecords = collectStageRecords(analysis);
   const derivationSteps = Array.isArray(analysis.derivationSteps) ? analysis.derivationSteps : [];
   const moveSteps = countMoveSteps(analysis);
-  const explanation = String(analysis.explanation || '').trim();
-  const explanationMentionsMovement = MOVEMENT_RE.test(explanation);
-  const explanationHedging = HEDGE_RE.test(explanation);
-
-  const invalidMovementRefs = movementEvents.filter((ev) => {
-    const from = String(ev?.fromNodeId || '').trim();
-    const to = String(ev?.toNodeId || '').trim();
-    const trace = String(ev?.traceNodeId || '').trim();
-    if (!from || !to) return true;
-    if (!nodeIds.has(from) || !nodeIds.has(to)) return true;
-    if (trace && !nodeIds.has(trace)) return true;
-    return false;
-  }).length;
-
-  const outOfRangeStepIndex = movementEvents.filter((ev) => {
-    const idx = Number(ev?.stepIndex);
-    return Number.isInteger(idx) && idx >= derivationSteps.length && derivationSteps.length > 0;
-  }).length;
+  const notesText = stageRecords.join('\n');
+  const notesMentionMovement = MOVEMENT_RE.test(notesText);
+  const notesHedging = HEDGE_RE.test(notesText);
 
   const issues = [];
-  if (invalidMovementRefs > 0) issues.push('INVALID_MOVEMENT_NODE_REF');
-  if (outOfRangeStepIndex > 0) issues.push('OUT_OF_RANGE_MOVEMENT_STEP');
-  if (movementEvents.length > 0 && moveSteps === 0) issues.push('MOVE_EVENTS_WITHOUT_MOVE_STEPS');
-  if (movementEvents.length === 0 && moveSteps > 0) issues.push('MOVE_STEPS_WITHOUT_MOVE_EVENTS');
-  if (movementEvents.length > 0 && !explanationMentionsMovement) issues.push('EXPLANATION_MISSES_MOVEMENT');
-  if (movementEvents.length === 0 && explanationMentionsMovement) issues.push('EXPLANATION_MOVEMENT_WITHOUT_EVENTS');
-  if (explanationHedging) issues.push('EXPLANATION_HEDGING');
-  if (testCase.expectedMovement && movementEvents.length === 0) issues.push('EXPECTED_MOVEMENT_MISSING');
+  if (countUnresolvedAnchors(visualRelations) > 0) issues.push('UNRESOLVED_VISUAL_RELATION_ANCHOR');
+  if (movementRelations.length > 0 && moveSteps === 0) issues.push('MOVEMENT_RELATIONS_WITHOUT_MOVE_STEPS');
+  if (movementRelations.length > 0 && !notesMentionMovement) issues.push('STAGE_RECORDS_MISS_MOVEMENT');
+  if (notesHedging) issues.push('STAGE_RECORD_HEDGING');
+  if (testCase.expectedMovement && movementRelations.length === 0) issues.push('EXPECTED_MOVEMENT_RELATION_MISSING');
 
   return {
     framework,
@@ -126,11 +106,12 @@ function analyze(framework, testCase, parsed) {
     ok: true,
     status: parsed.status,
     elapsedMs: parsed.elapsedMs,
-    movementEventsCount: movementEvents.length,
+    visualRelationsCount: visualRelations.length,
+    movementRelationsCount: movementRelations.length,
     moveSteps,
     derivationStepsCount: derivationSteps.length,
-    explanationMentionsMovement,
-    explanationHedging,
+    notesMentionMovement,
+    notesHedging,
     issues
   };
 }

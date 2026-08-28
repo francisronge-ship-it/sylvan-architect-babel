@@ -1,7 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 require('./helpers/loadLocalEnv.cjs')();
-const { parseSentenceWithGemini } = require('../server/geminiParser');
+const loadCurrentParser = require('./helpers/loadCurrentParser.cjs');
+const {
+  collectMovementRelations,
+  collectResolvedVisualRelations,
+  collectStageRecords,
+  countUnresolvedAnchors
+} = require('./helpers/currentContract.cjs');
 
 const CASES = [
   { framework: 'xbar', language: 'English', phenomenon: 'expletive-clause', sentence: 'It was shocking that no one arrived on time' },
@@ -32,7 +38,6 @@ const CASES = [
 
 const TRACE_RE = /^(?:t|trace|t\d+|trace\d+|(?:t|trace)(?:_[a-z0-9]+)+|[a-z]+_trace(?:_[a-z0-9]+)*|<[^>]+>|⟨[^⟩]+⟩|\(t\)|\{t\}|∅|Ø|ε|null|epsilon)$/i;
 const MOVEMENT_RE = /\b(wh-movement|head-movement|a-bar movement|a-movement|internal merge|movement|raising|move to|moved to|v-to-c|v-to-infl|v-to-t|fronted|fronting|occup(?:y|ies|ied)\s+the\s+spec(?:ifier)?[, ]*cp)\b/i;
-const NO_MOVEMENT_RE = /\b(?:no movement is posited|no displacement(?: operation)? is encoded|without movement|no movement occurs)\b/i;
 const PROVIDER_FAILURE_CODES = new Set(['GEMINI_UNAVAILABLE', 'MODEL_UNAVAILABLE', 'GEMINI_QUOTA', 'SERVER_BUSY', 'RATE_LIMITED']);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const tokenize = (s) => String(s || '').trim().split(/\s+/).filter(Boolean);
@@ -58,15 +63,6 @@ function collectLeaves(node, out = []) {
     return out;
   }
   children.forEach((child) => collectLeaves(child, out));
-  return out;
-}
-
-function collectNodeIds(node, out = new Set()) {
-  if (!node || typeof node !== 'object') return out;
-  const id = String(node.id || '').trim();
-  if (id) out.add(id);
-  const children = Array.isArray(node.children) ? node.children : [];
-  children.forEach((child) => collectNodeIds(child, out));
   return out;
 }
 
@@ -102,9 +98,10 @@ function analyze(bundle, testCase) {
   const surfaceOrder = Array.isArray(analysis.surfaceOrder) ? analysis.surfaceOrder : [];
   const derivationSteps = Array.isArray(analysis.derivationSteps) ? analysis.derivationSteps : [];
   const derivationOps = derivationSteps.map((s) => s.operation);
-  const movementEvents = Array.isArray(analysis.movementEvents) ? analysis.movementEvents : [];
-  const nodeIds = collectNodeIds(analysis.tree);
-  const explanation = String(analysis.explanation || '').trim();
+  const visualRelations = collectResolvedVisualRelations(analysis);
+  const movementRelations = collectMovementRelations(analysis);
+  const stageRecords = collectStageRecords(analysis);
+  const notesText = stageRecords.join('\n');
   const overtSpans = collectOvertSpans(analysis.tree);
   const issues = [];
 
@@ -112,20 +109,10 @@ function analyze(bundle, testCase) {
   if (!sameSeq(surfaceOrder, sentenceTokens)) issues.push('SURFACE_NE_SENTENCE');
   if (!sameSeq(leaves, surfaceOrder)) issues.push('LEAVES_NE_SURFACE');
   if (derivationOps[derivationOps.length - 1] !== 'SpellOut') issues.push('NO_FINAL_SPELLOUT');
-  if (movementEvents.length > 0 && !MOVEMENT_RE.test(explanation)) issues.push('MOVEMENT_MISSING_FROM_NOTES');
-  if (movementEvents.length === 0 && MOVEMENT_RE.test(explanation) && !NO_MOVEMENT_RE.test(explanation)) issues.push('NOTES_MOVEMENT_WITHOUT_EVENTS');
+  if (movementRelations.length > 0 && !MOVEMENT_RE.test(notesText)) issues.push('MOVEMENT_MISSING_FROM_STAGE_RECORDS');
   const moveSteps = countOps(derivationSteps, new Set(['Move', 'InternalMerge', 'HeadMove', 'A-Move', 'AbarMove']));
-  if (movementEvents.length > 0 && moveSteps === 0) issues.push('MOVEMENT_EVENTS_WITHOUT_MOVE_STEPS');
-
-  for (const ev of movementEvents) {
-    const from = String(ev?.fromNodeId || '').trim();
-    const to = String(ev?.toNodeId || '').trim();
-    const trace = String(ev?.traceNodeId || '').trim();
-    if (!from || !to || !nodeIds.has(from) || !nodeIds.has(to) || (trace && !nodeIds.has(trace))) {
-      issues.push('INVALID_MOVEMENT_NODE_REF');
-      break;
-    }
-  }
+  if (movementRelations.length > 0 && moveSteps === 0) issues.push('MOVEMENT_RELATIONS_WITHOUT_MOVE_STEPS');
+  if (countUnresolvedAnchors(visualRelations) > 0) issues.push('UNRESOLVED_VISUAL_RELATION_ANCHOR');
 
   for (let i = 0; i < overtSpans.length; i += 1) {
     const entry = overtSpans[i];
@@ -145,18 +132,20 @@ function analyze(bundle, testCase) {
     leaves,
     surfaceOrder,
     derivationOps,
-    movementEventsCount: movementEvents.length,
-    explanation
+    visualRelationsCount: visualRelations.length,
+    movementRelationsCount: movementRelations.length,
+    stageRecords
   };
 }
 
 (async () => {
+  const { parseSentenceWithGemini } = await loadCurrentParser();
   const results = [];
   for (const testCase of CASES) {
     let final = null;
     for (let attempt = 1; attempt <= 4; attempt += 1) {
       try {
-        const bundle = await parseSentenceWithGemini(testCase.sentence, testCase.framework, 'flash-lite');
+        const bundle = await parseSentenceWithGemini(testCase.sentence, testCase.framework, 'gemini');
         final = analyze(bundle, testCase);
         break;
       } catch (error) {
@@ -194,7 +183,7 @@ function analyze(bundle, testCase) {
     results
   };
 
-  const outPath = path.resolve('/Users/francisronge/Documents/Babel/sylvan-architect-babel/.artifacts/direct-consistency-world-sweep.json');
+  const outPath = path.resolve('.artifacts/direct-consistency-world-sweep.json');
   fs.writeFileSync(outPath, JSON.stringify(out, null, 2));
   console.log(outPath);
   console.log(JSON.stringify(out, null, 2));

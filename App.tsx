@@ -1,23 +1,29 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Analytics } from '@vercel/analytics/react';
-import { parseSentence } from './services/geminiService';
-import { DerivationStep, MovementEvent, ParseBundle, ParseResult, SyntaxNode } from './types';
+import { parseSentence, ParseServiceError } from './services/parseService';
+import {
+  ParseBundle,
+  ParseFailure,
+  ParseResult,
+  RawOutputArtifact,
+  SyntaxNode
+} from './types';
 import TreeVisualizer from './components/TreeVisualizer';
 import RootLogo from './components/RootLogo';
+import FailurePanel from './components/FailurePanel';
+import { collectDerivationStageRecords } from './derivationNotes.js';
+import { collectPronouncedTerminalSequence } from './replay/pronouncedTerminals.ts';
 import {
-  buildMovementIndexMaps,
-  resolveMovementEventLinks,
-  MovementIndexMaps,
-  EMPTY_MOVEMENT_INDEX_MAPS
-} from './movementEvents';
+  createTreeBankBundleSnapshot,
+  loadTreeBankBundleSnapshot
+} from './treeBankSnapshot.js';
 import { 
   RotateCcw, 
   Sparkles,
   TreeDeciduous,
-  AlertTriangle,
   Layers,
   Zap,
   Info,
+  Brain,
   FileText,
   ChevronUp,
   ChevronDown,
@@ -36,51 +42,188 @@ import {
   Clock3
 } from 'lucide-react';
 
-type AppTab = 'tree' | 'growth' | 'notes';
+type AppTab = 'tree' | 'derivation' | 'notes';
 
 const NAV_TABS: Array<{ id: AppTab; icon: React.ComponentType<{ size?: number }>; label: string }> = [
   { id: 'tree', icon: Layers, label: 'Canopy' },
-  { id: 'growth', icon: FlameKindling, label: 'Growth Simulation' },
+  { id: 'derivation', icon: FlameKindling, label: 'Derivation Replay' },
   { id: 'notes', icon: FileText, label: 'Notes' },
 ];
 
 const KEY_ERROR_CODES = new Set(['API_KEY_EXPIRED', 'API_KEY_MISSING', 'API_KEY_INVALID']);
 
-const resolveUiError = (err: unknown): { needsKey: boolean; message: string } => {
+type KeyPromptMode = 'none' | 'gemini' | 'external';
+
+interface UiErrorState {
+  message: string;
+  code?: string;
+  failure?: ParseFailure;
+  rawOutput?: RawOutputArtifact;
+}
+
+const resolveUiError = (err: unknown, modelRoute: ModelMode): {
+  needsKey: boolean;
+  keyPromptMode: KeyPromptMode;
+  error: UiErrorState;
+} => {
   const message = err instanceof Error ? err.message : String(err || '');
-  if (KEY_ERROR_CODES.has(message)) {
+  const code = err instanceof ParseServiceError ? err.code : '';
+  if (KEY_ERROR_CODES.has(code || message)) {
     return {
       needsKey: true,
-      message: 'Your API key is missing or invalid. Please update it below.'
+      keyPromptMode: modelRoute === 'gemini' ? 'gemini' : 'external',
+      error: {
+        message: 'Your API key is missing or invalid. Please update it below.',
+        code: code || message,
+        ...(err instanceof ParseServiceError && err.failure ? { failure: err.failure } : {})
+      }
     };
   }
 
   return {
     needsKey: false,
-    message: message || 'Linguistic growth interrupted.'
+    keyPromptMode: 'none',
+    error: {
+      message: message || 'Derivation interrupted.',
+      ...(code ? { code } : {}),
+      ...(err instanceof ParseServiceError && err.failure ? { failure: err.failure } : {}),
+      ...(err instanceof ParseServiceError && err.rawOutput ? { rawOutput: err.rawOutput } : {})
+    }
   };
 };
 
 const formatModelLabel = (modelUsed?: string): string => {
   const model = String(modelUsed || '').trim();
-  if (!model) return 'Gemini 3.1 Flash Lite';
-  if (model === 'gemini-3.1-flash-lite-preview') return 'Gemini 3.1 Flash Lite';
+  if (!model) return 'Gemini 3.1 Pro';
+  if (/^gpt/i.test(model)) return model.toUpperCase();
+  if (/^claude/i.test(model)) return model.replace(/^claude/i, 'Claude');
   if (model === 'gemini-3.1-pro-preview') return 'Gemini 3.1 Pro';
   if (model === 'gemini-3-pro-preview') return 'Gemini 3 Pro';
   return model.replace(/^gemini-/i, 'Gemini ').replace(/-preview$/i, '');
 };
 
-type ModelRoute = 'flash-lite' | 'pro';
+type ModelMode = 'gemini' | 'gpt' | 'claude';
+type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
-const inferModelRouteFromModel = (modelUsed?: string): ModelRoute => {
-  const model = String(modelUsed || '').trim().toLowerCase();
-  if (!model) return 'flash-lite';
-  return model.includes('pro') ? 'pro' : 'flash-lite';
+const MODEL_ROUTE_LABELS: Record<ModelMode, string> = {
+  gemini: 'Gemini 3.1 Pro',
+  gpt: 'GPT 5.5',
+  claude: 'Claude Opus'
 };
 
-type MilesMode = 'canopy' | 'growth';
-type CopyCodeKey = 'canopy' | 'growth';
+const MODEL_MODE_PILLS: Array<{
+  id: ModelMode;
+  label: string;
+  className: string;
+  activeClassName: string;
+  keyRequired?: boolean;
+}> = [
+  {
+    id: 'gemini',
+    label: 'Gemini Pro',
+    className: 'border-purple-900/40 bg-purple-950/20 text-purple-200 hover:border-purple-600/50 hover:bg-purple-900/30',
+    activeClassName: 'border-purple-500/70 bg-purple-500/20 text-purple-100 shadow-[0_0_18px_rgba(168,85,247,0.22)]'
+  },
+  {
+    id: 'gpt',
+    label: 'GPT 5.5',
+    className: 'border-blue-900/40 bg-blue-950/20 text-blue-200 hover:border-blue-600/50 hover:bg-blue-900/30',
+    activeClassName: 'border-blue-500/70 bg-blue-500/20 text-blue-100 shadow-[0_0_18px_rgba(59,130,246,0.24)]'
+  },
+  {
+    id: 'claude',
+    label: 'Claude Opus',
+    className: 'border-orange-900/40 bg-orange-950/20 text-orange-200 hover:border-orange-600/50 hover:bg-orange-900/30',
+    activeClassName: 'border-orange-500/70 bg-orange-500/20 text-orange-100 shadow-[0_0_18px_rgba(249,115,22,0.24)]'
+  }
+];
+
+const MODEL_MODE_SEQUENCE: ModelMode[] = ['gemini', 'gpt', 'claude'];
+
+const REASONING_OPTIONS_BY_MODEL: Record<ModelMode, ReasoningEffort[]> = {
+  gemini: ['low', 'medium', 'high'],
+  gpt: ['low', 'medium', 'high', 'xhigh'],
+  claude: ['low', 'medium', 'high', 'xhigh', 'max']
+};
+
+const REASONING_EFFORT_ORDER: ReasoningEffort[] = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+
+const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'XHigh',
+  max: 'Max'
+};
+
+const REASONING_PILL_STYLES: Record<ReasoningEffort, string> = {
+  minimal: 'border-slate-500/35 bg-slate-500/10 text-slate-200 shadow-[0_0_16px_rgba(148,163,184,0.12)]',
+  low: 'border-cyan-700/35 bg-cyan-950/20 text-cyan-200 shadow-[0_0_16px_rgba(8,145,178,0.14)]',
+  medium: 'border-teal-500/45 bg-teal-500/15 text-teal-200 shadow-[0_0_16px_rgba(20,184,166,0.16)]',
+  high: 'border-[#b7791f]/55 bg-[#b7791f]/24 text-[#f3c777] shadow-[0_0_18px_rgba(183,121,31,0.22)]',
+  xhigh: 'border-orange-500/60 bg-orange-500/20 text-orange-200 shadow-[0_0_20px_rgba(249,115,22,0.22)]',
+  max: 'border-[#dc2626]/70 bg-[#7f1d1d]/36 text-[#fecaca] shadow-[0_0_22px_rgba(220,38,38,0.28)]'
+};
+
+const normalizeReasoningEffort = (value?: string): ReasoningEffort | null => {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (normalized === 'extra_high' || normalized === 'extra') return 'xhigh';
+  if (normalized === 'minimal' || normalized === 'low' || normalized === 'medium' || normalized === 'high' || normalized === 'xhigh' || normalized === 'max') {
+    return normalized as ReasoningEffort;
+  }
+  return null;
+};
+
+const coerceReasoningEffortForRoute = (route: ModelMode, value?: string): ReasoningEffort => {
+  const options = REASONING_OPTIONS_BY_MODEL[route];
+  const requested = normalizeReasoningEffort(value) || 'high';
+  if (options.includes(requested)) return requested;
+
+  const requestedRank = REASONING_EFFORT_ORDER.indexOf(requested);
+  if (requestedRank >= 0) {
+    for (let index = requestedRank; index >= 0; index -= 1) {
+      const candidate = REASONING_EFFORT_ORDER[index];
+      if (options.includes(candidate)) return candidate;
+    }
+    for (let index = requestedRank + 1; index < REASONING_EFFORT_ORDER.length; index += 1) {
+      const candidate = REASONING_EFFORT_ORDER[index];
+      if (options.includes(candidate)) return candidate;
+    }
+  }
+  return options.includes('high') ? 'high' : options[0];
+};
+
+const reasoningControlLabelForRoute = (route: ModelMode): string =>
+  route === 'gpt' ? 'Reasoning' : 'Thinking';
+
+const coerceModelRoute = (value?: string): ModelMode => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'gemini') return 'gemini';
+  if (normalized === 'gpt' || normalized === 'gpt-5.5' || normalized === 'gpt-5.4') return 'gpt';
+  if (normalized === 'claude' || normalized === 'claude-4.8' || normalized === 'claude-4.7' || normalized === 'claude-4.6') return 'claude';
+  return 'gemini';
+};
+
+const inferModelRouteFromModel = (modelUsed?: string): ModelMode => {
+  const model = String(modelUsed || '').trim().toLowerCase();
+  if (!model) return 'gemini';
+  if (model.includes('claude')) return 'claude';
+  if (model.includes('gpt')) return 'gpt';
+  return 'gemini';
+};
+
+type MilesMode = 'canopy' | 'derivation';
+type CopyCodeKey = 'canopy' | 'derivation';
 type WorkspaceView = 'arboretum' | 'treeBank';
+type DevReplayTarget = number | 'last' | null;
+
+interface DevBundleConfig {
+  bundlePath: string;
+  tab: AppTab;
+  replayStep: DevReplayTarget;
+  captureMode: boolean;
+}
 
 interface TreeBankEntry {
   id: string;
@@ -181,7 +324,9 @@ const normalizeTreeBankEntry = (value: unknown): TreeBankEntry | null => {
   const activeParseIndex = Number.isInteger(activeParseIndexRaw) && activeParseIndexRaw >= 0 ? activeParseIndexRaw : 0;
   const createdAt = String(candidate.createdAt || '').trim();
   const updatedAt = String(candidate.updatedAt || '').trim();
-  const bundle = candidate.bundle as ParseBundle | undefined;
+  const bundle = candidate.bundle
+    ? loadTreeBankBundleSnapshot(candidate.bundle) as ParseBundle
+    : undefined;
   const snapshotRaw = typeof candidate.treeSnapshotDataUrl === 'string' ? candidate.treeSnapshotDataUrl : '';
   const treeSnapshotDataUrl = snapshotRaw.startsWith('data:image/') ? snapshotRaw : undefined;
 
@@ -199,6 +344,22 @@ const normalizeTreeBankEntry = (value: unknown): TreeBankEntry | null => {
     bundle,
     treeSnapshotDataUrl
   };
+};
+
+const unwrapDevBundlePayload = (value: unknown): ParseBundle | null => {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Record<string, unknown>;
+  const response = candidate.response;
+  if (response && typeof response === 'object' && Array.isArray((response as unknown as ParseBundle).analyses)) {
+    return response as unknown as ParseBundle;
+  }
+  const result = candidate.result;
+  if (result && typeof result === 'object' && Array.isArray((result as unknown as ParseBundle).analyses)) {
+    return result as unknown as ParseBundle;
+  }
+  return Array.isArray((candidate as unknown as ParseBundle).analyses)
+    ? candidate as unknown as ParseBundle
+    : null;
 };
 
 const openTreeBankDb = (): Promise<IDBDatabase> =>
@@ -275,7 +436,7 @@ const removeTreeBankEntry = async (id: string): Promise<void> => {
   });
 };
 
-const NULL_SURFACE_RE = /^(∅|Ø|ε|null|epsilon)$/i;
+const NULL_SURFACE_RE = /^(?:∅|Ø|ε|null|epsilon)$/i;
 const TRACE_SURFACE_RE = /^(?:t|trace|t\d+|trace\d+|t[_-][a-z0-9{}]+|trace[_-][a-z0-9{}]+|<[^>]+>|⟨[^⟩]+⟩|\(t\)|\{t\})$/i;
 const KNOWN_CATEGORY_LABELS = new Set([
   'A',
@@ -339,139 +500,27 @@ const sanitizeMilesToken = (token: string): string =>
     .replace(/\[/g, '(')
     .replace(/\]/g, ')');
 
-const appendMovementIndex = (token: string, movementIndex?: string): string => {
-  const base = String(token || '').trim();
-  if (!base || !movementIndex) return base;
-  if (/_([a-z0-9]+)$/i.test(base)) return base;
-  return `${base}_${movementIndex}`;
-};
-
-const resolveLeafSurface = (node: SyntaxNode): string =>
-  String(node.word || node.label || '').trim();
-
-const pruneCanopyMovementArtifacts = (node: SyntaxNode, isRoot = true): SyntaxNode | null => {
-  const children = Array.isArray(node.children) ? node.children : [];
-  const prunedChildren = children
-    .map((child) => pruneCanopyMovementArtifacts(child, false))
-    .filter((child): child is SyntaxNode => Boolean(child));
-
-  if (prunedChildren.length === 0) {
-    const surface = resolveLeafSurface(node);
-    if (!isRoot && TRACE_SURFACE_RE.test(surface)) {
-      return null;
-    }
-    return {
-      label: node.label,
-      id: node.id,
-      word: node.word
-    };
-  }
-
-  return {
-    label: node.label,
-    id: node.id,
-    children: prunedChildren
-  };
-};
-
-const applyGrowthMovementNotation = (
-  node: SyntaxNode,
-  surface: string,
-  movementMaps: MovementIndexMaps
-): string => {
-  const nodeId = String(node.id || '').trim();
-  if (!nodeId || !surface) return surface;
-
-  const movedIndex = movementMaps.movedByNodeId.get(nodeId);
-  if (movedIndex) {
-    return appendMovementIndex(surface, movedIndex);
-  }
-
-  const traceIndex = movementMaps.traceByNodeId.get(nodeId);
-  if (traceIndex) {
-    if (/^<[^>]+>$/.test(surface) || /^⟨[^⟩]+⟩$/.test(surface)) return surface;
-    return `<${traceIndex}>`;
-  }
-
-  return surface;
-};
-
-const serializeMilesNode = (
-  node: SyntaxNode,
-  mode: MilesMode,
-  movementMaps: MovementIndexMaps
-): string => {
+const serializeMilesNode = (node: SyntaxNode): string => {
+  if (!node || typeof node !== 'object') return '';
   const label = String(node.label || '').trim();
   const word = String(node.word || '').trim();
-  const children = Array.isArray(node.children) ? node.children : [];
+  const children = Array.isArray(node.children)
+    ? node.children.filter((child): child is SyntaxNode => Boolean(child && typeof child === 'object'))
+    : [];
 
   if (children.length === 0) {
     const rawSurface = (word || label || '∅').trim();
-    const nodeId = String(node.id || '').trim();
-    const movedIndex = mode === 'growth' && nodeId
-      ? movementMaps.movedByNodeId.get(nodeId)
-      : undefined;
-    const hasRenderableLabelToken = Boolean(
-      label &&
-      word &&
-      label !== word &&
-      (
-        isLikelySyntacticCategory(label) ||
-        (mode === 'growth' && Boolean(movedIndex))
-      )
-    );
-    const attachMovementToLabel = Boolean(
-      mode === 'growth' &&
-      movedIndex &&
-      hasRenderableLabelToken
-    );
-    const surfaced = mode === 'growth'
-      ? (attachMovementToLabel ? rawSurface : applyGrowthMovementNotation(node, rawSurface, movementMaps))
-      : rawSurface;
-    const token = sanitizeMilesToken(surfaced || '∅');
-
-    if (word) {
-      if (hasRenderableLabelToken) {
-        const categoryToken = attachMovementToLabel
-          ? sanitizeMilesToken(appendMovementIndex(label, movedIndex))
-          : sanitizeMilesToken(label);
-        return `[${categoryToken} ${token}]`;
-      }
-      return token;
-    }
-
+    const token = sanitizeMilesToken(rawSurface || '∅');
+    if (word) return token;
     if (label && isLikelySyntacticCategory(label)) {
       return `[${sanitizeMilesToken(label)} ${token === sanitizeMilesToken(label) ? '∅' : token}]`;
     }
-
     return token;
   }
 
-  const promotedMovementIndex = (() => {
-    if (mode !== 'growth' || children.length !== 1) return undefined;
-    const parentLabel = String(label || word || '').trim();
-    if (!parentLabel) return undefined;
-    const onlyChild = children[0];
-    const childChildren = Array.isArray(onlyChild.children) ? onlyChild.children : [];
-    if (childChildren.length > 0) return undefined;
-    const parentId = String(node.id || '').trim();
-    if (parentId && movementMaps.movedByNodeId.has(parentId)) return undefined;
-    const childId = String(onlyChild.id || '').trim();
-    if (!childId) return undefined;
-    return movementMaps.movedByNodeId.get(childId);
-  })();
-
-  if (promotedMovementIndex) {
-    const onlyChild = children[0];
-    const childSurface = sanitizeMilesToken(String(onlyChild.word || onlyChild.label || '∅').trim() || '∅');
-    const promotedLabel = sanitizeMilesToken(appendMovementIndex(label || word || 'X', promotedMovementIndex));
-    return `[${promotedLabel} ${childSurface}]`;
-  }
-
   const serializedChildren = children
-    .map((child) => serializeMilesNode(child, mode, movementMaps))
+    .map((child) => serializeMilesNode(child))
     .filter((value) => value.length > 0);
-
   const nodeLabel = sanitizeMilesToken(label || word || 'X');
   if (serializedChildren.length === 0) return `[${nodeLabel}]`;
   return `[${nodeLabel} ${serializedChildren.join(' ')}]`;
@@ -479,404 +528,10 @@ const serializeMilesNode = (
 
 const buildMilesNotation = (
   tree: SyntaxNode,
-  mode: MilesMode,
-  movementEvents?: MovementEvent[],
-  precomputedMovementMaps?: MovementIndexMaps
+  _mode: MilesMode
 ): string => {
-  const movementMaps = mode === 'growth'
-    ? (precomputedMovementMaps || buildMovementIndexMaps(tree, movementEvents))
-    : EMPTY_MOVEMENT_INDEX_MAPS;
-  return serializeMilesNode(tree, mode, movementMaps).trim();
-};
-
-const EXPLANATION_MOVEMENT_RE = /\b(move(?:ment|d|s|ing)?|internal\s*merge|head[\s-]*move(?:ment)?|raising|raised|trace|copy|a-?bar|a-?move|wh-?move|spec(?:ifier)?[, ]*(?:cp|tp|inflp|ip)|epp)\b/i;
-const EXPLANATION_HEDGE_RE = /\b(may|might|possibly|can)\b/gi;
-const EXPLANATION_HEADMOVE_RE = /\b(head[\s-]*move(?:ment)?|v\s*-?to\s*-?[ct]|t\s*-?to\s*-?c)\b/i;
-const EXPLANATION_WHMOVE_RE = /\b(wh-?move|wh-?movement|wh-?fronting|\[\+wh\]|a-?bar|spec[, ]*cp)\b/i;
-const EXPLANATION_AMOVE_RE = /\b(a-?move|a-?movement|spec(?:ifier)?[, ]*tp|epp)\b/i;
-const EXPLANATION_INTERNALMERGE_RE = /\binternal\s*merge\b/i;
-
-const splitExplanationSentences = (text: string): string[] =>
-  String(text || '')
-    .split(/(?<=[.!?])\s+/)
-    .map((segment) => segment.trim())
-    .filter((segment) => segment.length > 0);
-
-const cleanExplanationWhitespace = (text: string): string =>
-  String(text || '')
-    .replace(/\s+/g, ' ')
-    .replace(/\s+([,.;:!?])/g, '$1')
-    .trim();
-
-const ensureExplanationTerminator = (text: string): string => {
-  const value = cleanExplanationWhitespace(text);
-  if (!value) return '';
-  return /[.!?]$/.test(value) ? value : `${value}.`;
-};
-
-const removeWeakHedging = (text: string): string =>
-  cleanExplanationWhitespace(String(text || '').replace(EXPLANATION_HEDGE_RE, ''));
-
-const extractMovementClaimsFromSentence = (sentence: string): {
-  mentionsMovement: boolean;
-  claimsHeadMove: boolean;
-  claimsWhMove: boolean;
-  claimsAMove: boolean;
-  claimsInternalMerge: boolean;
-} => {
-  const text = String(sentence || '');
-  return {
-    mentionsMovement: EXPLANATION_MOVEMENT_RE.test(text),
-    claimsHeadMove: EXPLANATION_HEADMOVE_RE.test(text),
-    claimsWhMove: EXPLANATION_WHMOVE_RE.test(text),
-    claimsAMove: EXPLANATION_AMOVE_RE.test(text),
-    claimsInternalMerge: EXPLANATION_INTERNALMERGE_RE.test(text)
-  };
-};
-
-const normalizeMovementOperationForSummary = (operation?: MovementEvent['operation']): string =>
-  String(operation || '').trim().toLowerCase().replace(/[^a-z]/g, '');
-
-const extractMovementEventKinds = (movementEvents?: MovementEvent[]): Set<string> => {
-  const kinds = new Set<string>();
-  (Array.isArray(movementEvents) ? movementEvents : []).forEach((event) => {
-    const op = normalizeMovementOperationForSummary(event.operation);
-    if (op === 'headmove') kinds.add('head');
-    if (op === 'move' || op === 'abarmove' || op === 'amove' || op === 'internalmerge') {
-      kinds.add('generic');
-    }
-    if (op === 'abarmove') kinds.add('wh');
-    if (op === 'amove') kinds.add('a');
-    if (op === 'internalmerge') kinds.add('internal');
-  });
-  return kinds;
-};
-
-const movementKindFromOperation = (operation?: MovementEvent['operation']): string | null => {
-  const op = normalizeMovementOperationForSummary(operation);
-  if (op === 'headmove') return 'head';
-  if (op === 'abarmove') return 'wh';
-  if (op === 'amove') return 'a';
-  if (op === 'internalmerge') return 'internal';
-  return null;
-};
-
-const extractClaimedMovementKindsFromText = (text: string): Set<string> => {
-  const kinds = new Set<string>();
-  splitExplanationSentences(text).forEach((sentence) => {
-    const claims = extractMovementClaimsFromSentence(sentence);
-    if (claims.claimsHeadMove) kinds.add('head');
-    if (claims.claimsWhMove) kinds.add('wh');
-    if (claims.claimsAMove) kinds.add('a');
-    if (claims.claimsInternalMerge) kinds.add('internal');
-    if (
-      claims.mentionsMovement
-      && !claims.claimsHeadMove
-      && !claims.claimsWhMove
-      && !claims.claimsAMove
-      && !claims.claimsInternalMerge
-    ) {
-      kinds.add('generic');
-    }
-  });
-  return kinds;
-};
-
-const isCompatibleMovementSentence = (sentence: string, movementKinds: Set<string>): boolean => {
-  const claims = extractMovementClaimsFromSentence(sentence);
-  if (!claims.mentionsMovement) return true;
-  if (/\bor\b/i.test(sentence)) return false;
-  const hasGenericPhrasalMovement = movementKinds.has('generic');
-  if (claims.claimsHeadMove && !movementKinds.has('head')) return false;
-  if (claims.claimsWhMove && !(movementKinds.has('wh') || hasGenericPhrasalMovement)) return false;
-  if (claims.claimsAMove && !(movementKinds.has('a') || hasGenericPhrasalMovement)) return false;
-  if (claims.claimsInternalMerge && !(movementKinds.has('internal') || hasGenericPhrasalMovement)) return false;
-  return true;
-};
-
-const joinWithAnd = (items: string[]): string => {
-  const values = items.filter(Boolean);
-  if (values.length === 0) return '';
-  if (values.length === 1) return values[0];
-  if (values.length === 2) return `${values[0]} and ${values[1]}`;
-  return `${values.slice(0, -1).join(', ')}, and ${values[values.length - 1]}`;
-};
-
-const isNullLikeSurface = (surface: string): boolean => NULL_SURFACE_RE.test(surface);
-const isTraceLikeSurface = (surface: string): boolean => TRACE_SURFACE_RE.test(surface);
-
-const stripMovementIndex = (label: string): string =>
-  String(label || '')
-    .trim()
-    .replace(/[_-]\{?[a-z0-9]+\}?$/i, '');
-
-const normalizeMovementLabelKey = (label?: string): string =>
-  stripMovementIndex(String(label || ''))
-    .replace(/[’']+$/g, '')
-    .replace(/_bar$/i, '')
-    .toLowerCase();
-
-const buildNodeIndexForExplanation = (tree?: SyntaxNode | null): Map<string, SyntaxNode> => {
-  const byId = new Map<string, SyntaxNode>();
-  const visit = (node?: SyntaxNode | null) => {
-    if (!node) return;
-    const id = String(node.id || '').trim();
-    if (id) byId.set(id, node);
-    const children = Array.isArray(node.children) ? node.children : [];
-    children.forEach(visit);
-  };
-  visit(tree || undefined);
-  return byId;
-};
-
-const buildParentIndexForExplanation = (tree?: SyntaxNode | null): Map<string, SyntaxNode> => {
-  const parentById = new Map<string, SyntaxNode>();
-  const visit = (node?: SyntaxNode | null) => {
-    if (!node) return;
-    const children = Array.isArray(node.children) ? node.children : [];
-    children.forEach((child) => {
-      const childId = String(child?.id || '').trim();
-      if (childId) parentById.set(childId, node);
-      visit(child);
-    });
-  };
-  visit(tree || undefined);
-  return parentById;
-};
-
-const collectOvertYieldForExplanation = (node?: SyntaxNode | null, words: string[] = []): string[] => {
-  if (!node) return words;
-  const children = Array.isArray(node.children) ? node.children : [];
-  if (children.length === 0) {
-    const surface = String(node.word || node.label || '').trim();
-    if (surface && !isNullLikeSurface(surface) && !isTraceLikeSurface(surface)) {
-      words.push(surface);
-    }
-    return words;
-  }
-  children.forEach((child) => collectOvertYieldForExplanation(child, words));
-  return words;
-};
-
-const getNodeOvertYieldForExplanation = (node?: SyntaxNode | null): string =>
-  collectOvertYieldForExplanation(node, []).join(' ').trim();
-
-const isNullLikeNodeForExplanation = (node?: SyntaxNode | null): boolean => {
-  if (!node) return false;
-  const surface = String(node.word || node.label || '').trim();
-  return Boolean(surface) && isNullLikeSurface(surface);
-};
-
-const isTraceLikeNodeForExplanation = (node?: SyntaxNode | null): boolean => {
-  if (!node) return false;
-  const surface = String(node.word || node.label || '').trim();
-  return Boolean(surface) && isTraceLikeSurface(surface);
-};
-
-const getMovementDisplayLabelForExplanation = (node?: SyntaxNode | null): string => {
-  if (!node) return '';
-  const stripped = stripMovementIndex(String(node.label || '').trim());
-  return stripped || String(node.label || '').trim();
-};
-
-const resolveHeadMoveSourceLabel = (
-  node: SyntaxNode | undefined,
-  parentById: Map<string, SyntaxNode>
-): string => {
-  if (!node) return '';
-  if (!isNullLikeNodeForExplanation(node) && !isTraceLikeNodeForExplanation(node)) {
-    return getMovementDisplayLabelForExplanation(node);
-  }
-  let current = parentById.get(String(node.id || '').trim());
-  while (current) {
-    const label = getMovementDisplayLabelForExplanation(current);
-    if (label && label !== '∅') return label;
-    current = parentById.get(String(current.id || '').trim());
-  }
-  return '';
-};
-
-const buildMovementDetailForExplanation = (
-  event: MovementEvent,
-  nodeById: Map<string, SyntaxNode>,
-  parentById: Map<string, SyntaxNode>
-): string => {
-  const operation = normalizeMovementOperationForSummary(event.operation);
-  const fromNode = nodeById.get(String(event.fromNodeId || '').trim());
-  const toNode = nodeById.get(String(event.toNodeId || '').trim());
-  const traceNode = event.traceNodeId ? nodeById.get(String(event.traceNodeId).trim()) : undefined;
-  const note = cleanExplanationWhitespace(String(event.note || ''));
-
-  if (!toNode) {
-    return note || 'movement';
-  }
-
-  if (operation === 'headmove') {
-    const movedHeadSurface = getNodeOvertYieldForExplanation(toNode);
-    const movedHead = movedHeadSurface ? `"${movedHeadSurface}"` : 'the head';
-    const landingHead = getMovementDisplayLabelForExplanation(toNode);
-    const sourceHead = resolveHeadMoveSourceLabel(traceNode || fromNode, parentById);
-    const normalizedSource = normalizeMovementLabelKey(sourceHead);
-    const normalizedLanding = normalizeMovementLabelKey(landingHead);
-    const phrase =
-      normalizedSource === 'c' && /^(?:infl|i|t)$/.test(normalizedLanding)
-        ? 'lowering'
-        : 'head movement';
-    if (sourceHead && landingHead && normalizedSource && normalizedLanding && normalizedSource !== normalizedLanding) {
-      return `${phrase} of ${movedHead} from ${sourceHead} to ${landingHead}`;
-    }
-    if (landingHead) {
-      return `${phrase} of ${movedHead} to ${landingHead}`;
-    }
-    return note || 'head movement';
-  }
-
-  const movedYield = getNodeOvertYieldForExplanation(toNode);
-  const movedLabel = getMovementDisplayLabelForExplanation(toNode);
-  const movedDescriptor = movedYield ? `${movedLabel} "${movedYield}"` : movedLabel;
-  if (
-    traceNode
-    && (isTraceLikeNodeForExplanation(traceNode) || isNullLikeNodeForExplanation(traceNode))
-    && movedDescriptor
-  ) {
-    return `movement of ${movedDescriptor} from its lower copy`;
-  }
-  if (
-    fromNode
-    && (isTraceLikeNodeForExplanation(fromNode) || isNullLikeNodeForExplanation(fromNode))
-    && movedDescriptor
-  ) {
-    return `movement of ${movedDescriptor} from its lower copy`;
-  }
-  const sourceLabel = getMovementDisplayLabelForExplanation(fromNode);
-  const landingLabel = getMovementDisplayLabelForExplanation(toNode);
-  if (sourceLabel && landingLabel) {
-    return `movement from ${sourceLabel} to ${landingLabel}`;
-  }
-  return note || 'movement';
-};
-
-const summarizeMovementFromEvents = (tree: SyntaxNode | null | undefined, movementEvents?: MovementEvent[]): string => {
-  if (!Array.isArray(movementEvents) || movementEvents.length === 0) return 'No movement is posited in this analysis.';
-
-  const nodeById = buildNodeIndexForExplanation(tree);
-  const parentById = buildParentIndexForExplanation(tree);
-  const details = movementEvents
-    .slice(0, 3)
-    .map((event) => buildMovementDetailForExplanation(event, nodeById, parentById))
-    .filter(Boolean);
-  if (details.length > 0) {
-    return `The derivation explicitly records ${details.join('; ')}.`;
-  }
-
-  const operationOrder: string[] = [];
-  movementEvents.forEach((event) => {
-    const op = normalizeMovementOperationForSummary(event.operation);
-    const key = op || 'move';
-    if (!operationOrder.includes(key)) operationOrder.push(key);
-  });
-
-  const labelForOperation = (op: string): string => {
-    if (op === 'headmove') return 'head movement';
-    if (op === 'internalmerge') return 'internal merge';
-    if (op === 'amove') return 'A-movement';
-    if (op === 'abarmove') return 'A-bar movement';
-    return 'movement';
-  };
-
-  const parts = operationOrder.map((op) => labelForOperation(op));
-  const summary = parts.length > 0
-    ? `Movement in this derivation includes ${joinWithAnd(parts)}.`
-    : 'Movement is present in this derivation.';
-  return summary;
-};
-
-const buildSupplementalMovementSummary = (
-  compatibleText: string,
-  tree: SyntaxNode | null | undefined,
-  movementEvents?: MovementEvent[]
-): string => {
-  if (!Array.isArray(movementEvents) || movementEvents.length === 0) return '';
-  const claimedKinds = extractClaimedMovementKindsFromText(compatibleText);
-  if (claimedKinds.size === 0) {
-    return summarizeMovementFromEvents(tree, movementEvents);
-  }
-
-  const missingEvents = movementEvents.filter((event) => {
-    const kind = movementKindFromOperation(event.operation);
-    if (!kind) return false;
-    return !claimedKinds.has(kind);
-  });
-  if (missingEvents.length === 0) return '';
-  return summarizeMovementFromEvents(tree, missingEvents);
-};
-
-const movementSignatureForSentence = (sentence: string): string => {
-  const claims = extractMovementClaimsFromSentence(sentence);
-  if (!claims.mentionsMovement) return '';
-  const tags: string[] = [];
-  if (claims.claimsHeadMove) tags.push('head');
-  if (claims.claimsWhMove) tags.push('wh');
-  if (claims.claimsAMove) tags.push('a');
-  if (claims.claimsInternalMerge) tags.push('internal');
-  if (tags.length === 0) tags.push('generic');
-  return tags.sort().join('+');
-};
-
-const dedupeMovementSentences = (sentences: string[]): string[] => {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  sentences.forEach((sentence) => {
-    const signature = movementSignatureForSentence(sentence);
-    if (!signature) {
-      out.push(sentence);
-      return;
-    }
-    if (seen.has(signature)) return;
-    seen.add(signature);
-    out.push(sentence);
-  });
-  return out;
-};
-
-const normalizeExplanationForDisplay = (
-  explanation: string,
-  movementEvents?: MovementEvent[],
-  tree?: SyntaxNode | null
-): string => {
-  const base = ensureExplanationTerminator(removeWeakHedging(explanation));
-  if (base) return base;
-  const hasMovementEvents = Array.isArray(movementEvents) && movementEvents.length > 0;
-  if (hasMovementEvents) return summarizeMovementFromEvents(tree, movementEvents);
-  return 'No movement is posited in this analysis.';
-};
-
-const ensureReplaySpelloutStep = (parse: ParseResult | null): DerivationStep[] | undefined => {
-  if (!parse) return undefined;
-  const existing = Array.isArray(parse.derivationSteps) ? parse.derivationSteps : [];
-  const surfaceOrder = Array.isArray(parse.surfaceOrder)
-    ? parse.surfaceOrder.map((token) => String(token || '').trim()).filter(Boolean)
-    : [];
-  if (surfaceOrder.length === 0) return existing.length > 0 ? existing : undefined;
-  const hasSpellout = existing.some((step) => String(step?.operation || '').trim() === 'SpellOut');
-  if (hasSpellout) return existing;
-
-  const rootId = String(parse.tree?.id || '').trim() || undefined;
-  const rootLabel = String(parse.tree?.label || '').trim() || 'Tree';
-  return [
-    ...existing,
-    {
-      operation: 'SpellOut',
-      targetNodeId: rootId,
-      targetLabel: rootLabel,
-      sourceNodeIds: rootId ? [rootId] : undefined,
-      sourceLabels: [rootLabel],
-      recipe: 'SpellOut',
-      workspaceAfter: [rootLabel],
-      spelloutOrder: surfaceOrder,
-      note: 'Final spellout of the committed surface order.'
-    }
-  ];
+  if (!tree || typeof tree !== 'object') return '';
+  return serializeMilesNode(tree).trim();
 };
 
 const App: React.FC = () => {
@@ -887,6 +542,24 @@ const App: React.FC = () => {
     if (typeof window === 'undefined') return false;
     const value = new URLSearchParams(window.location.search).get('showcase');
     return ['1', 'true', 'yes'].includes(String(value || '').toLowerCase());
+  }, []);
+  const devBundleConfig = useMemo<DevBundleConfig | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const bundlePath = String(params.get('devBundle') || '').trim();
+    if (!bundlePath) return null;
+    const rawTab = String(params.get('devTab') || '').trim();
+    const tab: AppTab =
+      rawTab === 'derivation' || rawTab === 'notes' || rawTab === 'tree' ? rawTab : 'tree';
+    const rawReplayStep = String(params.get('devReplayStep') || '').trim().toLowerCase();
+    const replayStep: DevReplayTarget =
+      rawReplayStep === 'last'
+        ? 'last'
+        : (rawReplayStep !== '' && Number.isInteger(Number(rawReplayStep)) && Number(rawReplayStep) >= 0
+          ? Number(rawReplayStep)
+          : null);
+    const captureMode = ['1', 'true', 'yes'].includes(String(params.get('devCapture') || '').toLowerCase());
+    return { bundlePath, tab, replayStep, captureMode };
   }, []);
   const spores = useMemo(
     () =>
@@ -902,14 +575,17 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [analysisBundle, setAnalysisBundle] = useState<ParseBundle | null>(null);
   const [activeParseIndex, setActiveParseIndex] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<UiErrorState | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('tree');
   const [isInputExpanded, setIsInputExpanded] = useState(true);
   const [isInputVisible, setIsInputVisible] = useState(!showcaseMode);
+  const [devCaptureMode, setDevCaptureMode] = useState(false);
   const [needsKey, setNeedsKey] = useState(false);
+  const [keyPromptMode, setKeyPromptMode] = useState<KeyPromptMode>('none');
   const [abstractionMode, setAbstractionMode] = useState(false);
   const [framework, setFramework] = useState<'xbar' | 'minimalism'>('xbar');
-  const [modelRoute, setModelRoute] = useState<ModelRoute>('flash-lite');
+  const [modelRoute, setModelRoute] = useState<ModelMode>('gemini');
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('high');
   const [copiedCodeKey, setCopiedCodeKey] = useState<CopyCodeKey | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [parsedSentence, setParsedSentence] = useState('The farmer eats the pig');
@@ -921,45 +597,206 @@ const App: React.FC = () => {
   const [treeBankSaving, setTreeBankSaving] = useState(false);
   const [entryPendingDelete, setEntryPendingDelete] = useState<TreeBankEntry | null>(null);
   const activeParse: ParseResult | null = analysisBundle?.analyses?.[activeParseIndex] ?? null;
-  const hasAmbiguity = (analysisBundle?.analyses?.length ?? 0) === 2;
-  const selectedModelLabel = modelRoute === 'pro' ? 'Gemini 3.1 Pro' : 'Gemini 3.1 Flash Lite';
+  const hasAmbiguity = (analysisBundle?.analyses?.length ?? 0) > 1;
+  const selectedModelLabel = MODEL_ROUTE_LABELS[modelRoute];
   const modelLabel = formatModelLabel(analysisBundle?.modelUsed);
-  const isFallbackModel = Boolean(analysisBundle?.fallbackUsed);
+  const activeModelOption = MODEL_MODE_PILLS.find((option) => option.id === modelRoute) || MODEL_MODE_PILLS[0];
+  const nextModelOption = MODEL_MODE_PILLS[
+    (MODEL_MODE_SEQUENCE.indexOf(activeModelOption.id) + 1 + MODEL_MODE_SEQUENCE.length) % MODEL_MODE_SEQUENCE.length
+  ] || MODEL_MODE_PILLS[0];
+  const activeReasoningEffort = coerceReasoningEffortForRoute(modelRoute, reasoningEffort);
+  const activeReasoningOptions = REASONING_OPTIONS_BY_MODEL[modelRoute];
+  const nextReasoningEffort = activeReasoningOptions[
+    (activeReasoningOptions.indexOf(activeReasoningEffort) + 1 + activeReasoningOptions.length) % activeReasoningOptions.length
+  ] || activeReasoningOptions[0];
+  const reasoningControlLabel = reasoningControlLabelForRoute(modelRoute);
   const isTreeBankView = workspaceView === 'treeBank';
   const hideShowcaseInput = showcaseMode && Boolean(activeParse);
-  const resolvedMovementLinks = useMemo(() => {
-    if (!activeParse) return [];
-    return resolveMovementEventLinks(activeParse.tree, activeParse.movementEvents, framework);
-  }, [activeParse, framework]);
-  const growthMovementMaps = useMemo(() => {
-    if (!activeParse) return EMPTY_MOVEMENT_INDEX_MAPS;
-    return buildMovementIndexMaps(activeParse.tree, activeParse.movementEvents, framework);
-  }, [activeParse, framework]);
-  const replayDerivationSteps = useMemo(() => ensureReplaySpelloutStep(activeParse), [activeParse]);
+  const replayDerivationSteps = useMemo(
+    () => activeParse?.derivationSteps?.filter((step) => String(step?.operation || '').trim() !== 'SpellOut'),
+    [activeParse]
+  );
   const canopyMilesNotation = useMemo(() => {
     if (!activeParse) return '';
-    const tracePrunedTree = pruneCanopyMovementArtifacts(activeParse.tree) || activeParse.tree;
-    return buildMilesNotation(tracePrunedTree, 'canopy');
+    return buildMilesNotation(activeParse.tree, 'canopy');
   }, [activeParse]);
-  const growthMilesNotation = useMemo(() => {
+  const derivationMilesNotation = useMemo(() => {
     if (!activeParse) return '';
-    return buildMilesNotation(activeParse.tree, 'growth', activeParse.movementEvents, growthMovementMaps);
-  }, [activeParse, growthMovementMaps]);
-  const normalizedExplanation = useMemo(() => {
-    if (!activeParse) return '';
-    return normalizeExplanationForDisplay(activeParse.explanation, activeParse.movementEvents, activeParse.tree);
+    return buildMilesNotation(activeParse.tree, 'derivation');
   }, [activeParse]);
+  const derivationalNoteParagraphs = useMemo(() => {
+    if (!activeParse) return [];
+    return collectDerivationStageRecords(activeParse.derivationStages);
+  }, [activeParse]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const target = window as any;
+    target.__BABEL_DEV_SET_ANALYSIS__ = (bundle: ParseBundle, options: {
+      sentence?: string;
+      framework?: 'xbar' | 'minimalism';
+      modelRoute?: ModelMode;
+      reasoningEffort?: ReasoningEffort;
+    } = {}) => {
+      setAnalysisBundle(bundle);
+      const nextSentence = String(options.sentence || '').trim();
+      if (nextSentence) {
+        setParsedSentence(nextSentence);
+        setInput(nextSentence);
+      }
+      if (options.framework) setFramework(options.framework);
+      if (options.modelRoute) {
+        const nextRoute = coerceModelRoute(options.modelRoute);
+        setModelRoute(nextRoute);
+        setReasoningEffort(coerceReasoningEffortForRoute(nextRoute, options.reasoningEffort || reasoningEffort));
+      } else if (options.reasoningEffort) {
+        setReasoningEffort(coerceReasoningEffortForRoute(modelRoute, options.reasoningEffort));
+      }
+      setActiveParseIndex(0);
+      setActiveTab('tree');
+      setError(null);
+      setCopiedCodeKey(null);
+      setNeedsKey(false);
+      setKeyPromptMode('none');
+      setIsInputVisible(true);
+      setIsInputExpanded(true);
+      setWorkspaceView('arboretum');
+      setLoading(false);
+    };
+    target.__BABEL_DEV_SET_TAB__ = (tab: AppTab) => {
+      if (tab === 'tree' || tab === 'derivation' || tab === 'notes') {
+        setActiveTab(tab);
+      }
+    };
+    target.__BABEL_DEV_SET_INPUT_VISIBILITY__ = (visible: boolean) => {
+      setIsInputVisible(Boolean(visible));
+    };
+    target.__BABEL_DEV_SET_CAPTURE_MODE__ = (enabled: boolean) => {
+      setDevCaptureMode(Boolean(enabled));
+    };
+
+    return () => {
+      delete target.__BABEL_DEV_SET_ANALYSIS__;
+      delete target.__BABEL_DEV_SET_TAB__;
+      delete target.__BABEL_DEV_SET_INPUT_VISIBILITY__;
+      delete target.__BABEL_DEV_SET_CAPTURE_MODE__;
+    };
+  }, [modelRoute, reasoningEffort]);
+
+  useEffect(() => {
+    setReasoningEffort((current) => coerceReasoningEffortForRoute(modelRoute, current));
+  }, [modelRoute]);
 
   useEffect(() => {
     const checkKeyStatus = async () => {
       const aistudio = (window as any).aistudio;
       if (aistudio && typeof aistudio.hasSelectedApiKey === 'function') {
         const hasKey = await aistudio.hasSelectedApiKey();
-        if (!hasKey) setNeedsKey(true);
+        if (!hasKey) {
+          setNeedsKey(true);
+          setKeyPromptMode('gemini');
+        }
       }
     };
     checkKeyStatus();
   }, []);
+
+  useEffect(() => {
+    if (!devBundleConfig) return;
+    let cancelled = false;
+
+    const loadDevBundle = async () => {
+      try {
+        const response = await fetch(devBundleConfig.bundlePath, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const saved = await response.json();
+        const bundle = unwrapDevBundlePayload(saved);
+        if (!bundle || !Array.isArray(bundle.analyses) || bundle.analyses.length === 0) {
+          throw new Error('Saved bundle does not contain analyses.');
+        }
+        if (cancelled) return;
+
+        const savedRecord = saved && typeof saved === 'object' ? saved as Record<string, any> : {};
+        const requestRecord = savedRecord.request && typeof savedRecord.request === 'object'
+          ? savedRecord.request as Record<string, any>
+          : {};
+        const firstAnalysis = bundle.analyses[0];
+        const pronouncedTerminalSentence = collectPronouncedTerminalSequence(firstAnalysis?.tree).join(' ');
+        const nextSentence =
+          String(requestRecord.sentence || savedRecord.sentence || bundle.sentence || '').trim()
+          || pronouncedTerminalSentence
+          || 'Sentence unavailable';
+        const nextFramework = requestRecord.framework === 'minimalism'
+          ? 'minimalism'
+          : (requestRecord.framework === 'xbar' ? 'xbar' : firstAnalysis?.provenance?.framework === 'minimalism' ? 'minimalism' : 'xbar');
+        const nextModelRoute =
+          String(requestRecord.modelRoute || savedRecord.requestedRoute || bundle.requestedModelRoute || '').trim()
+          || inferModelRouteFromModel(bundle.modelUsed);
+        const coercedModelRoute = coerceModelRoute(nextModelRoute);
+        const nextReasoningEffort = String(requestRecord.reasoningEffort || bundle.requestedReasoningEffort || '').trim();
+
+        setAnalysisBundle(bundle);
+        setParsedSentence(nextSentence);
+        setInput(nextSentence);
+        setFramework(nextFramework);
+        setModelRoute(coercedModelRoute);
+        setReasoningEffort(coerceReasoningEffortForRoute(coercedModelRoute, nextReasoningEffort || reasoningEffort));
+        setActiveParseIndex(0);
+        setActiveTab(devBundleConfig.tab);
+        setError(null);
+        setCopiedCodeKey(null);
+        setNeedsKey(false);
+        setKeyPromptMode('none');
+        setWorkspaceView('arboretum');
+        setLoading(false);
+        setDevCaptureMode(devBundleConfig.captureMode);
+        setIsInputVisible(!(showcaseMode || devBundleConfig.captureMode));
+        setIsInputExpanded(!(showcaseMode || devBundleConfig.captureMode));
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : String(err || 'Unknown error');
+        setError({ message: `Unable to load preview bundle: ${message}` });
+      }
+    };
+
+    loadDevBundle();
+    return () => {
+      cancelled = true;
+    };
+  }, [devBundleConfig, showcaseMode, reasoningEffort]);
+
+  useEffect(() => {
+    if (!devBundleConfig || devBundleConfig.replayStep === null || typeof window === 'undefined' || !analysisBundle) {
+      return;
+    }
+    let attempts = 0;
+    const target = window as any;
+    const timer = window.setInterval(() => {
+      const getReplayCount = target.__BABEL_DEV_GET_REPLAY_STEP_COUNT__;
+      const setReplayStep = target.__BABEL_DEV_SET_REPLAY_STEP__;
+      if (typeof getReplayCount !== 'function' || typeof setReplayStep !== 'function') {
+        attempts += 1;
+        if (attempts > 40) window.clearInterval(timer);
+        return;
+      }
+      const replayCount = Number(getReplayCount()) || 0;
+      if (replayCount <= 0) {
+        attempts += 1;
+        if (attempts > 40) window.clearInterval(timer);
+        return;
+      }
+      const nextStep = devBundleConfig.replayStep === 'last'
+        ? replayCount - 1
+        : Math.min(Math.max(devBundleConfig.replayStep, 0), replayCount - 1);
+      setReplayStep(nextStep);
+      window.clearInterval(timer);
+    }, 180);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [analysisBundle, devBundleConfig]);
 
   useEffect(() => {
     const syncFullscreenState = () => {
@@ -1027,6 +864,7 @@ const App: React.FC = () => {
       try {
         await aistudio.openSelectKey();
         setNeedsKey(false);
+        setKeyPromptMode('none');
         setError(null);
         if (loading) handleParse();
       } catch (err) {
@@ -1044,18 +882,22 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      const data = await parseSentence(input, framework, modelRoute);
+      const data = await parseSentence(input, framework, modelRoute, activeReasoningEffort);
       setAnalysisBundle(data);
-      setModelRoute(data.requestedModelRoute || modelRoute);
+      const nextModelRoute = coerceModelRoute(data.requestedModelRoute || modelRoute);
+      setModelRoute(nextModelRoute);
+      setReasoningEffort(coerceReasoningEffortForRoute(nextModelRoute, data.requestedReasoningEffort || activeReasoningEffort));
       setParsedSentence(input.trim());
       setActiveParseIndex(0);
       setActiveTab('tree');
       setCopiedCodeKey(null);
       setNeedsKey(false);
+      setKeyPromptMode('none');
     } catch (err: unknown) {
-      const uiError = resolveUiError(err);
+      const uiError = resolveUiError(err, modelRoute);
       setNeedsKey(uiError.needsKey);
-      setError(uiError.message);
+      setKeyPromptMode(uiError.keyPromptMode);
+      setError(uiError.error);
     } finally {
       setLoading(false);
     }
@@ -1068,7 +910,7 @@ const App: React.FC = () => {
     if (!sentence) return;
 
     const now = new Date().toISOString();
-    const snapshot = JSON.parse(JSON.stringify(analysisBundle)) as ParseBundle;
+    const snapshot = createTreeBankBundleSnapshot(analysisBundle) as ParseBundle;
     const treeSnapshotDataUrl = captureVisibleTreeSnapshot();
     const entry: TreeBankEntry = {
       id: createTreeBankId(),
@@ -1113,12 +955,15 @@ const App: React.FC = () => {
     setParsedSentence(entry.sentence);
     setInput(entry.sentence);
     setFramework(entry.framework);
-    setModelRoute(entry.bundle.requestedModelRoute || inferModelRouteFromModel(entry.bundle.modelUsed));
+    const nextModelRoute = coerceModelRoute(entry.bundle.requestedModelRoute || inferModelRouteFromModel(entry.bundle.modelUsed));
+    setModelRoute(nextModelRoute);
+    setReasoningEffort(coerceReasoningEffortForRoute(nextModelRoute, entry.bundle.requestedReasoningEffort || reasoningEffort));
     setActiveParseIndex(nextParseIndex);
     setActiveTab('tree');
     setError(null);
     setCopiedCodeKey(null);
     setNeedsKey(false);
+    setKeyPromptMode('none');
     setIsInputVisible(true);
     setIsInputExpanded(true);
     setWorkspaceView('arboretum');
@@ -1215,7 +1060,12 @@ const App: React.FC = () => {
                           }`}
                           aria-hidden="true"
                         >
-                          {framework === 'xbar' ? 'X̄' : 'vP'}
+                          {framework === 'xbar' ? (
+                            <span className="relative inline-flex w-4 items-center justify-center leading-none">
+                              X
+                              <span className="absolute left-1/2 top-[-0.16rem] h-[2px] w-3 -translate-x-1/2 rounded-full bg-current" />
+                            </span>
+                          ) : 'vP'}
                         </span>
                         {framework === 'xbar' ? 'X-Bar Theory' : 'Minimalist Program'}
                       </button>
@@ -1271,22 +1121,41 @@ const App: React.FC = () => {
                   </button>
 
                   {!isTreeBankView && (
-                    <button
-                      onClick={() => setModelRoute(modelRoute === 'flash-lite' ? 'pro' : 'flash-lite')}
-                      className={`flex items-center gap-2 text-[9px] font-black px-3.5 md:px-5 py-2 md:py-2.5 rounded-full border tracking-[0.18em] md:tracking-widest uppercase shadow-inner whitespace-nowrap ${
-                        modelRoute === 'pro'
-                          ? 'text-purple-300 bg-purple-950/35 border-purple-700/40'
-                          : 'text-emerald-400 bg-emerald-950/40 border-emerald-900/30'
-                      }`}
+                    <div
+                      className="flex flex-wrap items-center gap-2"
                       title={
                         analysisBundle?.modelUsed
-                          ? `Selected route: ${selectedModelLabel}. Last parse used: ${modelLabel}${isFallbackModel ? ' (fallback).' : '.'}`
-                          : 'Toggle parsing model route'
+                          ? `Selected route: ${selectedModelLabel}. Last parse used: ${modelLabel}.`
+                          : 'Choose parsing model route'
                       }
                     >
-                      <Zap size={10} className={modelRoute === 'pro' ? 'fill-purple-300' : 'fill-emerald-400'} />
-                      {selectedModelLabel}
-                    </button>
+                      <button
+                        onClick={() => {
+                          const nextRoute = nextModelOption.id;
+                          setModelRoute(nextRoute);
+                          setReasoningEffort((current) => coerceReasoningEffortForRoute(nextRoute, current));
+                          setError(null);
+                          setNeedsKey(false);
+                          setKeyPromptMode('none');
+                        }}
+                        className={`flex items-center gap-2 text-[9px] font-black px-3.5 md:px-4 py-2 rounded-full border tracking-[0.18em] md:tracking-widest uppercase shadow-inner whitespace-nowrap transition-all ${activeModelOption.activeClassName}`}
+                        title={`Current route: ${MODEL_ROUTE_LABELS[activeModelOption.id]}. Click to switch to ${MODEL_ROUTE_LABELS[nextModelOption.id]}.`}
+                      >
+                        <Zap size={10} className="fill-current" />
+                        {MODEL_ROUTE_LABELS[activeModelOption.id]}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setReasoningEffort(nextReasoningEffort);
+                          setError(null);
+                        }}
+                        className={`flex items-center gap-2 text-[9px] font-black px-3.5 md:px-4 py-2 rounded-full border tracking-[0.18em] md:tracking-widest uppercase shadow-inner whitespace-nowrap transition-all ${REASONING_PILL_STYLES[activeReasoningEffort]}`}
+                        title={`${reasoningControlLabel}: ${REASONING_EFFORT_LABELS[activeReasoningEffort]}. Click to switch to ${REASONING_EFFORT_LABELS[nextReasoningEffort]}.`}
+                      >
+                        <Brain size={10} className="fill-current" />
+                        {reasoningControlLabel}: {REASONING_EFFORT_LABELS[activeReasoningEffort]}
+                      </button>
+                    </div>
                   )}
 
                   <button
@@ -1351,7 +1220,6 @@ const App: React.FC = () => {
                       Math.max((entry.bundle.analyses?.length ?? 1) - 1, 0)
                     );
                     const activeSavedParse = entry.bundle.analyses?.[safeParseIndex];
-                    const movementCount = activeSavedParse?.movementEvents?.length ?? 0;
                     const derivationCount = activeSavedParse?.derivationSteps?.length ?? 0;
 
                     return (
@@ -1378,9 +1246,6 @@ const App: React.FC = () => {
                           </span>
                           <span className="px-3 py-1.5 rounded-full border border-white/15 text-white/70 bg-white/5">
                             {derivationCount} Derivation Steps
-                          </span>
-                          <span className="px-3 py-1.5 rounded-full border border-white/15 text-white/70 bg-white/5">
-                            {movementCount} Movements
                           </span>
                         </div>
 
@@ -1426,27 +1291,20 @@ const App: React.FC = () => {
 
         {!isTreeBankView && hasAmbiguity && (
           <div className="absolute top-6 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2">
-            <div className="flex items-center gap-2 p-1 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-lg shadow-2xl">
-              <button
-                onClick={() => setActiveParseIndex(0)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  activeParseIndex === 0
-                    ? 'moss-gradient text-white border border-emerald-400/50'
-                    : 'text-white/60 hover:text-emerald-300'
-                }`}
-              >
-                Parse 1
-              </button>
-              <button
-                onClick={() => setActiveParseIndex(1)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  activeParseIndex === 1
-                    ? 'moss-gradient text-white border border-emerald-400/50'
-                    : 'text-white/60 hover:text-emerald-300'
-                }`}
-              >
-                Parse 2
-              </button>
+            <div className="flex max-w-[min(92vw,64rem)] flex-wrap items-center justify-center gap-2 p-1 rounded-2xl border border-white/10 bg-black/50 backdrop-blur-lg shadow-2xl">
+              {(analysisBundle?.analyses || []).map((_, parseIndex) => (
+                <button
+                  key={`parse-choice-${parseIndex}`}
+                  onClick={() => setActiveParseIndex(parseIndex)}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    activeParseIndex === parseIndex
+                      ? 'moss-gradient text-white border border-emerald-400/50'
+                      : 'text-white/60 hover:text-emerald-300'
+                  }`}
+                >
+                  Parse {parseIndex + 1}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -1475,12 +1333,12 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {!loading && activeParse && (activeTab === 'tree' || activeTab === 'growth') ? (
+          {!loading && activeParse && (activeTab === 'tree' || activeTab === 'derivation') ? (
             <TreeVisualizer 
               data={activeParse.tree} 
-              animated={activeTab === 'growth'} 
+              animated={activeTab === 'derivation'}
               derivationSteps={replayDerivationSteps}
-              resolvedMovementLinks={resolvedMovementLinks}
+              derivationStages={activeParse.derivationStages}
               abstractionMode={abstractionMode}
               sentence={parsedSentence}
             />
@@ -1491,19 +1349,25 @@ const App: React.FC = () => {
               {activeTab === 'notes' && (
                 <div className="max-w-4xl w-full space-y-8">
                   <div className="glass-dark p-6 md:p-12 rounded-[2rem] md:rounded-[3rem] shadow-2xl">
-                     <div className="flex items-center gap-4 md:gap-5 mb-6 md:mb-8">
+                      <div className="flex items-center gap-4 md:gap-5 mb-6 md:mb-8">
                         <div className="w-10 h-10 md:w-12 md:h-12 moss-gradient rounded-2xl flex items-center justify-center text-white shadow-lg">
                           <Info size={24} />
                         </div>
-                        <h2 className="text-xl md:text-3xl font-bold text-white serif tracking-tight">Structural Genealogy ({framework === 'xbar' ? 'X-Bar' : 'Minimalism'})</h2>
+                        <h2 className="text-xl md:text-3xl font-bold text-white serif tracking-tight">Derivational Notes</h2>
                       </div>
-                      {activeParse.interpretation && (
-                        <p className="text-xs uppercase tracking-[0.2em] text-emerald-400/70 mb-4">{activeParse.interpretation}</p>
-                      )}
-                      <p className="text-emerald-50/90 leading-relaxed italic serif text-lg md:text-2xl border-l-2 border-emerald-500/20 pl-5 md:pl-8">"{normalizedExplanation}"</p>
+                      <div className="space-y-5 md:space-y-6">
+                        {derivationalNoteParagraphs.map((paragraph, index) => (
+                          <p
+                            key={`derivational-note-${index}`}
+                            className="text-emerald-50/90 leading-relaxed italic serif text-lg md:text-2xl border-l-2 border-emerald-500/20 pl-5 md:pl-8"
+                          >
+                            &quot;{paragraph}&quot;
+                          </p>
+                        ))}
+                      </div>
                   </div>
 
-                  {(canopyMilesNotation || growthMilesNotation) && (
+                  {(canopyMilesNotation || derivationMilesNotation) && (
                     <div className="glass-dark p-6 md:p-12 rounded-[2rem] md:rounded-[3rem] shadow-2xl">
                        <div className="flex items-center justify-between mb-6 md:mb-8 gap-4">
                           <div className="flex items-center gap-4 md:gap-5">
@@ -1512,7 +1376,7 @@ const App: React.FC = () => {
                             </div>
                             <div>
                               <h2 className="text-xl md:text-3xl font-bold text-white serif tracking-tight">Labeled Bracketing</h2>
-                              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500/40">Canopy + Growth Miles Shang Formalism</p>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-500/40">Canopy + Derivation Miles Shang Formalism</p>
                             </div>
                           </div>
                           <a 
@@ -1548,24 +1412,24 @@ const App: React.FC = () => {
                             </div>
                           )}
 
-                          {growthMilesNotation && (
+                          {derivationMilesNotation && (
                             <div className="bg-black/40 p-5 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border border-white/5 shadow-inner">
                               <div className="flex items-center justify-between mb-4">
-                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-400/80">Growth Code (Movement Indexed)</p>
+                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-emerald-400/80">Derivation Code (Movement Indexed)</p>
                                 <button 
-                                  onClick={() => copyMilesCode(growthMilesNotation, 'growth')}
+                                  onClick={() => copyMilesCode(derivationMilesNotation, 'derivation')}
                                   className={`flex items-center gap-3 px-5 py-2.5 rounded-2xl border transition-all text-[10px] font-black uppercase tracking-widest ${
-                                    copiedCodeKey === 'growth'
+                                    copiedCodeKey === 'derivation'
                                     ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' 
                                     : 'bg-white/5 border-white/10 text-white/40 hover:text-emerald-400 hover:border-emerald-500/30'
                                   }`}
                                 >
-                                  {copiedCodeKey === 'growth' ? <Check size={13} /> : <Copy size={13} />}
-                                  {copiedCodeKey === 'growth' ? 'Copied to Soil' : 'Copy Growth'}
+                                  {copiedCodeKey === 'derivation' ? <Check size={13} /> : <Copy size={13} />}
+                                  {copiedCodeKey === 'derivation' ? 'Copied to Soil' : 'Copy Derivation'}
                                 </button>
                               </div>
                               <code className="text-emerald-400 mono text-sm md:text-lg break-all leading-relaxed opacity-90 selection:bg-emerald-500/30">
-                                {growthMilesNotation}
+                                {derivationMilesNotation}
                               </code>
                             </div>
                           )}
@@ -1615,7 +1479,7 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {!hideShowcaseInput && (
+            {!hideShowcaseInput && !devCaptureMode && (
               <>
                 {/* Input UI */}
                 <div
@@ -1648,11 +1512,12 @@ const App: React.FC = () => {
 
                     <div className={`transition-[max-height,opacity,padding] duration-700 ease-in-out ${isInputExpanded ? 'max-h-[350px] opacity-100 p-4 md:p-6 pt-3 md:pt-4' : 'max-h-0 opacity-0'}`}>
                       {error && (
-                        <div className="mb-4 bg-rose-500/10 border border-rose-500/20 px-4 py-3 rounded-2xl flex flex-col gap-3 text-rose-400 text-xs shadow-inner">
-                          <div className="flex items-center gap-3 italic serif">
-                            <AlertTriangle size={14} className="shrink-0" /> {error}
-                          </div>
-                          {needsKey && (
+                        <FailurePanel
+                          message={error.message}
+                          failure={error.failure}
+                          rawOutput={error.rawOutput}
+                        >
+                          {needsKey && keyPromptMode === 'gemini' && (
                             <button
                               onClick={handleOpenKeySelection}
                               className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-rose-500/20 border border-rose-500/30 hover:bg-rose-500/40 transition-all font-black uppercase tracking-widest text-[10px] text-rose-200 animate-pulse shadow-[0_0_15px_rgba(244,63,94,0.3)]"
@@ -1661,7 +1526,13 @@ const App: React.FC = () => {
                               Renew API Credentials
                             </button>
                           )}
-                        </div>
+                          {needsKey && keyPromptMode === 'external' && (
+                            <div className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] font-black uppercase tracking-widest text-amber-200">
+                              <Key size={12} />
+                              External API Key Required
+                            </div>
+                          )}
+                        </FailurePanel>
                       )}
 
                       <form onSubmit={handleParse} className="flex gap-3 md:gap-4 items-end">
@@ -1700,9 +1571,6 @@ const App: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <p className="mt-3 px-4 text-center text-[9px] md:text-[10px] uppercase tracking-[0.26em] text-emerald-900/70">
-                    Parses may be stored anonymously for research and product improvement.
-                  </p>
                 </div>
 
                 {/* Restore Logo Trigger */}
@@ -1758,13 +1626,18 @@ const App: React.FC = () => {
             <span className="flex items-center gap-3"><TreeDeciduous size={12} /> Deep Structural Formalism</span>
           </div>
           <div className="flex items-center gap-6">
-            {needsKey && (
+            {needsKey && keyPromptMode === 'gemini' && (
               <button 
                 onClick={handleOpenKeySelection}
                 className="flex items-center gap-2 text-rose-500/80 hover:text-rose-400 transition-colors"
               >
                 <Key size={10} /> Key Missing/Invalid - Update
               </button>
+            )}
+            {needsKey && keyPromptMode === 'external' && (
+              <div className="flex items-center gap-2 text-amber-400/80">
+                <Key size={10} /> External API Key Required
+              </div>
             )}
             <div className="italic serif lowercase text-[10px] tracking-normal opacity-40">
               rooted in {framework === 'xbar' ? 'generative grammar' : 'minimalist principles'} and neural synthesis
@@ -1773,7 +1646,6 @@ const App: React.FC = () => {
         </div>
       </footer>
       )}
-      <Analytics />
     </div>
   );
 };

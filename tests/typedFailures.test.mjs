@@ -1,0 +1,420 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { __test__, ParseApiError } from '../server/babelParser.js';
+import {
+  assertGenerationComplete,
+  buildGenerationOutcome,
+  isRetryableProviderFailure,
+  runWithTransportRetries,
+  summarizeGeneration
+} from '../server/babelParser/modelRuntime.js';
+import {
+  PROVIDER_OUTPUT_ALLOWANCE_POLICIES,
+  resolveRouteMaxOutputTokens
+} from '../server/babelParser/routeConfig.js';
+import { formatApiError, validateParseBody } from '../server/parseApi.js';
+import {
+  createRawOutputArtifact,
+  FAILURE_CLASSES,
+  MAX_RAW_OUTPUT_BODY_BYTES,
+  MAX_RAW_OUTPUT_BYTES,
+  withFailureDetails
+} from '../server/babelParser/validationErrors.js';
+
+const clone = (value) => structuredClone(value);
+
+const buildMinimalPayload = () => ({
+  derivationStages: [
+    {
+      statement: 'The authored token enters the derivation.',
+      stageRecord: 'The authored token Mia forms the complete convergent surface of this minimal provider-free derivation.',
+      relations: [],
+      workspaceForest: [
+        {
+          id: 'mia_root',
+          label: 'Mia',
+          word: 'Mia',
+          tokenIndex: 0,
+          children: []
+        }
+      ]
+    }
+  ]
+});
+
+const normalize = (payload, sentence = 'Mia') => __test__.normalizeParseBundle(
+  payload,
+  'xbar',
+  sentence,
+  'gemini',
+  true,
+  { payloadIntegrityFlags: [] }
+);
+
+test('failure registry exposes exactly the six normative classes', () => {
+  assert.deepEqual(Object.values(FAILURE_CLASSES).sort(), [
+    'contract_misunderstanding',
+    'deterministic_engine_failure',
+    'incomplete_generation',
+    'linguistic_failure',
+    'transport_serialization',
+    'valid_but_unexpected'
+  ]);
+});
+
+const expectTypedFailure = ({
+  name,
+  mutate,
+  expectedClass,
+  ruleId,
+  stageIndex,
+  fieldPath,
+  checkOffending,
+  sentence = 'Mia'
+}) => test(name, () => {
+  const payload = mutate(clone(buildMinimalPayload()));
+  assert.throws(
+    () => normalize(payload, sentence),
+    (error) => {
+      assert.equal(error instanceof ParseApiError, true);
+      assert.equal(error.failure.class, expectedClass);
+      assert.equal(error.failure.ruleId, ruleId);
+      assert.equal(error.failure.stageIndex, stageIndex);
+      assert.equal(error.failure.fieldPath, fieldPath);
+      assert.equal(Object.hasOwn(error.failure, 'offendingValue'), true);
+      checkOffending?.(error.failure.offendingValue);
+      return true;
+    }
+  );
+});
+
+expectTypedFailure({
+  name: 'typed probe: payload envelope rejects extra top-level fields',
+  mutate: (payload) => ({ ...payload, commentary: 'not allowed' }),
+  expectedClass: FAILURE_CLASSES.CONTRACT_MISUNDERSTANDING,
+  ruleId: 'PAYLOAD_ENVELOPE_EXACT',
+  stageIndex: null,
+  fieldPath: '$'
+});
+
+expectTypedFailure({
+  name: 'typed probe: derivationStages must be an array',
+  mutate: (payload) => ({ ...payload, derivationStages: 'transport-stringified stages' }),
+  expectedClass: FAILURE_CLASSES.CONTRACT_MISUNDERSTANDING,
+  ruleId: 'DERIVATION_STAGE_FIELDS_EXACT',
+  stageIndex: null,
+  fieldPath: '$.derivationStages'
+});
+
+expectTypedFailure({
+  name: 'typed probe: each derivation stage must be an object',
+  mutate: (payload) => ({ ...payload, derivationStages: ['not an object'] }),
+  expectedClass: FAILURE_CLASSES.CONTRACT_MISUNDERSTANDING,
+  ruleId: 'DERIVATION_STAGE_OBJECT',
+  stageIndex: 0,
+  fieldPath: '$.derivationStages[0]'
+});
+
+expectTypedFailure({
+  name: 'typed probe: extra stage field reaches the exact-field rule',
+  mutate: (payload) => {
+    payload.derivationStages[0].compilerHint = 'forbidden fifth field';
+    return payload;
+  },
+  expectedClass: FAILURE_CLASSES.CONTRACT_MISUNDERSTANDING,
+  ruleId: 'DERIVATION_STAGE_FIELDS_EXACT',
+  stageIndex: 0,
+  fieldPath: '$.derivationStages[0]',
+  checkOffending: (value) => assert.equal(value.compilerHint, 'forbidden fifth field')
+});
+
+expectTypedFailure({
+  name: 'typed probe: missing stage field reaches the exact-field rule',
+  mutate: (payload) => {
+    delete payload.derivationStages[0].stageRecord;
+    return payload;
+  },
+  expectedClass: FAILURE_CLASSES.CONTRACT_MISUNDERSTANDING,
+  ruleId: 'DERIVATION_STAGE_FIELDS_EXACT',
+  stageIndex: 0,
+  fieldPath: '$.derivationStages[0]',
+  checkOffending: (value) => {
+    assert.equal(Object.hasOwn(value, 'stageRecord'), false);
+    assert.deepEqual(Object.keys(value), ['statement', 'relations', 'workspaceForest']);
+  }
+});
+
+expectTypedFailure({
+  name: 'typed probe: empty stage statement is discriminated',
+  mutate: (payload) => {
+    payload.derivationStages[0].statement = ' ';
+    return payload;
+  },
+  expectedClass: FAILURE_CLASSES.CONTRACT_MISUNDERSTANDING,
+  ruleId: 'DERIVATION_STAGE_STATEMENT_NONEMPTY',
+  stageIndex: 0,
+  fieldPath: '$.derivationStages[0].statement'
+});
+
+expectTypedFailure({
+  name: 'typed probe: thin stage record is discriminated',
+  mutate: (payload) => {
+    payload.derivationStages[0].stageRecord = 'too thin';
+    return payload;
+  },
+  expectedClass: FAILURE_CLASSES.CONTRACT_MISUNDERSTANDING,
+  ruleId: 'DERIVATION_STAGE_RECORD_SUBSTANTIVE',
+  stageIndex: 0,
+  fieldPath: '$.derivationStages[0].stageRecord'
+});
+
+expectTypedFailure({
+  name: 'typed probe: malformed relation reaches the current exact-relation rule',
+  mutate: (payload) => {
+    payload.derivationStages[0].relations = [{
+      relation: 'UnknownRelation',
+      anchors: { witness: 'mia_root' },
+      rendererHint: 'forbidden'
+    }];
+    return payload;
+  },
+  expectedClass: FAILURE_CLASSES.CONTRACT_MISUNDERSTANDING,
+  ruleId: 'DERIVATION_STAGE_RELATION_EXACT',
+  stageIndex: 0,
+  fieldPath: '$.derivationStages[0].relations[0]',
+  checkOffending: (value) => assert.equal(value.rendererHint, 'forbidden')
+});
+
+expectTypedFailure({
+  name: 'typed probe: present-but-undefined workspaceForest is discriminated',
+  mutate: (payload) => {
+    payload.derivationStages[0].workspaceForest = undefined;
+    return payload;
+  },
+  expectedClass: FAILURE_CLASSES.CONTRACT_MISUNDERSTANDING,
+  ruleId: 'DERIVATION_STAGE_WORKSPACE_FOREST_PRESENT',
+  stageIndex: 0,
+  fieldPath: '$.derivationStages[0].workspaceForest'
+});
+
+expectTypedFailure({
+  name: 'typed probe: an empty stage sequence is an incomplete generation',
+  mutate: (payload) => ({ ...payload, derivationStages: [] }),
+  expectedClass: FAILURE_CLASSES.INCOMPLETE_GENERATION,
+  ruleId: 'GENERATION_DID_NOT_CONVERGE',
+  stageIndex: null,
+  fieldPath: '$.derivationStages'
+});
+
+expectTypedFailure({
+  name: 'typed probe: final token misalignment is a contract misunderstanding',
+  mutate: (payload) => payload,
+  expectedClass: FAILURE_CLASSES.CONTRACT_MISUNDERSTANDING,
+  ruleId: 'SURFACE_ORDER_EXACT',
+  stageIndex: 0,
+  fieldPath: '$.derivationStages[0].workspaceForest',
+  sentence: 'Nia'
+});
+
+test('transport JSON rejection preserves typed failure and downloadable raw bytes', () => {
+  const raw = '\uFEFF  \nnot-json-\u0000-🙂  \n';
+  assert.throws(
+    () => __test__.parseModelJson(raw),
+    (error) => {
+      assert.equal(error.failure.class, FAILURE_CLASSES.TRANSPORT_SERIALIZATION);
+      assert.equal(error.failure.ruleId, 'TRANSPORT_JSON_OBJECT');
+      assert.equal(error.failure.stageIndex, null);
+      assert.equal(error.failure.fieldPath, '$');
+      assert.equal(Buffer.from(error.rawOutput.data, 'base64').toString('utf8'), raw);
+      return true;
+    }
+  );
+});
+
+test('length stop is typed before parse and records sent allowance and reasoning use', () => {
+  const rawText = JSON.stringify(buildMinimalPayload());
+  const generation = {
+    text: rawText,
+    status: 'incomplete',
+    candidates: [{ finishReason: 'INCOMPLETE_MAX_OUTPUT_TOKENS' }],
+    usageMetadata: {
+      inputTokenCount: 90,
+      outputTokenCount: 128000,
+      totalTokenCount: 128090,
+      reasoningTokenCount: 8000
+    }
+  };
+
+  assert.throws(
+    () => assertGenerationComplete({
+      generation,
+      provider: 'gpt',
+      model: 'gpt-5.5',
+      sentMaxOutputTokens: 128000,
+      runId: 'run-one',
+      attempts: [{ attemptNumber: 1, outcome: 'completed' }]
+    }),
+    (error) => {
+      assert.equal(error.code, 'INCOMPLETE_GENERATION');
+      assert.equal(error.failure.class, FAILURE_CLASSES.INCOMPLETE_GENERATION);
+      assert.equal(error.failure.ruleId, 'GENERATION_LENGTH_STOP');
+      assert.equal(error.details.sentMaxOutputTokens, 128000);
+      assert.equal(error.details.finishReason, 'INCOMPLETE_MAX_OUTPUT_TOKENS');
+      assert.equal(error.details.reasoningTokenCount, 8000);
+      assert.equal(error.details.attempts.length, 1);
+      assert.equal(Buffer.from(error.rawOutput.data, 'base64').toString('utf8'), rawText);
+      return true;
+    }
+  );
+});
+
+test('transport retry uses one run id, at most three attempts, and exponential backoff', async () => {
+  const delays = [];
+  let calls = 0;
+  const clockValues = [
+    '2026-07-23T10:00:00.000Z',
+    '2026-07-23T10:00:00.010Z',
+    '2026-07-23T10:00:00.020Z',
+    '2026-07-23T10:00:00.030Z',
+    '2026-07-23T10:00:00.040Z',
+    '2026-07-23T10:00:00.050Z'
+  ].map((value) => new Date(value));
+  const result = await runWithTransportRetries({
+    runId: 'fixed-run-id',
+    backoffBaseMs: 10,
+    delay: async (ms) => delays.push(ms),
+    now: () => clockValues.shift(),
+    run: async ({ runId, attemptNumber }) => {
+      calls += 1;
+      assert.equal(runId, 'fixed-run-id');
+      if (attemptNumber < 3) {
+        const error = new Error('provider unavailable');
+        error.status = 503;
+        throw error;
+      }
+      return {
+        text: '{}',
+        status: 'completed',
+        candidates: [{ finishReason: 'STOP' }]
+      };
+    }
+  });
+
+  assert.equal(calls, 3);
+  assert.deepEqual(delays, [10, 20]);
+  assert.equal(result.runId, 'fixed-run-id');
+  assert.deepEqual(result.attempts.map((attempt) => attempt.outcome), [
+    'retryable_transport_failure',
+    'retryable_transport_failure',
+    'completed'
+  ]);
+});
+
+test('a completed stop state is never retried', async () => {
+  let calls = 0;
+  await assert.rejects(
+    () => runWithTransportRetries({
+      runId: 'completed-stop',
+      delay: async () => assert.fail('completed stop must not back off'),
+      run: async () => {
+        calls += 1;
+        const error = new Error('content filtered');
+        error.status = 502;
+        error.completedStopState = true;
+        throw error;
+      }
+    }),
+    (error) => {
+      assert.equal(error.providerAttempts.length, 1);
+      return true;
+    }
+  );
+  assert.equal(calls, 1);
+});
+
+test('provider allowances are route/model policy, never sentence-derived', () => {
+  assert.equal(resolveRouteMaxOutputTokens('gemini', 'x'), 65536);
+  assert.equal(resolveRouteMaxOutputTokens('gemini', 'x '.repeat(5000)), 65536);
+  assert.equal(resolveRouteMaxOutputTokens('gpt', 'x'), 128000);
+  assert.equal(resolveRouteMaxOutputTokens('gpt', 'x '.repeat(5000)), 128000);
+  assert.equal(PROVIDER_OUTPUT_ALLOWANCE_POLICIES.gemini.documentedMaximum, 65536);
+  assert.equal(PROVIDER_OUTPUT_ALLOWANCE_POLICIES.gpt.documentedMaximum, 128000);
+  assert.equal(PROVIDER_OUTPUT_ALLOWANCE_POLICIES.claude.documentedMaximum, null);
+  assert.equal(PROVIDER_OUTPUT_ALLOWANCE_POLICIES.claude.admissionProbeConfirmed, false);
+});
+
+test('generation outcome records finish status and reasoning tokens', () => {
+  const generationMeta = summarizeGeneration({
+    text: '{}',
+    status: 'completed',
+    candidates: [{ finishReason: 'STOP' }],
+    usageMetadata: {
+      inputTokenCount: 10,
+      outputTokenCount: 20,
+      totalTokenCount: 30,
+      reasoningTokenCount: 7
+    }
+  });
+  const outcome = buildGenerationOutcome({
+    generationMeta,
+    sentMaxOutputTokens: 65536,
+    runId: 'receipt-run',
+    attempts: [{ attemptNumber: 1, outcome: 'completed' }]
+  });
+  assert.equal(outcome.sentMaxOutputTokens, 65536);
+  assert.equal(outcome.finishReason, 'STOP');
+  assert.equal(outcome.finishStatus, 'COMPLETED');
+  assert.equal(outcome.reasoningTokenCount, 7);
+  assert.equal(outcome.attempts.length, 1);
+});
+
+test('API errors expose typed failure while raw output is capped and hash-bound', () => {
+  assert.throws(
+    () => validateParseBody({ sentence: 'Mia', framework: 'other', modelRoute: 'gemini' }),
+    (error) => {
+      const formatted = formatApiError(error);
+      assert.equal(formatted.body.error.failure.ruleId, 'REQUEST_FRAMEWORK_SUPPORTED');
+      assert.equal(formatted.body.error.failure.fieldPath, '$.framework');
+      return true;
+    }
+  );
+
+  const oversized = 'a'.repeat(MAX_RAW_OUTPUT_BYTES + 13);
+  const artifact = createRawOutputArtifact(oversized);
+  assert.equal(artifact.byteLength, MAX_RAW_OUTPUT_BYTES + 13);
+  assert.equal(artifact.retainedByteLength, MAX_RAW_OUTPUT_BYTES);
+  assert.equal(artifact.truncated, true);
+  assert.match(artifact.sha256, /^[0-9a-f]{64}$/);
+  assert.ok(Buffer.byteLength(JSON.stringify(artifact), 'utf8') <= MAX_RAW_OUTPUT_BODY_BYTES);
+
+  const formatted = formatApiError(new ParseApiError(
+    'BAD_MODEL_RESPONSE',
+    'Oversized provider output.',
+    502,
+    withFailureDetails({}, {
+      failureClass: 'transport_serialization',
+      ruleId: 'TRANSPORT_JSON_OBJECT',
+      fieldPath: '$',
+      offendingValue: oversized
+    }, oversized)
+  ));
+  assert.ok(
+    Buffer.byteLength(JSON.stringify(formatted.body), 'utf8') <= MAX_RAW_OUTPUT_BODY_BYTES
+  );
+});
+
+test('only transport/429/5xx failures without a completed stop are retryable', () => {
+  const rateLimited = new Error('rate limited');
+  rateLimited.status = 429;
+  assert.equal(isRetryableProviderFailure(rateLimited), true);
+
+  const invalid = new Error('invalid request');
+  invalid.status = 400;
+  assert.equal(isRetryableProviderFailure(invalid), false);
+
+  const completed = new Error('failed after completed stop');
+  completed.status = 503;
+  completed.completedStopState = true;
+  assert.equal(isRetryableProviderFailure(completed), false);
+});

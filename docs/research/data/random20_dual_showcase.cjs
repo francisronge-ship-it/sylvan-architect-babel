@@ -1,18 +1,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { loadChromium, resolveChromiumLaunchOptions } = require('../../../.artifacts/helpers/loadPlaywright.cjs');
 
-let chromium;
-try {
-  ({ chromium } = require('playwright'));
-} catch {
-  ({ chromium } = require('/Users/francisronge/.npm/_npx/e41f203b7505f1fb/node_modules/playwright'));
-}
+const chromium = loadChromium();
 
 const BASE_URL = process.env.BABEL_BASE_URL || 'http://127.0.0.1:5177/';
 const SEED = Number(process.env.BABEL_SWEEP_SEED || Date.now());
 const RUN_STAMP = new Date().toISOString().replace(/[:.]/g, '-');
 const OUT_DIR = path.resolve(`.artifacts/random20-dual-showcase-${RUN_STAMP}`);
-const CHROME_BIN = '/Users/francisronge/Library/Caches/ms-playwright/chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 
 const XBAR_POOL = [
   { language: 'English', phenomenon: 'relative-clause', sentence: 'The editor that Naomi interviewed laughed.' },
@@ -390,7 +385,6 @@ async function runCase(page, item) {
     analysisPath,
     modelUsed,
     actualRoute,
-    fallbackUsed: Boolean(parsed.payload?.fallbackUsed),
     movementDecision: analysisSummary.analysis.movementDecision || null,
     movementEventsCount: analysisSummary.checks.movementEventsCount,
     derivationStepsCount: Array.isArray(analysisSummary.analysis.derivationSteps)
@@ -406,10 +400,7 @@ async function runCase(page, item) {
 (async () => {
   ensureOut();
 
-  const browser = await chromium.launch({
-    headless: true,
-    executablePath: CHROME_BIN
-  });
+  const browser = await chromium.launch(resolveChromiumLaunchOptions({ headless: true }));
   const context = await browser.newContext({ viewport: { width: 1832, height: 1142 } });
   const page = await context.newPage();
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
@@ -421,7 +412,7 @@ async function runCase(page, item) {
     try {
       const result = await runCase(page, item);
       results.push(result);
-      console.error(`[random20-dual] completed ${item.runId} ok=${result.ok} status=${result.status} actualRoute=${result.actualRoute || 'n/a'} fallback=${result.fallbackUsed ? 'yes' : 'no'}`);
+      console.error(`[random20-dual] completed ${item.runId} ok=${result.ok} status=${result.status} actualRoute=${result.actualRoute || 'n/a'}`);
     } catch (error) {
       const failed = path.join(OUT_DIR, `${item.runId}-exception.png`);
       await page.screenshot({ path: failed, fullPage: true }).catch(() => {});

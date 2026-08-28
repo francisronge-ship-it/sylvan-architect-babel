@@ -1,0 +1,354 @@
+{
+  "analyses": [
+    {
+      "tree": {
+        "id": "tp_root",
+        "label": "TP",
+        "children": [
+          {
+            "id": "np_mia",
+            "label": "NP",
+            "children": [
+              {
+                "id": "n_mia",
+                "label": "N",
+                "children": [
+                  {
+                    "id": "leaf_mia",
+                    "label": "Mia",
+                    "word": "Mia",
+                    "tokenIndex": 0,
+                    "children": [],
+                    "surfaceSpan": [
+                      0,
+                      0
+                    ]
+                  }
+                ],
+                "surfaceSpan": [
+                  0,
+                  0
+                ]
+              }
+            ],
+            "surfaceSpan": [
+              0,
+              0
+            ]
+          },
+          {
+            "id": "tbar_1",
+            "label": "T'",
+            "children": [
+              {
+                "id": "t_past",
+                "label": "T",
+                "children": [
+                  {
+                    "id": "leaf_t",
+                    "label": "∅",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "vp_laughed",
+                "label": "VP",
+                "children": [
+                  {
+                    "id": "vbar_laughed",
+                    "label": "V'",
+                    "children": [
+                      {
+                        "id": "v_laughed",
+                        "label": "V",
+                        "children": [
+                          {
+                            "id": "leaf_laughed",
+                            "label": "laughed",
+                            "word": "laughed",
+                            "tokenIndex": 1,
+                            "children": [],
+                            "surfaceSpan": [
+                              1,
+                              1
+                            ]
+                          }
+                        ],
+                        "surfaceSpan": [
+                          1,
+                          1
+                        ]
+                      }
+                    ],
+                    "surfaceSpan": [
+                      1,
+                      1
+                    ]
+                  }
+                ],
+                "surfaceSpan": [
+                  1,
+                  1
+                ]
+              }
+            ],
+            "surfaceSpan": [
+              1,
+              1
+            ]
+          }
+        ],
+        "surfaceSpan": [
+          0,
+          1
+        ]
+      },
+      "derivationStages": [
+        {
+          "statement": "The noun Mia enters the derivation.",
+          "stageRecord": "Lexical selection introduces the proper noun Mia, which projects a noun phrase that will serve as the external argument of the predicate.",
+          "relations": [],
+          "workspaceForest": [
+            {
+              "id": "np_mia",
+              "label": "NP",
+              "children": [
+                {
+                  "id": "n_mia",
+                  "label": "N",
+                  "children": [
+                    {
+                      "id": "leaf_mia",
+                      "label": "Mia",
+                      "word": "Mia",
+                      "tokenIndex": 0,
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "statement": "The intransitive verb laughed projects a verb phrase.",
+          "stageRecord": "The unergative verb laughed is selected and projects a verb phrase; its single theta role is assigned to the external argument position, which the noun phrase Mia will occupy.",
+          "relations": [],
+          "workspaceForest": [
+            {
+              "id": "np_mia",
+              "label": "NP",
+              "children": [
+                {
+                  "id": "n_mia",
+                  "label": "N",
+                  "children": [
+                    {
+                      "id": "leaf_mia",
+                      "label": "Mia",
+                      "word": "Mia",
+                      "tokenIndex": 0,
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "vp_laughed",
+              "label": "VP",
+              "children": [
+                {
+                  "id": "vbar_laughed",
+                  "label": "V'",
+                  "children": [
+                    {
+                      "id": "v_laughed",
+                      "label": "V",
+                      "children": [
+                        {
+                          "id": "leaf_laughed",
+                          "label": "laughed",
+                          "word": "laughed",
+                          "tokenIndex": 1,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "statement": "Tense combines with the verb phrase.",
+          "stageRecord": "A finite past tense head selects the verb phrase as its complement, projecting the inflectional layer that licenses the subject position of the clause.",
+          "relations": [],
+          "workspaceForest": [
+            {
+              "id": "np_mia",
+              "label": "NP",
+              "children": [
+                {
+                  "id": "n_mia",
+                  "label": "N",
+                  "children": [
+                    {
+                      "id": "leaf_mia",
+                      "label": "Mia",
+                      "word": "Mia",
+                      "tokenIndex": 0,
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "tbar_1",
+              "label": "T'",
+              "children": [
+                {
+                  "id": "t_past",
+                  "label": "T",
+                  "children": [
+                    {
+                      "id": "leaf_t",
+                      "label": "∅",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "id": "vp_laughed",
+                  "label": "VP",
+                  "children": [
+                    {
+                      "id": "vbar_laughed",
+                      "label": "V'",
+                      "children": [
+                        {
+                          "id": "v_laughed",
+                          "label": "V",
+                          "children": [
+                            {
+                              "id": "leaf_laughed",
+                              "label": "laughed",
+                              "word": "laughed",
+                              "tokenIndex": 1,
+                              "children": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "statement": "The subject occupies the specifier of TP and the clause converges.",
+          "stageRecord": "The noun phrase Mia merges as the specifier of the tense projection, and the tense head bears an open agreement relation to that subject; the derivation converges with the surface order Mia laughed.",
+          "relations": [
+            {
+              "relation": "bespoke-open-agreement",
+              "anchors": {
+                "unbounded-probe-role": "t_past",
+                "bespoke-goal-role": "np_mia"
+              }
+            }
+          ],
+          "workspaceForest": [
+            {
+              "id": "tp_root",
+              "label": "TP",
+              "children": [
+                {
+                  "id": "np_mia",
+                  "label": "NP",
+                  "children": [
+                    {
+                      "id": "n_mia",
+                      "label": "N",
+                      "children": [
+                        {
+                          "id": "leaf_mia",
+                          "label": "Mia",
+                          "word": "Mia",
+                          "tokenIndex": 0,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "tbar_1",
+                  "label": "T'",
+                  "children": [
+                    {
+                      "id": "t_past",
+                      "label": "T",
+                      "children": [
+                        {
+                          "id": "leaf_t",
+                          "label": "∅",
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "id": "vp_laughed",
+                      "label": "VP",
+                      "children": [
+                        {
+                          "id": "vbar_laughed",
+                          "label": "V'",
+                          "children": [
+                            {
+                              "id": "v_laughed",
+                              "label": "V",
+                              "children": [
+                                {
+                                  "id": "leaf_laughed",
+                                  "label": "laughed",
+                                  "word": "laughed",
+                                  "tokenIndex": 1,
+                                  "children": []
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "derivationSteps": [],
+      "provenance": {
+        "modelRoute": "gemini",
+        "framework": "xbar",
+        "treeSource": "derivationStages",
+        "payloadIntegrityFlags": [
+          "derivation_stages_compiled_to_derivation_frames",
+          "prior_stage_refid_expanded:2:np_mia",
+          "prior_stage_refid_expanded:3:np_mia",
+          "prior_stage_refid_expanded:3:vp_laughed",
+          "prior_stage_refid_expanded:4:np_mia",
+          "prior_stage_refid_expanded:4:tbar_1"
+        ],
+        "hasDerivationStages": true
+      }
+    }
+  ],
+  "ambiguityDetected": false
+}
