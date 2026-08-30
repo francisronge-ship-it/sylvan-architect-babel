@@ -134,12 +134,14 @@ mixing that work into renderer completion or the later public benchmark. This
 program answers whether Babel can reliably operate its product; it does not rank
 models or claim syntactic competence.
 
-Preparation status, 2026-08-28: the corrected contract has a reproducible
+Preparation status, 2026-08-30: the corrected contract has a reproducible
 post-fix baseline; provider-free raw-output, typed-receipt, and click-through
-Replay review plumbing is verified; and GPT 5.6 Sol, Claude Opus 5, and Claude
-Fable 5 are recorded as unqualified research candidates with provider-native
-controls. No provider was called, no live route changed, and the qualification
-sentence set remains unselected. See
+Replay review plumbing is verified. The admission pair and 14-item qualification
+set are frozen in
+[`program-1.item-set.json`](contractQualification/program-1.item-set.json).
+The next decision is which models and native settings enter admission, followed
+by an approved run limit or spend. No provider was called and no live route
+changed. See
 [`pre-provider-preparation-2026-08-28.md`](docs/implementation/contract-qualification/pre-provider-preparation-2026-08-28.md).
 
 1. Freeze and hash the incumbent prompt, system instruction, route config,

@@ -14,6 +14,13 @@ const fixture = JSON.parse(
   fs.readFileSync(new URL('../fixtures/raw/mia-laughed.xbar.json', import.meta.url), 'utf8')
 );
 
+const frozenItemSet = JSON.parse(
+  fs.readFileSync(
+    new URL('../contractQualification/program-1.item-set.json', import.meta.url),
+    'utf8'
+  )
+);
+
 const plan = (overrides = {}) => ({
   schemaVersion: 1,
   label: 'plumbing-only',
@@ -35,6 +42,44 @@ const plan = (overrides = {}) => ({
     }
   ],
   ...overrides
+});
+
+test('the frozen Program 1 item set preserves the approved qualification design', () => {
+  assert.equal(frozenItemSet.schemaVersion, 1);
+  assert.equal(frozenItemSet.status, 'frozen');
+  assert.equal(frozenItemSet.admission.runsFor, 'every-candidate');
+  assert.equal(frozenItemSet.admission.items.length, 2);
+
+  const admissionRequests = frozenItemSet.admission.items.map(({ sentence, framework }) => ({
+    sentence,
+    framework
+  }));
+  assert.deepEqual(admissionRequests, [
+    { sentence: 'Which book did John buy?', framework: 'minimalism' },
+    { sentence: 'Which book did John buy?', framework: 'xbar' }
+  ]);
+
+  const qualificationItems = frozenItemSet.qualification.items;
+  assert.equal(qualificationItems.length, 14);
+  assert.equal(
+    qualificationItems.filter(({ framework }) => framework === 'minimalism').length,
+    7
+  );
+  assert.equal(
+    qualificationItems.filter(({ framework }) => framework === 'xbar').length,
+    7
+  );
+  assert.equal(
+    qualificationItems.filter(({ cohort }) => cohort === 'shared-core').length,
+    5
+  );
+  assert.equal(
+    qualificationItems.filter(({ cohort }) => cohort === 'finalist-only').length,
+    9
+  );
+  assert.equal(new Set(qualificationItems.map(({ id }) => id)).size, 14);
+  assert.ok(frozenItemSet.interpretation.itemsDoNotPrescribeRelations);
+  assert.ok(frozenItemSet.interpretation.rendererCoverageUsesActualDispatch);
 });
 
 test('qualification plans distinguish plumbing smoke data from a selected item set', () => {
