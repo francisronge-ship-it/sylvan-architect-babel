@@ -25,7 +25,7 @@ test('the research catalog contains the seven approved unqualified candidates', 
     RESEARCH_MODEL_CATALOG.filter(
       (entry) => entry.qualificationConfiguration === 'pending-settings'
     ).length,
-    4
+    3
   );
   assert.equal(RESEARCH_MODEL_CATALOG.some((entry) => entry.provider === 'google'), false);
   assert.equal(RESEARCH_MODEL_CATALOG.some((entry) => /gemini/i.test(entry.providerModel)), false);
@@ -53,7 +53,7 @@ test('catalog settings retain each provider native parameter name', () => {
   assert.equal(fable.constraints.dataRetention, '30-days-required');
 });
 
-test('new candidates retain documented identities but cannot run before settings are chosen', () => {
+test('candidate identities and pending-settings gates remain exact', () => {
   const kimi = getResearchModel('moonshot:kimi-k3');
   assert.equal(kimi?.providerModel, 'kimi-k3');
   assert.deepEqual(kimi?.controls[0].values, ['low', 'high', 'max']);
@@ -77,12 +77,27 @@ test('new candidates retain documented identities but cannot run before settings
   for (const id of [
     'moonshot:kimi-k3',
     'meta:muse-spark-1.2',
-    'xai:grok-4.6',
-    'zai:glm-5.3-flash'
+    'xai:grok-4.6'
   ]) {
     assert.throws(
       () => resolveResearchModelSelection(id),
       /Qualification settings have not been finalized/
+    );
+  }
+});
+
+test('GLM qualifies at high while research retains every native effort', () => {
+  assert.deepEqual(
+    resolveResearchModelSelection('zai:glm-5.3-flash').nativeSettings,
+    { reasoning_effort: 'high' }
+  );
+
+  for (const reasoningEffort of ['low', 'high', 'max']) {
+    assert.deepEqual(
+      resolveResearchModelSelection('zai:glm-5.3-flash', {
+        reasoning_effort: reasoningEffort
+      }).nativeSettings,
+      { reasoning_effort: reasoningEffort }
     );
   }
 });

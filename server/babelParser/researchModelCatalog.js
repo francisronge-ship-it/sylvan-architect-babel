@@ -174,14 +174,14 @@ export const RESEARCH_MODEL_CATALOG = deepFreeze([
     providerRoute: 'glm',
     providerModel: 'glm-5.3-flash',
     qualificationStatus: 'unqualified',
-    qualificationConfiguration: 'pending-settings',
+    qualificationConfiguration: 'configured',
     api: 'chat-completions',
     controls: [
       {
         id: 'reasoning_effort',
         label: 'Reasoning effort',
         values: ['low', 'high', 'max'],
-        qualificationDefault: null
+        qualificationDefault: 'high'
       }
     ],
     requestPolicy: {

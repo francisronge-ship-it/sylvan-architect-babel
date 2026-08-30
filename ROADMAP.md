@@ -143,10 +143,10 @@ set are frozen in
 binds that set and the audited contract to source commit `732e0fa`.
 The admission roster now contains GPT 5.6 Sol, Claude Opus 5, Claude Fable 5,
 Kimi K3, Muse Spark 1.2, Grok 4.6, and GLM 5.3 Flash. Gemini remains excluded.
-The next decision is the final native qualification setting for all seven
-models. The four new candidates remain unschedulable until that decision,
-followed by an approved run limit or spend. No provider was called and no live
-route changed.
+GLM 5.3 Flash uses `high` for qualification; `/research` will retain its native
+`low`, `high`, and `max` choices. Kimi K3, Muse Spark 1.2, and Grok 4.6 remain
+unschedulable until their settings are chosen, followed by an approved run
+limit or spend. No provider was called and no live route changed.
 See
 [`pre-provider-preparation-2026-08-28.md`](docs/implementation/contract-qualification/pre-provider-preparation-2026-08-28.md).
 
