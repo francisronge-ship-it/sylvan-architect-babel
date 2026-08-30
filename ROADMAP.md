@@ -139,6 +139,8 @@ post-fix baseline; provider-free raw-output, typed-receipt, and click-through
 Replay review plumbing is verified. The admission pair and 14-item qualification
 set are frozen in
 [`program-1.item-set.json`](contractQualification/program-1.item-set.json).
+[`frozen-item-set-contract.manifest.json`](docs/implementation/contract-qualification/frozen-item-set-contract.manifest.json)
+binds that set and the audited contract to source commit `732e0fa`.
 The next decision is which models and native settings enter admission, followed
 by an approved run limit or spend. No provider was called and no live route
 changed. See
