@@ -7,19 +7,28 @@ import {
   resolveResearchModelSelection
 } from '../server/babelParser/researchModelCatalog.js';
 
-test('the initial research catalog contains only the three approved unqualified candidates', () => {
+test('the research catalog contains the six approved unqualified candidates', () => {
   assert.deepEqual(
     RESEARCH_MODEL_CATALOG.map((entry) => entry.id),
     [
       'openai:gpt-5.6-sol',
       'anthropic:claude-opus-5',
-      'anthropic:claude-fable-5'
+      'anthropic:claude-fable-5',
+      'moonshot:kimi-k3',
+      'meta:muse-spark-1.2',
+      'xai:grok-4.6'
     ]
   );
   assert.ok(RESEARCH_MODEL_CATALOG.every((entry) => entry.qualificationStatus === 'unqualified'));
+  assert.equal(
+    RESEARCH_MODEL_CATALOG.filter(
+      (entry) => entry.qualificationConfiguration === 'pending-settings'
+    ).length,
+    3
+  );
   assert.equal(RESEARCH_MODEL_CATALOG.some((entry) => entry.provider === 'google'), false);
   assert.equal(RESEARCH_MODEL_CATALOG.some((entry) => /gemini/i.test(entry.providerModel)), false);
-  assert.equal(new Set(RESEARCH_MODEL_CATALOG.map((entry) => entry.id)).size, 3);
+  assert.equal(new Set(RESEARCH_MODEL_CATALOG.map((entry) => entry.id)).size, 6);
   assert.equal(Object.isFrozen(RESEARCH_MODEL_CATALOG), true);
 });
 
@@ -41,6 +50,28 @@ test('catalog settings retain each provider native parameter name', () => {
   assert.deepEqual(fable.nativeSettings, { 'output_config.effort': 'high' });
   assert.equal(fable.requestPolicy.thinking.requestMode, 'implicit-always-on');
   assert.equal(fable.constraints.dataRetention, '30-days-required');
+});
+
+test('new candidates retain documented identities but cannot run before settings are chosen', () => {
+  const kimi = getResearchModel('moonshot:kimi-k3');
+  assert.equal(kimi?.providerModel, 'kimi-k3');
+  assert.deepEqual(kimi?.controls[0].values, ['low', 'high', 'max']);
+  assert.equal(kimi?.requestPolicy.thinking.requestMode, 'implicit-always-on');
+
+  const muse = getResearchModel('meta:muse-spark-1.2');
+  assert.equal(muse?.providerModel, 'muse-spark-1.2');
+  assert.deepEqual(muse?.controls, []);
+
+  const grok = getResearchModel('xai:grok-4.6');
+  assert.equal(grok?.providerModel, 'grok-4.6');
+  assert.deepEqual(grok?.controls[0].values, ['low', 'medium', 'high', 'xhigh']);
+
+  for (const id of ['moonshot:kimi-k3', 'meta:muse-spark-1.2', 'xai:grok-4.6']) {
+    assert.throws(
+      () => resolveResearchModelSelection(id),
+      /Qualification settings have not been finalized/
+    );
+  }
 });
 
 test('catalog lookup and settings fail closed without coercion', () => {

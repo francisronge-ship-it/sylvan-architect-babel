@@ -14,6 +14,7 @@ export const RESEARCH_MODEL_CATALOG = deepFreeze([
     providerRoute: 'gpt',
     providerModel: 'gpt-5.6-sol',
     qualificationStatus: 'unqualified',
+    qualificationConfiguration: 'configured',
     api: 'responses',
     controls: [
       {
@@ -40,6 +41,7 @@ export const RESEARCH_MODEL_CATALOG = deepFreeze([
     providerRoute: 'claude',
     providerModel: 'claude-opus-5',
     qualificationStatus: 'unqualified',
+    qualificationConfiguration: 'configured',
     api: 'messages',
     controls: [
       {
@@ -69,6 +71,7 @@ export const RESEARCH_MODEL_CATALOG = deepFreeze([
     providerRoute: 'claude',
     providerModel: 'claude-fable-5',
     qualificationStatus: 'unqualified',
+    qualificationConfiguration: 'configured',
     api: 'messages',
     controls: [
       {
@@ -93,6 +96,76 @@ export const RESEARCH_MODEL_CATALOG = deepFreeze([
       retrievedOn: '2026-08-28',
       url: 'https://docs.anthropic.com/en/docs/about-claude/models/migrating-to-claude-4'
     }
+  },
+  {
+    id: 'moonshot:kimi-k3',
+    label: 'Kimi K3',
+    provider: 'moonshot',
+    providerRoute: 'kimi',
+    providerModel: 'kimi-k3',
+    qualificationStatus: 'unqualified',
+    qualificationConfiguration: 'pending-settings',
+    api: 'chat-completions',
+    controls: [
+      {
+        id: 'reasoning_effort',
+        label: 'Reasoning effort',
+        values: ['low', 'high', 'max'],
+        qualificationDefault: null
+      }
+    ],
+    requestPolicy: {
+      maxCompletionTokens: 131072,
+      thinking: {
+        requestMode: 'implicit-always-on'
+      }
+    },
+    documentation: {
+      retrievedOn: '2026-08-30',
+      url: 'https://www.kimi.ai/help/kimi-api/api-model-selection'
+    }
+  },
+  {
+    id: 'meta:muse-spark-1.2',
+    label: 'Muse Spark 1.2',
+    provider: 'meta',
+    providerRoute: 'muse',
+    providerModel: 'muse-spark-1.2',
+    qualificationStatus: 'unqualified',
+    qualificationConfiguration: 'pending-settings',
+    api: 'openai-compatible',
+    controls: [],
+    requestPolicy: {},
+    documentation: {
+      retrievedOn: '2026-08-30',
+      url: 'https://developer.meta.com/ai/models/muse-spark/'
+    }
+  },
+  {
+    id: 'xai:grok-4.6',
+    label: 'Grok 4.6',
+    provider: 'xai',
+    providerRoute: 'grok',
+    providerModel: 'grok-4.6',
+    qualificationStatus: 'unqualified',
+    qualificationConfiguration: 'pending-settings',
+    api: 'responses',
+    controls: [
+      {
+        id: 'reasoning.effort',
+        label: 'Reasoning effort',
+        values: ['low', 'medium', 'high', 'xhigh'],
+        qualificationDefault: null
+      }
+    ],
+    requestPolicy: {
+      reasoningCannotBeDisabled: true,
+      omitParameters: ['presencePenalty', 'frequencyPenalty', 'stop']
+    },
+    documentation: {
+      retrievedOn: '2026-08-30',
+      url: 'https://docs.x.ai/developers/model-capabilities/text/reasoning'
+    }
   }
 ]);
 
@@ -103,6 +176,11 @@ export const getResearchModel = (modelId) => MODEL_BY_ID.get(String(modelId || '
 export const resolveResearchModelSelection = (modelId, requestedSettings = {}) => {
   const model = getResearchModel(modelId);
   if (!model) throw new TypeError(`Unknown research model: ${String(modelId || '')}`);
+  if (model.qualificationConfiguration !== 'configured') {
+    throw new TypeError(
+      `Qualification settings have not been finalized for ${model.id}.`
+    );
+  }
   if (!requestedSettings || typeof requestedSettings !== 'object' || Array.isArray(requestedSettings)) {
     throw new TypeError('Research model settings must be an object.');
   }
