@@ -7,7 +7,7 @@ import {
   resolveResearchModelSelection
 } from '../server/babelParser/researchModelCatalog.js';
 
-test('the research catalog contains the six approved unqualified candidates', () => {
+test('the research catalog contains the seven approved unqualified candidates', () => {
   assert.deepEqual(
     RESEARCH_MODEL_CATALOG.map((entry) => entry.id),
     [
@@ -16,7 +16,8 @@ test('the research catalog contains the six approved unqualified candidates', ()
       'anthropic:claude-fable-5',
       'moonshot:kimi-k3',
       'meta:muse-spark-1.2',
-      'xai:grok-4.6'
+      'xai:grok-4.6',
+      'zai:glm-5.3-flash'
     ]
   );
   assert.ok(RESEARCH_MODEL_CATALOG.every((entry) => entry.qualificationStatus === 'unqualified'));
@@ -24,11 +25,11 @@ test('the research catalog contains the six approved unqualified candidates', ()
     RESEARCH_MODEL_CATALOG.filter(
       (entry) => entry.qualificationConfiguration === 'pending-settings'
     ).length,
-    3
+    4
   );
   assert.equal(RESEARCH_MODEL_CATALOG.some((entry) => entry.provider === 'google'), false);
   assert.equal(RESEARCH_MODEL_CATALOG.some((entry) => /gemini/i.test(entry.providerModel)), false);
-  assert.equal(new Set(RESEARCH_MODEL_CATALOG.map((entry) => entry.id)).size, 6);
+  assert.equal(new Set(RESEARCH_MODEL_CATALOG.map((entry) => entry.id)).size, 7);
   assert.equal(Object.isFrozen(RESEARCH_MODEL_CATALOG), true);
 });
 
@@ -66,7 +67,19 @@ test('new candidates retain documented identities but cannot run before settings
   assert.equal(grok?.providerModel, 'grok-4.6');
   assert.deepEqual(grok?.controls[0].values, ['low', 'medium', 'high', 'xhigh']);
 
-  for (const id of ['moonshot:kimi-k3', 'meta:muse-spark-1.2', 'xai:grok-4.6']) {
+  const glm = getResearchModel('zai:glm-5.3-flash');
+  assert.equal(glm?.providerModel, 'glm-5.3-flash');
+  assert.equal(glm?.api, 'chat-completions');
+  assert.deepEqual(glm?.controls[0].values, ['low', 'high', 'max']);
+  assert.equal(glm?.requestPolicy.maxTokens, 131072);
+  assert.equal(glm?.requestPolicy.thinking.requestMode, 'implicit-always-on');
+
+  for (const id of [
+    'moonshot:kimi-k3',
+    'meta:muse-spark-1.2',
+    'xai:grok-4.6',
+    'zai:glm-5.3-flash'
+  ]) {
     assert.throws(
       () => resolveResearchModelSelection(id),
       /Qualification settings have not been finalized/

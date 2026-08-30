@@ -166,6 +166,34 @@ export const RESEARCH_MODEL_CATALOG = deepFreeze([
       retrievedOn: '2026-08-30',
       url: 'https://docs.x.ai/developers/model-capabilities/text/reasoning'
     }
+  },
+  {
+    id: 'zai:glm-5.3-flash',
+    label: 'GLM 5.3 Flash',
+    provider: 'zai',
+    providerRoute: 'glm',
+    providerModel: 'glm-5.3-flash',
+    qualificationStatus: 'unqualified',
+    qualificationConfiguration: 'pending-settings',
+    api: 'chat-completions',
+    controls: [
+      {
+        id: 'reasoning_effort',
+        label: 'Reasoning effort',
+        values: ['low', 'high', 'max'],
+        qualificationDefault: null
+      }
+    ],
+    requestPolicy: {
+      maxTokens: 131072,
+      thinking: {
+        requestMode: 'implicit-always-on'
+      }
+    },
+    documentation: {
+      retrievedOn: '2026-08-30',
+      url: 'https://docs.z.ai/guides/vlm/glm-5.3-flash'
+    }
   }
 ]);
 
