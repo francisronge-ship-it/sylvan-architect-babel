@@ -18,25 +18,9 @@ const CURRENT_PROVENANCE_FIELDS = [
   'primaryTotalTokenCount'
 ];
 
-// Current parses never write these fields. Preserve them only when an older
-// saved parse already contains truthful transcriber provenance.
-const LEGACY_PAYLOAD_TRANSCRIBER_FIELDS = [
-  'payloadTranscriberUsed',
-  'payloadTranscriberModel',
-  'payloadTranscriberPromptTokenCount',
-  'payloadTranscriberOutputTokenCount',
-  'payloadTranscriberTotalTokenCount'
-];
-
-const SNAPSHOT_PROVENANCE_FIELDS = [
-  ...CURRENT_PROVENANCE_FIELDS,
-  ...LEGACY_PAYLOAD_TRANSCRIBER_FIELDS
-];
-
 const CURRENT_ANALYSIS_FIELDS = [
   'tree',
   'derivationStages',
-  'derivationSteps',
   'provenance'
 ];
 
@@ -51,33 +35,7 @@ const CURRENT_BUNDLE_FIELDS = [
   'generationRecord'
 ];
 
-const removeFalseLegacyPayloadTranscriberMarker = (provenance) => {
-  if (!provenance || typeof provenance !== 'object' || Array.isArray(provenance)) return;
-  if (Array.isArray(provenance.payloadIntegrityFlags)) {
-    provenance.payloadIntegrityFlags = provenance.payloadIntegrityFlags
-      .filter((flag) => flag !== 'payload_transcribed_by_flash_lite');
-  }
-};
-
-export const loadTreeBankBundleSnapshot = (bundle) => {
-  const current = JSON.parse(JSON.stringify(bundle));
-  (Array.isArray(current?.analyses) ? current.analyses : []).forEach((analysis) => {
-    if (!analysis || typeof analysis !== 'object') return;
-    removeFalseLegacyPayloadTranscriberMarker(analysis.provenance);
-    delete analysis.surfaceOrder;
-    if (Array.isArray(analysis.derivationSteps)) {
-      analysis.derivationSteps = analysis.derivationSteps
-        .filter((step) => String(step?.operation || '').trim() !== 'SpellOut')
-        .map((step) => {
-          if (!step || typeof step !== 'object') return step;
-          const next = { ...step };
-          delete next.spelloutOrder;
-          return next;
-        });
-    }
-  });
-  return current;
-};
+export const loadTreeBankBundleSnapshot = (bundle) => JSON.parse(JSON.stringify(bundle));
 
 const projectFields = (source, fields) => {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
@@ -90,7 +48,7 @@ const projectFields = (source, fields) => {
 const snapshotCurrentAnalysis = (analysis) => {
   const current = projectFields(analysis, CURRENT_ANALYSIS_FIELDS);
   if (current.provenance) {
-    current.provenance = projectFields(current.provenance, SNAPSHOT_PROVENANCE_FIELDS);
+    current.provenance = projectFields(current.provenance, CURRENT_PROVENANCE_FIELDS);
   }
   return current;
 };

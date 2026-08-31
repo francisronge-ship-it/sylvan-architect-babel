@@ -167,7 +167,7 @@ test('compiled OperatorVariableBinding Replay preserves authored participant rol
   }];
   const frames = adaptDerivationStagesForReplay(stages);
   const plan = buildDerivationReplayPlan({ derivationStages: stages });
-  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, undefined, plan);
+  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, plan);
   const relation = steps.find((step) => (
     step.replayKind === 'relation' && step.operation === 'OperatorVariableBinding'
   ));
@@ -290,7 +290,7 @@ test('one-anchor deletion evidence survives alongside an earlier movement relati
   ];
   const frames = adaptDerivationStagesForReplay(stages);
   const plan = buildDerivationReplayPlan({ derivationStages: stages });
-  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, undefined, plan);
+  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, plan);
   const deletion = steps.find((step) => (
     step.replayKind === 'relation' && step.operation === 'EllipsisDeletion'
   ));

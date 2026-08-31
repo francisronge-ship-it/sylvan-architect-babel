@@ -219,20 +219,11 @@ test('a verdict requires its own explicit analysis anchor', () => {
   assert.deepEqual(facetIds(broadTarget), []);
 });
 
-test('retired ellipsis licensing syntax does not regain special meaning by name', () => {
+test('structured feature values recover a generic Tier-2 plaque', () => {
   const currentForest = [
     leaf('licensor', 'C'),
     node('domain', 'TP', [], { silent: true })
   ];
-  const retired = dispatch({
-    relation: 'EllipsisLicensing',
-    anchors: { licensor: 'licensor', domain: 'domain' },
-    values: { licensorFeature: '[E]' }
-  }, currentForest);
-  assert.equal(retired.tier1Dispatch.outcome, 'unregistered');
-  assert.deepEqual(claimTiers(retired), [3]);
-  assert.equal(primaryFallbackReason(retired), 'no-complete-tier2-facet');
-
   const genericPlaque = dispatch({
     relation: 'UnknownLicensingFeature',
     anchors: { anchor: 'licensor' },

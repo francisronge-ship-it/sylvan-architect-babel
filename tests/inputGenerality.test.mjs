@@ -146,7 +146,6 @@ test('emoji survives the complete final-stage alignment path', () => {
     true,
     { payloadIntegrityFlags: [] }
   );
-  assert.equal('surfaceOrder' in bundle.analyses[0], false);
   assert.deepEqual(
     bundle.analyses[0].derivationStages[0].workspaceForest[0],
     payload.derivationStages[0].workspaceForest[0]

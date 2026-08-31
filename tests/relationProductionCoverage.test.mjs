@@ -9,10 +9,7 @@ import {
   compileRelationRenderPlan,
   visiblePlanFrameItems
 } from '../replay/relations/renderPlanCompiler.ts';
-import {
-  EXCLUDED_RELATION_IDENTITIES,
-  PRODUCTION_RENDER_FAMILIES
-} from '../replay/relations/renderFamilies.ts';
+import { PRODUCTION_RENDER_FAMILIES } from '../replay/relations/renderFamilies.ts';
 
 /**
  * The production coverage gate. This committed manifest records every
@@ -84,18 +81,13 @@ const ACCEPTED_RELATION_IDENTITIES = [
   'VocabularyInsertion'
 ].sort();
 
-test('every accepted relation identity is production-wired or explicitly excluded with a reason', () => {
+test('every accepted relation identity is production-wired', () => {
   const authoredNames = ACCEPTED_RELATION_IDENTITIES;
   assert.equal(authoredNames.length, 60, 'accepted relation manifest changed unexpectedly');
 
   const wired = [];
-  const excluded = [];
   const uncovered = [];
   authoredNames.forEach((name) => {
-    if (Object.hasOwn(EXCLUDED_RELATION_IDENTITIES, name)) {
-      excluded.push(name);
-      return;
-    }
     const entry = findRelationRegistryEntry(productionRelationRegistry, name);
     if (entry && PRODUCTION_RENDER_FAMILIES[entry.id]) {
       wired.push(name);
@@ -110,17 +102,6 @@ test('every accepted relation identity is production-wired or explicitly exclude
     `accepted active relations without production wiring: ${uncovered.join(', ')}`
   );
   assert.ok(wired.length >= 49, `wired count regressed: ${wired.length}`);
-  excluded.forEach((name) => {
-    assert.ok(
-      EXCLUDED_RELATION_IDENTITIES[name].length > 10,
-      `${name} exclusion carries no reason`
-    );
-  });
-});
-
-test('RightRoof is retired as a production relation; rightward movement remains AbarMove', () => {
-  assert.equal(findRelationRegistryEntry(productionRelationRegistry, 'RightRoof'), null);
-  assert.ok(findRelationRegistryEntry(productionRelationRegistry, 'AbarMove'));
 });
 
 /**

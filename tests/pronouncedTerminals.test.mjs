@@ -43,8 +43,7 @@ test('replay snapshot derives its sentence from final pronounced terminal order'
   const bundle = {
     analyses: [{
       tree: localDislocationTree,
-      derivationStages: [],
-      derivationSteps: []
+      derivationStages: []
     }]
   };
   assert.equal(buildReplaySnapshotProjection(bundle).sentence, 'tery -eer -maan');

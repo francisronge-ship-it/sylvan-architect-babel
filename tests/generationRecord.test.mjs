@@ -12,8 +12,7 @@ import {
 } from '../server/babelParser/modelRuntime.js';
 import { buildParseContentsPrompt } from '../server/babelParser/prompts.js';
 import {
-  createTreeBankBundleSnapshot,
-  loadTreeBankBundleSnapshot
+  createTreeBankBundleSnapshot
 } from '../treeBankSnapshot.js';
 
 const HASH_RE = /^[0-9a-f]{64}$/;
@@ -163,28 +162,4 @@ test('Tree Bank snapshots preserve generationRecord as bundle metadata', () => {
 
   assert.deepEqual(snapshot.generationRecord, generationRecord);
   assert.equal('transientBundleField' in snapshot, false);
-});
-
-test('Tree Bank loading preserves truthful legacy transcriber provenance but removes the false marker', () => {
-  const loaded = loadTreeBankBundleSnapshot({
-    analyses: [{
-      tree: { id: 'root', label: 'TP', children: [] },
-      provenance: {
-        treeSource: 'derivationStages',
-        payloadTranscriberUsed: true,
-        payloadTranscriberModel: 'gemini-legacy',
-        payloadIntegrityFlags: [
-          'payload_transcribed_by_flash_lite',
-          'derivation_stages_compiled_to_derivation_frames'
-        ]
-      }
-    }]
-  });
-  const provenance = loaded.analyses[0].provenance;
-
-  assert.equal(provenance.payloadTranscriberUsed, true);
-  assert.equal(provenance.payloadTranscriberModel, 'gemini-legacy');
-  assert.deepEqual(provenance.payloadIntegrityFlags, [
-    'derivation_stages_compiled_to_derivation_frames'
-  ]);
 });

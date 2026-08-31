@@ -94,7 +94,6 @@ test('detector discriminates invented IDs, scalar rewrites, and operation labels
   const analysis = normalize(clone(fixture.payload), fixture.sentence).analyses[0];
   analysis.tree.children[0].id = 'invented-node';
   analysis.derivationStages[0].workspaceForest[0].label = 'InventedProjection';
-  analysis.derivationSteps.push({ operation: 'InventedOperation' });
   const replayPlan = buildDerivationReplayPlan({
     derivationStages: analysis.derivationStages
   });
@@ -107,7 +106,6 @@ test('detector discriminates invented IDs, scalar rewrites, and operation labels
   }).map((issue) => issue.kind));
   assert.equal(kinds.has('compiled-node-id-not-authored'), true);
   assert.equal(kinds.has('compiled-node-label-not-authored'), true);
-  assert.equal(kinds.has('compiled-operation-label-not-authored'), true);
   assert.equal(kinds.has('replay-plan-operation-not-authored-or-declared'), true);
 });
 
@@ -127,7 +125,7 @@ test('compiler leaves bare authored structural heads bare instead of inventing n
   assert.deepEqual(head.children, []);
 });
 
-test('compiler preserves authored movement-index labels and emits no invented derivation operations', () => {
+test('compiler preserves authored movement-index labels', () => {
   const payload = buildSingleStagePayload([{
     id: 'dp',
     label: 'DP₁',
@@ -142,7 +140,6 @@ test('compiler preserves authored movement-index labels and emits no invented de
   const analysis = normalize(payload, 'What').analyses[0];
   assert.equal(analysis.tree.label, 'DP₁');
   assert.equal(analysis.tree.children[0].label, 'What₁');
-  assert.deepEqual(analysis.derivationSteps, []);
 });
 
 test('compiler derives alignment metadata without rewriting authored linguistic scalars', () => {

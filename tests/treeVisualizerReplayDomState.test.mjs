@@ -754,18 +754,13 @@ test('production parasitic gap keeps its semantic copy fork separate from moveme
   );
 });
 
-test('production ellipsis licensing content uses only the ordinary feature and ellipsis painters', async () => {
+test('production ellipsis content uses the ordinary feature painter', async () => {
   const source = await readFile(sourceUrl, 'utf8');
 
   assert.match(
     source,
     /primitive\.type === 'plaque'[\s\S]*?primitive\.plaqueStyle === 'feature'/u,
     'ordinary feature plaques remain available for an authored E feature'
-  );
-  assert.doesNotMatch(
-    source,
-    /EllipsisLicensing|ellipsis\.licensing|ellipsis-licensing|ellipsis-checking|babel-feature-plaque-compact|babel-vpe-ellipsis/u,
-    'the retired specialized painter and its private styling stay absent'
   );
 });
 

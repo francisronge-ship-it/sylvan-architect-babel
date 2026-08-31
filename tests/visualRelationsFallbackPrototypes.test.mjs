@@ -23,7 +23,6 @@ import {
 import { compileRelationRenderPlan } from '../replay/relations/renderPlanCompiler.ts';
 import {
   ACTIVE_VISUAL_DESIGNS,
-  HISTORICAL_RELATIONS,
   RECOGNIZED_RELATIONS,
   SOURCE_BACKED_UNFROZEN_DESIGNS,
   toRendererStages,
@@ -61,7 +60,6 @@ const findParent = (root, nodeId) => {
 
 const playback = (card) => buildPlaybackStepsFromDerivationFrames(
   adaptDerivationStagesForReplay(card.derivationStages),
-  undefined,
   card.sentence,
   buildDerivationReplayPlan({ derivationStages: card.derivationStages })
 );
@@ -69,7 +67,6 @@ const playback = (card) => buildPlaybackStepsFromDerivationFrames(
 const playbackFromStages = (derivationStages, sentence = '') =>
   buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(derivationStages),
-    undefined,
     sentence,
     buildDerivationReplayPlan({ derivationStages })
   );
@@ -78,8 +75,7 @@ test('every prototype relation is genuinely unregistered', () => {
   const registered = new Set([
     ...Object.values(RECOGNIZED_RELATIONS).flat(),
     ...Object.values(ACTIVE_VISUAL_DESIGNS).flat(),
-    ...Object.values(SOURCE_BACKED_UNFROZEN_DESIGNS).flat(),
-    ...Object.values(HISTORICAL_RELATIONS).flat()
+    ...Object.values(SOURCE_BACKED_UNFROZEN_DESIGNS).flat()
   ].map((name) => String(name).toLowerCase()));
   FALLBACK_PROTOTYPE_RELATIONS.forEach((relation) => {
     assert.equal(

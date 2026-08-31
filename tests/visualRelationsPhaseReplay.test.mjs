@@ -387,7 +387,7 @@ test('ImproperMovement retains its exact authored Replay identity in the product
   assert.ok(items.every((item) => item.relationRef.relation === 'ImproperMovement'));
 });
 
-test('legacy recoverability authors the ghost primitive without a connector', () => {
+test('recoverability authors the ghost primitive without a connector', () => {
   const tree = {
     id: 'coordp_ellipsis_timing_test',
     label: 'CoordP',

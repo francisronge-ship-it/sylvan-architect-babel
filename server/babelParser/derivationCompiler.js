@@ -1,6 +1,6 @@
 export const createDerivationCompilerHelpers = ({
   ParseApiError,
-  normalizeOptionalStepText,
+  normalizeOptionalText,
   collectNodeReferencesById,
   collectOvertTerminalNodes,
   resolveNodeSurface,
@@ -30,7 +30,7 @@ export const createDerivationCompilerHelpers = ({
     throw new ParseApiError('BAD_MODEL_RESPONSE', message, 502);
   };
 
-  const isSubstantiveStageRecordText = (value) => Boolean(normalizeOptionalStepText(value));
+  const isSubstantiveStageRecordText = (value) => Boolean(normalizeOptionalText(value));
 
   const normalizeRelations = (
     value,
@@ -450,10 +450,7 @@ export const createDerivationCompilerHelpers = ({
       .filter(Boolean);
     if (!sameTokenSequence(pronouncedTerminals, sentenceTokens)) return null;
 
-    return {
-      tree: committedFrame.root,
-      derivationSteps: []
-    };
+    return { tree: committedFrame.root };
   };
 
   return {

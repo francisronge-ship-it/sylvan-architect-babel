@@ -13,7 +13,6 @@ import {
 
 import {
   ACTIVE_VISUAL_DESIGNS,
-  HISTORICAL_RELATIONS,
   LARGE_ANCHOR_ARRAY_THRESHOLD,
   SOURCE_BACKED_UNFROZEN_DESIGNS,
   allocateSpanLanes,
@@ -757,10 +756,6 @@ test('Atlas cards use only the current production contract and renderer path', a
   assert.match(source, /disableRelationOverlay=\{false\}/u);
   assert.doesNotMatch(
     source,
-    /\b(?:productionOverlay|stageScopedTrajectories|accumulatedTrajectories|derivationSteps|surfaceOrder|visualRelations|resolvedVisualRelations|visualRelationEvents)\b/u
-  );
-  assert.doesNotMatch(
-    source,
     /\b(?:markLensNodes|renderTrajectoryRelation|hydrateLabLensFromCurrentContract)\b/u,
     'the Atlas must not retain an alternate Lab painter or semantic hydration path'
   );
@@ -1381,14 +1376,12 @@ test('one-context source-backed designs remain deliberately unfrozen', () => {
   });
   const activeRelationNames = Object.values(ACTIVE_VISUAL_DESIGNS)
     .flatMap((design) => design.relations);
-  assert.equal(activeRelationNames.includes('EllipsisLicensing'), false);
   for (const relationName of [
     'PartialCopyDeletion',
     'CyclicLinearization'
   ]) {
     assert.equal(activeRelationNames.includes(relationName), true);
   }
-  assert.equal(activeRelationNames.includes('RemnantEscape'), false);
 });
 
 test('the four scope and information-structure relations compile only their authored marks', () => {
@@ -2571,19 +2564,6 @@ test('PF morphology relations hydrate only their authored source geometry', () =
   });
 });
 
-test('polarity marks come from declared notation and a derived index, not authored values', () => {
-  const lens = hydrateLabLensFromCurrentContract(valuesStage([{
-    relation: 'NegativePolarityAnswer',
-    anchors: { polarityHead: 't_probe', proposition: 'tp', propositionPredicate: 'dp_goal' }
-  }]), valuesTree, { label: 'x', nodes: [] });
-  assert.deepEqual(lens.lf.operatorMarks.map((mark) => mark.label), ['Σᵢ−', 'Σᵢ−']);
-  assert.equal(lens.lf.paths[0].kind, 'polarity');
-  assert.deepEqual(
-    { stage: lens.lf.stage, relationIndex: lens.lf.relationIndex },
-    { stage: 0, relationIndex: 0 }
-  );
-});
-
 test('an authored lf lens survives QR and reconstruction hydration', () => {
   const authored = { label: 'x', nodes: [], lf: { strikeNodes: ['keep_me'] } };
   const qrLens = hydrateLabLensFromCurrentContract(valuesStage([{
@@ -2736,12 +2716,6 @@ test('the migrated lab cards derive the same drawings from authored values', asy
     { input: 'laugh + -ed', output: 'laughed', stage: 0, relationIndex: 2, final: true }
   ]);
 
-  assert.equal(
-    stagesNaming('NegativePolarityAnswer').length,
-    0,
-    'the retired Sigma study does not appear in the public relation archive'
-  );
-
   assert.deepEqual(unregisteredRelationNames(stages), []);
 });
 
@@ -2808,27 +2782,6 @@ const copyStage = (anchors) => [{
   workspaceForest: [copyTree]
 }];
 
-
-test('the Sigma polarity relation is retained only as internal historical provenance', async () => {
-  const activeNames = Object.values(RECOGNIZED_RELATIONS).flat();
-  assert.equal(activeNames.includes('NegativePolarityAnswer'), false);
-  assert.deepEqual(HISTORICAL_RELATIONS.negativePolarity, ['NegativePolarityAnswer']);
-
-  const labSource = await readFile(
-    new URL('../docs/design/visual-relations-current-lab.tsx', import.meta.url),
-    'utf8'
-  );
-  assert.doesNotMatch(labSource, /NegativePolarityAnswer|Sigma-to-Pol|negativePolarityTree/);
-
-  // The adapter can still reconstruct the retired source convention for provenance.
-  const stages = valuesStage([{
-    relation: 'NegativePolarityAnswer',
-    anchors: { polarityHead: 't_probe', proposition: 'tp', propositionPredicate: 'dp_goal' }
-  }]);
-  assert.deepEqual(unregisteredRelationNames(stages), []);
-  const lens = hydrateLabLensFromCurrentContract(stages, valuesTree, { label: 'x', nodes: [] });
-  assert.equal(lens.lf.operatorMarks.length, 2);
-});
 
 test('bounding-node crossings keep every authored boundary and assume no category', () => {
   const lens = hydrateLabLensFromCurrentContract(valuesStage([{
@@ -5021,7 +4974,6 @@ test('successive roll-up stages reveal each moved constituent only at its relati
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
   const steps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(stages),
-    undefined,
     'ha-sfarim ha-adumim ha-gdolim ha-ele',
     replayPlan
   );

@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { DerivationStage, DerivationStep, SyntaxNode } from '../types';
+import { DerivationStage, SyntaxNode } from '../types';
 import { ResolvedRelationLink } from '../relationLinks';
 import { buildDerivationReplayPlan } from '../derivationReplayPlan.js';
 import RootLogo from './RootLogo';
@@ -18,7 +18,6 @@ import {
   buildMovementCopyTraceIndexByTerminalId,
   buildMovementProtectedNodeIds,
   buildNodeStepIndex,
-  buildPlaybackSteps,
   buildPlaybackStepsFromDerivationFrames,
   buildRenderableCommittedCanvasData,
   buildRenderableDerivationCanvasData,
@@ -134,7 +133,6 @@ import {
 interface TreeVisualizerProps {
   data: SyntaxNode;
   animated?: boolean;
-  derivationSteps?: DerivationStep[];
   derivationStages?: DerivationStage[];
   abstractionMode?: boolean;
   sentence?: string;
@@ -154,7 +152,6 @@ type RelationMoment = {
 const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
   data,
   animated = false,
-  derivationSteps,
   derivationStages,
   abstractionMode = false,
   sentence = '',
@@ -214,26 +211,6 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
     if (!Array.isArray(derivationStages) || derivationStages.length === 0) return null;
     return compileRelationRenderPlan(derivationStages);
   }, [derivationStages, derivationStagesSignature]);
-  const derivationStepsSignature = useMemo(() => {
-    const steps = derivationSteps || [];
-    return steps
-      .map((step, idx) => [
-        idx,
-        step.operation || '',
-        step.targetNodeId || '',
-        step.targetLabel || '',
-        (step.sourceNodeIds || []).join(','),
-        (step.sourceLabels || []).join(','),
-        step.recipe || '',
-        (step.detailBlocks || [])
-          .map((block) => [
-            block.title || '',
-            (block.lines || []).join(',')
-          ].join(':'))
-          .join(';')
-      ].join(':'))
-      .join('|');
-  }, [derivationSteps]);
   const derivationFramesSignature = useMemo(() => {
     const frames = replayDerivationFrames || [];
     return frames.map((frame, index) => JSON.stringify({
@@ -310,7 +287,6 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
     );
     const steps = buildPlaybackStepsFromDerivationFrames(
       replayDerivationFrames,
-      derivationSteps,
       sentence,
       derivationReplayPlan
     ).map(hidePendingInflSpecifierWrappersInStep);
@@ -321,7 +297,6 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
   }, [
     animated,
     data,
-    derivationSteps,
     derivationReplayPlan,
     derivationStagesSignature,
     usesDerivationFrames,
@@ -887,10 +862,7 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
         && replayVisibleNodeIdSet.has(getNodeId(link.target))
       ))
     ) as VisibleLink[];
-    const inferredTimeline = usesDerivationFrames
-      ? []
-      : buildPlaybackSteps(rootHierarchy, visibleNodes, derivationSteps);
-    const timeline = animated && playbackSteps.length > 0 ? playbackSteps : inferredTimeline;
+    const timeline = playbackSteps;
     const nodeStepIndex = buildNodeStepIndex(timeline);
     const firstRevealNodeStepIndex = buildFirstRevealNodeStepIndex(timeline);
     const revealThreshold = animated ? activeStepIndex : Number.MAX_SAFE_INTEGER;
@@ -8958,7 +8930,6 @@ const TreeVisualizer: React.FC<TreeVisualizerProps> = ({
     fontLayoutPass,
     animated,
     abstractionMode,
-    derivationStepsSignature,
     derivationFramesSignature,
     disableRelationOverlay,
     focusedRelationMoment?.stageIndex,

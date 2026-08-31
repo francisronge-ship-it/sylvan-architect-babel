@@ -47,7 +47,6 @@ export const buildReplaySnapshotProjection = (bundle: ParseBundle): ReplaySnapsh
   const replayPlan = buildDerivationReplayPlan({ derivationStages }) as DerivationReplayPlan;
   const steps = buildPlaybackStepsFromDerivationFrames(
     frames,
-    analysis.derivationSteps,
     sentence,
     replayPlan
   );

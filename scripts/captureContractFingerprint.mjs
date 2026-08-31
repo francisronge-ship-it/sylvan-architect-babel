@@ -40,12 +40,10 @@ const explicitSections = {
   ],
   deterministicIngress: [
     'server/babelParser.js',
-    'server/babelParser/constants.js',
     'server/babelParser/derivationCompiler.js',
     'server/babelParser/derivationHelpers.js',
     'server/babelParser/error.js',
     'server/babelParser/inventionDetector.js',
-    'server/babelParser/normalizationUtils.js',
     'server/babelParser/parseNormalization.js',
     'server/babelParser/provenance.js',
     'server/babelParser/strictJson.js',

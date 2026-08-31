@@ -14,7 +14,7 @@ import {
   LARGE_ANCHOR_ARRAY_THRESHOLD,
   compileLargeAnchorSets
 } from '../replay/relations/largeAnchorSets.ts';
-import { EXCLUDED_RELATION_IDENTITIES, PRODUCTION_RENDER_FAMILIES } from '../replay/relations/renderFamilies.ts';
+import { PRODUCTION_RENDER_FAMILIES } from '../replay/relations/renderFamilies.ts';
 
 const leaf = (id, label, word, extra = {}) => ({ id, label, ...(word ? { word } : {}), ...extra });
 const node = (id, label, children, extra = {}) => ({ id, label, children, ...extra });
@@ -915,12 +915,9 @@ test('the fallback dispatcher rows match the accepted table', () => {
   assert.deepEqual(twoArrays.marks.map((mark) => mark.frame), ['circle', 'circle', 'box', 'box']);
 });
 
-test('every registry entry has a production render family and the exclusion list stays reasoned', () => {
+test('every registry entry has a production render family', () => {
   const wiredEntryIds = new Set(Object.keys(PRODUCTION_RENDER_FAMILIES));
   assert.ok(wiredEntryIds.size >= 45, `expected the full accepted grammar, got ${wiredEntryIds.size}`);
-  Object.entries(EXCLUDED_RELATION_IDENTITIES).forEach(([relation, reason]) => {
-    assert.ok(reason.length > 10, `${relation} exclusion carries no reason`);
-  });
 });
 
 test('bound HeadMove endpoints are pronounced-terminal positions, never preterminal shells', () => {

@@ -344,7 +344,7 @@ test('a relations-only stage (unchanged forest) still yields one Replay moment p
   ];
   const frames = adaptDerivationStagesForReplay(stages);
   const plan = buildDerivationReplayPlan({ derivationStages: stages });
-  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, undefined, plan);
+  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, plan);
   const relationSteps = steps.filter((step) => step.replayKind === 'relation');
   assert.deepEqual(
     relationSteps.map((step) => step.operation),

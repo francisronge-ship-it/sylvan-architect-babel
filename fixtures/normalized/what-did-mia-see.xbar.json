@@ -454,7 +454,6 @@
           ]
         }
       ],
-      "derivationSteps": [],
       "provenance": {
         "modelRoute": "gemini",
         "framework": "xbar",

@@ -965,7 +965,7 @@ test('a relation appears only at its Replay relation moment, never during earlie
   // microsteps, and each authored relation gets its own moment.
   const frames = adaptDerivationStagesForReplay(stages);
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
-  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, undefined, replayPlan);
+  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, replayPlan);
   const relationStepIndices = steps
     .map((step, index) => ({ step, index }))
     .filter(({ step }) => step.replayKind === 'relation');
@@ -1084,7 +1084,7 @@ test('Identity never owns a structural transition that must be authored by movem
   ];
   const frames = adaptDerivationStagesForReplay(stages);
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
-  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, undefined, replayPlan);
+  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, replayPlan);
   const secondMacroIndex = steps.findIndex((step) =>
     step.replayKind === 'macro' && step.replayFrameIndex === 1);
   const identityIndex = steps.findIndex((step) =>

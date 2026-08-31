@@ -28,7 +28,7 @@ const node = (id, label, children, extra = {}) => ({
 const compile = (stages, sentence) => {
   const frames = adaptDerivationStagesForReplay(stages);
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
-  return buildPlaybackStepsFromDerivationFrames(frames, [], sentence, replayPlan);
+  return buildPlaybackStepsFromDerivationFrames(frames, sentence, replayPlan);
 };
 
 const findNode = (root, targetNodeId) => {
