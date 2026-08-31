@@ -24,8 +24,6 @@ This file answers one question: which document should be trusted for what?
   benchmark plumbing.
 - [`docs/design/benchmark-provenance-conditions.md`](design/benchmark-provenance-conditions.md):
   benchmark provenance conditions.
-- [`docs/implementation/case-retirement-census.md`](implementation/case-retirement-census.md):
-  completed case-metadata retirement evidence.
 
 ## Renderer Research Archive
 
