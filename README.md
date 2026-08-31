@@ -14,11 +14,7 @@ Babel logo design by Lona Noury.
 
 It helps researchers test how large language models reason about syntax under explicit theoretical prompts, while also giving students a clean and practical way to generate, inspect, and compare syntactic trees.
 
-Babel is not a general chatbot. Its core purpose is syntactic analysis and structure visualization.
-
-Babel is generative syntax, implemented as an interactive derivation and structure analysis environment.
-
-Babel is the world's first AI syntax tree generator and the fastest syntax tree generator in its class.
+Babel is generative syntax: an interactive environment where model-produced analyses can be inspected as derivations, trees, and syntactic relations.
 
 ## License
 
