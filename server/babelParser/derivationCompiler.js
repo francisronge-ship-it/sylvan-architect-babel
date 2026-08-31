@@ -1,6 +1,6 @@
 export const createDerivationCompilerHelpers = ({
   ParseApiError,
-  normalizeOptionalStepText,
+  normalizeOptionalText,
   collectNodeReferencesById,
   collectOvertTerminalNodes,
   resolveNodeSurface,
@@ -31,7 +31,7 @@ export const createDerivationCompilerHelpers = ({
   };
 
   const isSubstantiveStageRecordText = (value) => {
-    const text = normalizeOptionalStepText(value);
+    const text = normalizeOptionalText(value);
     if (!text || text.length < 24 || !/\p{L}/u.test(text)) return false;
     return text.split(/\s+/).filter(Boolean).length >= 4;
   };
@@ -456,10 +456,7 @@ export const createDerivationCompilerHelpers = ({
       .filter(Boolean);
     if (!sameTokenSequence(pronouncedTerminals, sentenceTokens)) return null;
 
-    return {
-      tree: committedFrame.root,
-      derivationSteps: []
-    };
+    return { tree: committedFrame.root };
   };
 
   return {

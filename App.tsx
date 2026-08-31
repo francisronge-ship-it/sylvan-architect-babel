@@ -612,10 +612,6 @@ const App: React.FC = () => {
   const reasoningControlLabel = reasoningControlLabelForRoute(modelRoute);
   const isTreeBankView = workspaceView === 'treeBank';
   const hideShowcaseInput = showcaseMode && Boolean(activeParse);
-  const replayDerivationSteps = useMemo(
-    () => activeParse?.derivationSteps?.filter((step) => String(step?.operation || '').trim() !== 'SpellOut'),
-    [activeParse]
-  );
   const canopyMilesNotation = useMemo(() => {
     if (!activeParse) return '';
     return buildMilesNotation(activeParse.tree, 'canopy');
@@ -1220,7 +1216,7 @@ const App: React.FC = () => {
                       Math.max((entry.bundle.analyses?.length ?? 1) - 1, 0)
                     );
                     const activeSavedParse = entry.bundle.analyses?.[safeParseIndex];
-                    const derivationCount = activeSavedParse?.derivationSteps?.length ?? 0;
+                    const stageCount = activeSavedParse?.derivationStages?.length ?? 0;
 
                     return (
                       <div
@@ -1245,7 +1241,7 @@ const App: React.FC = () => {
                             {(entry.bundle.analyses?.length ?? 0)} {(entry.bundle.analyses?.length ?? 0) === 1 ? 'Parse' : 'Parses'}
                           </span>
                           <span className="px-3 py-1.5 rounded-full border border-white/15 text-white/70 bg-white/5">
-                            {derivationCount} Derivation Steps
+                            {stageCount} {stageCount === 1 ? 'Stage' : 'Stages'}
                           </span>
                         </div>
 
@@ -1337,7 +1333,6 @@ const App: React.FC = () => {
             <TreeVisualizer 
               data={activeParse.tree} 
               animated={activeTab === 'derivation'}
-              derivationSteps={replayDerivationSteps}
               derivationStages={activeParse.derivationStages}
               abstractionMode={abstractionMode}
               sentence={parsedSentence}

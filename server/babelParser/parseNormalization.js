@@ -2,7 +2,7 @@ import { withFailureDetails } from './validationErrors.js';
 
 export const createParseNormalizationHelpers = ({
   ParseApiError,
-  normalizeOptionalStepText,
+  normalizeOptionalText,
   tokenizeSentenceSurfaceOrder,
   normalizeDerivationStagesToDerivationFrames,
   normalizeDerivationFrames,
@@ -122,7 +122,6 @@ export const createParseNormalizationHelpers = ({
       );
     }
     const committedTree = derivationPrimaryBundle.tree;
-    const identifiedDerivationSteps = [];
     const derivationStages = derivationFrames.map((frame) => {
       const details = frame?.change?.details && typeof frame.change.details === 'object' && !Array.isArray(frame.change.details)
         ? frame.change.details
@@ -143,9 +142,9 @@ export const createParseNormalizationHelpers = ({
       framework,
       timestamp: new Date().toISOString(),
       treeSource: 'derivationStages',
-      promptVersion: normalizeOptionalStepText(process.env.BABEL_PROMPT_VERSION),
-      parserVersion: normalizeOptionalStepText(process.env.BABEL_PARSER_VERSION || process.env.VERCEL_GIT_COMMIT_SHA),
-      uiVersion: normalizeOptionalStepText(process.env.BABEL_UI_VERSION || process.env.VERCEL_GIT_COMMIT_SHA),
+      promptVersion: normalizeOptionalText(process.env.BABEL_PROMPT_VERSION),
+      parserVersion: normalizeOptionalText(process.env.BABEL_PARSER_VERSION || process.env.VERCEL_GIT_COMMIT_SHA),
+      uiVersion: normalizeOptionalText(process.env.BABEL_UI_VERSION || process.env.VERCEL_GIT_COMMIT_SHA),
       payloadIntegrityFlags: payloadIntegrityFlags.length > 0
         ? Array.from(new Set(payloadIntegrityFlags))
         : undefined,
@@ -155,7 +154,6 @@ export const createParseNormalizationHelpers = ({
     return {
       tree: committedTree,
       derivationStages,
-      derivationSteps: identifiedDerivationSteps,
       provenance
     };
   };

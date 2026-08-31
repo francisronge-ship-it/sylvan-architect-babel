@@ -300,7 +300,6 @@ test('phrasal movement reveals the complete landing and lower traces in one rela
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
   const steps = buildPlaybackStepsFromDerivationFrames(
     frames,
-    undefined,
     'Which book did John buy',
     replayPlan
   );
@@ -411,7 +410,6 @@ test('a later movement stage preserves the preceding source subtree until the re
   ];
   const steps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(stages),
-    undefined,
     'Read did',
     buildDerivationReplayPlan({ derivationStages: stages })
   );
@@ -484,7 +482,6 @@ test('ParasiticGap moves the complete real-gap phrase once at its exact relation
 
   const steps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(stages),
-    undefined,
     'Which article did file without',
     buildDerivationReplayPlan({ derivationStages: stages })
   );
@@ -562,7 +559,6 @@ test('Replay keeps gap-only ParasiticGap non-trajectory beside an explicit AbarM
 
   const steps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(stages),
-    undefined,
     'Which did file without',
     buildDerivationReplayPlan({ derivationStages: stages })
   );
@@ -622,7 +618,6 @@ test('AcrossTheBoardMovement withholds one shared landing and restores every low
 
   const steps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(stages),
-    undefined,
     'Who did praise and thank',
     buildDerivationReplayPlan({ derivationStages: stages })
   );
@@ -687,7 +682,6 @@ test('SidewardMovement atomically transfers the complete phrase between workspac
   }];
   const steps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(stages),
-    undefined,
     'A tamer stood and stroked',
     buildDerivationReplayPlan({ derivationStages: stages })
   );
@@ -746,7 +740,6 @@ test('a one-stage OperatorVariableBinding waits for complete syntax and changes 
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
   const steps = buildPlaybackStepsFromDerivationFrames(
     frames,
-    undefined,
     'Who did leave',
     replayPlan
   );
@@ -832,7 +825,6 @@ test('head movement starts with the auxiliary in T and creates its C occurrence 
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
   const steps = buildPlaybackStepsFromDerivationFrames(
     frames,
-    undefined,
     'Did Noa leave',
     replayPlan
   );
@@ -923,7 +915,6 @@ test('ordered phrase and head movements do not leak the later head trace into ea
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
   const steps = buildPlaybackStepsFromDerivationFrames(
     frames,
-    undefined,
     'What did Mia see',
     replayPlan
   );
@@ -1007,7 +998,7 @@ test('a non-movement relation waits for its exact new anchor and never reveals s
 
   const frames = adaptDerivationStagesForReplay(stages);
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
-  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, 'Mia saw Noa', replayPlan);
+  const steps = buildPlaybackStepsFromDerivationFrames(frames, 'Mia saw Noa', replayPlan);
   const stageTwoSteps = steps.filter((step) =>
     String(step.replayProgressLabel || '').startsWith('Stage 2/2')
   );
@@ -1067,7 +1058,6 @@ test('a later PF relation owns the tree change at its exact authored moment', ()
 
   const steps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(stages),
-    undefined,
     'Mia went',
     buildDerivationReplayPlan({ derivationStages: stages })
   );
@@ -1137,7 +1127,6 @@ test('a persistent projected ancestor never reveals later descendants ahead of t
 
   const steps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(stages),
-    undefined,
     'that Mia saw Noa',
     buildDerivationReplayPlan({ derivationStages: stages })
   );
@@ -1239,7 +1228,6 @@ test('A-movement folds a complete phrasal landing before a following identity mo
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
   const steps = buildPlaybackStepsFromDerivationFrames(
     frames,
-    undefined,
     'The book was read',
     replayPlan
   );
@@ -1375,7 +1363,6 @@ test('AMove builds the chain before AntiLocality judges it without changing synt
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
   const steps = buildPlaybackStepsFromDerivationFrames(
     frames,
-    undefined,
     'A package arrived',
     replayPlan
   );
@@ -1454,7 +1441,6 @@ test('AbarMove builds the chain before Intervention judges it without changing s
   ];
   const steps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(stages),
-    undefined,
     'What do which student bought',
     buildDerivationReplayPlan({ derivationStages: stages })
   );
@@ -1560,7 +1546,6 @@ test('AbarMove builds the copy chain before LF Reconstruction selects its interp
   ];
   const steps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(stages),
-    undefined,
     'Which did file',
     buildDerivationReplayPlan({ derivationStages: stages })
   );
@@ -1605,7 +1590,7 @@ test('repeated lexical surfaces keep distinct selection microsteps by node ident
   }];
   const frames = adaptDerivationStagesForReplay(stages);
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
-  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, 'the the', replayPlan);
+  const steps = buildPlaybackStepsFromDerivationFrames(frames, 'the the', replayPlan);
   const selectedTargets = steps
     .filter((step) => step.replayKind === 'micro' && step.operation === 'LexicalSelect')
     .map((step) => step.targetNodeId);
@@ -1641,7 +1626,6 @@ test('relation-owned PF and Fission outputs appear in their relation frames, nev
   ];
   const pfSteps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(pfStages),
-    undefined,
     'went',
     buildDerivationReplayPlan({ derivationStages: pfStages })
   );
@@ -1680,7 +1664,6 @@ test('relation-owned PF and Fission outputs appear in their relation frames, nev
   ];
   const fissionSteps = buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(fissionStages),
-    undefined,
     '-su -e',
     buildDerivationReplayPlan({ derivationStages: fissionStages })
   );

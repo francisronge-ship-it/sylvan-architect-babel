@@ -120,17 +120,6 @@ export const detectDeterministicLinguisticInvention = ({
     );
   });
 
-  asArray(analysis?.derivationSteps).forEach((step, stepIndex) => {
-    const operation = asText(step?.operation);
-    if (operation && !relationLabels.has(operation)) {
-      issues.push({
-        kind: 'compiled-operation-label-not-authored',
-        observed: operation,
-        surface: `analysis.derivationSteps[${stepIndex}]`
-      });
-    }
-  });
-
   asArray(replayPlan?.stages).forEach((stage, stageIndex) => {
     inspectCompiledNodes(
       `replayPlan.stages[${stageIndex}].workspaceForest`,

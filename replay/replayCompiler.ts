@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import type { DerivationStage, DerivationStep, ReplayDetailBlock, SyntaxNode } from '../types.ts';
+import type { DerivationOperation, DerivationStage, ReplayDetailBlock, SyntaxNode } from '../types.ts';
 import {
   isFrontingMovementIdentity,
   isMovementIdentity,
@@ -30,7 +30,7 @@ export type HierNode = d3.HierarchyNode<SyntaxNode>;
 export type VisibleLink = d3.HierarchyLink<SyntaxNode>;
 
 export interface PlaybackStep {
-  operation: DerivationStep['operation'];
+  operation: DerivationOperation;
   sourceKind?: 'microstep' | 'derivation-effect' | 'derived';
   trajectoryKind?: ResolvedRelationLink['trajectoryKind'];
   movementSerializationStatus?: 'complete' | 'underspecified' | 'incoherent';
@@ -82,7 +82,7 @@ export interface MovementArrow {
   traceNode?: HierNode;
   step: number;
   index?: string | null;
-  operation?: DerivationStep['operation'];
+  operation?: DerivationOperation;
   trajectoryKind?: ResolvedRelationLink['trajectoryKind'];
 }
 
@@ -102,13 +102,13 @@ interface DerivationMovementTransition {
   step: number;
   index: string;
   chainId?: string | null;
-  operation?: DerivationStep['operation'];
+  operation?: DerivationOperation;
   trajectoryKind?: ResolvedRelationLink['trajectoryKind'];
   note?: string;
 }
 
 interface ReplayDerivationMovementPayload {
-  operation?: DerivationStep['operation'];
+  operation?: DerivationOperation;
   sourceNodeId?: string;
   landingNodeId?: string;
   targetNodeId?: string;
@@ -151,7 +151,7 @@ export interface ReplayDerivationFrame {
   after?: ReplayDerivationAfterState;
   change?: ReplayDerivationChange;
   workspaceForest: SyntaxNode[];
-  operation?: DerivationStep['operation'];
+  operation?: DerivationOperation;
   recipe?: string;
   chainId?: string;
   movement?: ReplayDerivationMovementPayload | null;
@@ -918,12 +918,12 @@ const formatReplayLabelSeries = (labels: string[]): string => {
 };
 
 const buildStructuralReplayFallback = (
-  operation: DerivationStep['operation'] | string | undefined,
+  operation: DerivationOperation | string | undefined,
   primaryRootLabel: string,
   rootLabels: string[]
 ): string => {
   const op = String(operation || '').trim();
-  const readableOperation = formatOperationLabel(op as DerivationStep['operation']);
+  const readableOperation = formatOperationLabel(op as DerivationOperation);
   const target = primaryRootLabel || rootLabels[0] || 'workspace';
   const targetSummary = rootLabels.length > 1 ? rootLabels.join(' + ') : target;
   const targetIsTraceLike = isTraceLike(target) || isNullLike(target);
@@ -2259,20 +2259,10 @@ const relationOwnsNonMovementTreeTransition = (
 
 export const buildPlaybackStepsFromDerivationFrames = (
   frames: ReplayDerivationFrame[],
-  derivationSteps?: DerivationStep[],
   sentence?: string,
   replayPlan?: DerivationReplayPlan | null
 ): PlaybackStep[] => {
-  const alignedSteps = (Array.isArray(derivationSteps) ? derivationSteps : [])
-    .filter((step) => String(step?.operation || '').trim() !== 'SpellOut');
   const plannedStageCount = Array.isArray(replayPlan?.stages) ? replayPlan.stages.length : 0;
-  const stepsById = new Map(
-    alignedSteps
-      .map((step) => [String(step?.stepId || '').trim(), step] as const)
-      .filter(([stepId]) => Boolean(stepId))
-  );
-
-  const usedStepIds = new Set<string>();
   let previousVisibleNodeIds = new Set<string>();
   let previousWorkspaceRootIds = new Set<string>();
   const sentenceInitialSurface = String(tokenizeReplaySentenceSurface(sentence)[0] || '').trim();
@@ -2303,18 +2293,9 @@ export const buildPlaybackStepsFromDerivationFrames = (
   };
   const frameBackedSteps = frames.flatMap((frame, index) => {
     const plannedStage = getReplayPlanStage(replayPlan, index);
-    const alignedStep = (() => {
-      const frameStepId = String(frame?.stepId || '').trim();
-      if (frameStepId && stepsById.has(frameStepId)) {
-        return stepsById.get(frameStepId);
-      }
-      // A stage-identified frame must never borrow an unrelated positional step.
-      if (frameStepId) return undefined;
-      return alignedSteps[index];
-    })();
     const rawWorkspaceRoots = Array.isArray(frame.workspaceForest) ? frame.workspaceForest : [];
     const nextFrame = index < frames.length - 1 ? frames[index + 1] : null;
-    const fallbackOperation = frame.movement?.operation || frame.operation || alignedStep?.operation || 'Other';
+    const fallbackOperation = frame.movement?.operation || frame.operation || 'Other';
     // Anchor detached roots to explicit future daughter order as soon as a later
     // derivation frame makes that merge order unambiguous. This keeps bottom-up
     // workspace assembly visually aligned with the eventual tree without guessing.
@@ -2331,7 +2312,6 @@ export const buildPlaybackStepsFromDerivationFrames = (
     const primaryRoot = workspaceRoots[0];
     const primaryRootId = String(primaryRoot?.id || '').trim();
     const primaryRootLabel = String(primaryRoot?.label || '').trim() || 'Workspace';
-    const preferredNote = pickPreferredReplayText(alignedStep?.note);
     const structuralFallbackRecipe = buildStructuralReplayFallback(
       fallbackOperation,
       primaryRootLabel,
@@ -2339,9 +2319,7 @@ export const buildPlaybackStepsFromDerivationFrames = (
     );
     const preferredRecipe = pickPreferredReplayText(
       frame.recipe,
-      frame.movement?.note,
-      alignedStep?.recipe,
-      preferredNote
+      frame.movement?.note
     );
     const plannedFrameRelations = plannedStage
       ? getFrameRelations(frame, plannedStage)
@@ -2380,15 +2358,13 @@ export const buildPlaybackStepsFromDerivationFrames = (
       authoredLandingNodeId
       || String(frame.movement?.sourceNodeId || '').trim()
       || String(frame.movement?.traceNodeId || '').trim()
-      || String(frame.chainId || alignedStep?.chainId || '').trim()
+      || String(frame.chainId || '').trim()
       || plannedStageRelocatesPriorLandingOccurrence
     );
     const frameCarriesAuthoredEffect =
       Boolean(String(getDerivationFrameChange(frame)?.statement || '').trim());
     const movementRecipe = pickPreferredReplayText(
-      frame.movement?.note,
-      alignedStep?.note,
-      alignedStep?.recipe
+      frame.movement?.note
     );
     const semanticRecipe = (() => {
       if (isMoveLikeOperation(fallbackOperation) || frameHasMovementPayload) {
@@ -2396,9 +2372,6 @@ export const buildPlaybackStepsFromDerivationFrames = (
       }
       return structuralFallbackRecipe;
     })();
-    const alignedStepId = String(alignedStep?.stepId || '').trim();
-    if (alignedStepId) usedStepIds.add(alignedStepId);
-
     const priorVisibleNodeIds = new Set(previousVisibleNodeIds);
     type IndexedRelationStep = DerivationReplayPlanStep & { authoredRelationIndex: number };
     const frameRelationSteps: IndexedRelationStep[] = plannedStage
@@ -2591,7 +2564,6 @@ export const buildPlaybackStepsFromDerivationFrames = (
           ? moveTargetNodeId
           : (
               primaryRootId
-              || alignedStep?.targetNodeId
               || frame.frameId
               || frame.stepId
               || `__derivation_${index}`
@@ -2602,27 +2574,21 @@ export const buildPlaybackStepsFromDerivationFrames = (
           ? moveTargetLabel
           : (
               (rootLabels.length === 1 ? primaryRootLabel : 'Workspace')
-              || alignedStep?.targetLabel
               || 'Workspace'
             ),
-      sourceNodeIds: moveSourceNodeIds.length > 0 ? moveSourceNodeIds : alignedStep?.sourceNodeIds,
+      sourceNodeIds: moveSourceNodeIds.length > 0 ? moveSourceNodeIds : undefined,
       sourceLabels: moveSourceLabels.length > 0
         ? moveSourceLabels
         : (frameEncodesMovement
-          ? (Array.isArray(alignedStep?.sourceLabels) ? alignedStep.sourceLabels : [])
-          : (Array.isArray(alignedStep?.sourceLabels) && alignedStep.sourceLabels.length > 0
-            ? alignedStep.sourceLabels
-            : rootLabels)),
+          ? []
+          : rootLabels),
       recipe: resolvedSemanticRecipe,
-      workspaceAfter: Array.isArray(alignedStep?.workspaceAfter) && alignedStep.workspaceAfter.length > 0
-        ? alignedStep.workspaceAfter
-        : rootLabels,
+      workspaceAfter: rootLabels,
       detailBlocks: mergedFrameDetailBlocks,
       replayKind: plannedStage ? 'macro' : undefined,
       stageRecord: getFrameStageRecordText(frame, plannedStage),
-      stepId: alignedStep?.stepId || frame.stepId,
-      chainId: alignedStep?.chainId || frame.chainId,
-      note: preferredNote && preferredNote !== resolvedSemanticRecipe ? preferredNote : undefined,
+      stepId: frame.stepId,
+      chainId: frame.chainId,
       replayFrameIndex: index,
       replayCanvasData: frameReplaySnapshot.canvasData,
       replayVisibleNodeIds: frameReplaySnapshot.visibleNodeIds,
@@ -3186,7 +3152,7 @@ export const buildPlaybackStepsFromDerivationFrames = (
             : placement.relationAnchorNodeIds.filter((nodeId) => nodeId !== resolvedTargetNodeId);
           return {
             ...frameSemanticStep,
-            operation: placement.relationLabel as DerivationStep['operation'],
+            operation: placement.relationLabel as DerivationOperation,
             replayKind: 'relation',
             replayRelationIdentity: {
               stageIndex: index,
@@ -3272,7 +3238,7 @@ export const buildPlaybackStepsFromDerivationFrames = (
             .map((nodeId, sourceIndex) => ({ nodeId, label: sourceLabels[sourceIndex] || '' }))
             .filter(({ nodeId }) => !withheldLandingNodeIds.has(nodeId));
           if (retainedSources.length === sourceNodeIds.length || retainedSources.length === 0) return step;
-          const operation: DerivationStep['operation'] = retainedSources.length === 1
+          const operation: DerivationOperation = retainedSources.length === 1
             ? 'Project'
             : 'ExternalMerge';
           const retainedLabels = retainedSources.map(({ label }) => label).filter(Boolean);
@@ -3474,7 +3440,7 @@ export const buildPlaybackStepsFromDerivationFrames = (
           annotateStep(
             {
               ...frameSemanticStep,
-              operation: 'StageRecord' as DerivationStep['operation'],
+              operation: 'StageRecord' as DerivationOperation,
               replayKind: 'macro',
               detailBlocks: mergeReplayDetailBlocks(frameStageRecordBlocks),
               note: undefined,
@@ -3893,7 +3859,7 @@ export const insertPreMovementLandingMergeSteps = (steps: PlaybackStep[]): Playb
        */
       expanded.push({
         ...previous,
-        operation: 'ExternalMerge' as DerivationStep['operation'],
+        operation: 'ExternalMerge' as DerivationOperation,
         replayKind: 'micro',
         replayRelationIdentity: undefined,
         targetNodeId: parentNodeId,
@@ -4123,7 +4089,7 @@ const splitCollapsedNullSelectionProjectSteps = (steps: PlaybackStep[]): Playbac
     previousVisibleIds.add(collapsedNullSelection.leafId);
     expanded.push({
       ...step,
-      operation: 'LexicalSelect' as DerivationStep['operation'],
+      operation: 'LexicalSelect' as DerivationOperation,
       targetNodeId: collapsedNullSelection.leafId,
       targetLabel: collapsedNullSelection.leafSurface,
       sourceNodeIds: [collapsedNullSelection.leafId],
@@ -5907,31 +5873,6 @@ const buildBottomUpSequence = (root: HierNode, visibleIds: Set<string>): HierNod
   return sequence.filter((node) => visibleIds.has(getNodeId(node)));
 };
 
-const mapProvidedStepsToNodes = (
-  visibleNodes: HierNode[],
-  derivationSteps?: DerivationStep[]
-): Map<string, DerivationStep> => {
-  if (!derivationSteps || derivationSteps.length === 0) return new Map();
-
-  const nodeById = new Map(visibleNodes.map((node) => [getNodeId(node), node]));
-  const used = new Set<string>();
-  const mapped = new Map<string, DerivationStep>();
-
-  for (const step of derivationSteps) {
-    if (String(step.operation || '').trim() === 'SpellOut') continue;
-    if (isMoveLikeOperation(step.operation) || String(step.chainId || '').trim()) continue;
-    if (!step.targetNodeId) continue;
-    const chosen = nodeById.get(step.targetNodeId);
-    if (!chosen) continue;
-    const targetNodeId = getNodeId(chosen);
-    if (used.has(targetNodeId)) continue;
-    used.add(targetNodeId);
-    mapped.set(targetNodeId, step);
-  }
-
-  return mapped;
-};
-
 export const buildStructuralDerivationPlaybackSteps = (
   forest: SyntaxNode[],
   frameIndex: number,
@@ -6123,7 +6064,7 @@ export const buildStructuralDerivationPlaybackSteps = (
       addReplayLayoutForNode(layoutVisibleNodeIds, pendingNode, cumulativeVisibleNodeIds);
     });
     const childNodes = (node.children || []).filter((child) => visibleIds.has(getNodeId(child)));
-    const operation: DerivationStep['operation'] = childNodes.length === 0
+    const operation: DerivationOperation = childNodes.length === 0
       ? 'LexicalSelect'
       : (childNodes.length === 1 ? 'Project' : 'ExternalMerge');
     const snapshotVisibleNodeIds = new Set(cumulativeVisibleNodeIds);
@@ -6211,7 +6152,7 @@ const normalizeLabelKey = (label?: string): string => (label || "").trim().toUpp
  * exact registry and, when unregistered, take the neutral fallback
  * presentation.
  */
-const isMoveLikeOperation = (operation?: DerivationStep['operation'] | string): boolean =>
+const isMoveLikeOperation = (operation?: DerivationOperation | string): boolean =>
   isMovementIdentity(String(operation || ''));
 
 const isResolvedMovementLink = (link?: ResolvedRelationLink | null): boolean => {
@@ -6259,175 +6200,6 @@ export const stepRepresentsMovement = (step?: PlaybackStep | null): boolean => {
 const relationMomentUsesMovementSupport = (step: PlaybackStep): boolean => {
   if (step.replayKind !== 'relation') return true;
   return getActiveReplayRelationLinks(step).some(isResolvedMovementLink);
-};
-
-const stepMatchesSourceLabel = (step: PlaybackStep, sourceLabel: string): boolean => {
-  const normalizedSource = normalizeLabelKey(sourceLabel);
-  if (!normalizedSource) return false;
-  if (normalizeLabelKey(step.targetLabel) === normalizedSource) return true;
-
-  const recipe = (step.recipe || "").trim().toUpperCase();
-  if (!recipe) return false;
-  return recipe.startsWith(`SELECT ${normalizedSource}`);
-};
-
-const getMovementDependencyIndex = (steps: PlaybackStep[], stepIndex: number): number => {
-  const step = steps[stepIndex];
-  if (!step) return stepIndex;
-  if (!stepRepresentsMovement(step)) return stepIndex;
-
-  const sourceNodeIds = (step.sourceNodeIds || []).filter((id) => id && id !== step.targetNodeId);
-  if (sourceNodeIds.length > 0) {
-    let dependencyById = -1;
-    sourceNodeIds.forEach((sourceId) => {
-      steps.forEach((candidate, idx) => {
-        if (idx === stepIndex) return;
-        if (candidate.targetNodeId !== sourceId) return;
-        dependencyById = Math.max(dependencyById, idx);
-      });
-    });
-    if (dependencyById >= 0) return dependencyById;
-  }
-
-  const normalizedTarget = normalizeLabelKey(step.targetLabel);
-  const sourceLabels = (step.sourceLabels || [])
-    .map((label) => label.trim())
-    .filter((label) => label.length > 0)
-    .filter((label) => normalizeLabelKey(label) !== normalizedTarget);
-
-  if (sourceLabels.length === 0) return stepIndex;
-
-  let dependencyIndex = -1;
-  sourceLabels.forEach((sourceLabel) => {
-    steps.forEach((candidate, idx) => {
-      if (idx === stepIndex) return;
-      if (!stepMatchesSourceLabel(candidate, sourceLabel)) return;
-      dependencyIndex = Math.max(dependencyIndex, idx);
-    });
-  });
-
-  return dependencyIndex;
-};
-
-const getTraceDependencyIndex = (steps: PlaybackStep[], stepIndex: number): number => {
-  const step = steps[stepIndex];
-  if (!step) return stepIndex;
-  if (step.operation !== 'LexicalSelect') return stepIndex;
-  if (!isTraceLike(step.targetLabel)) return stepIndex;
-
-  const traceIndex = extractMovementIndex(step.targetLabel);
-  if (!traceIndex) return stepIndex;
-
-  let dependencyIndex = -1;
-
-  steps.forEach((candidate, idx) => {
-    if (idx === stepIndex) return;
-    if (!stepRepresentsMovement(candidate)) return;
-
-    const sourceMentionsIndex = (candidate.sourceLabels || []).some((label) => extractMovementIndex(label) === traceIndex);
-    const targetMentionsIndex = extractMovementIndex(candidate.targetLabel) === traceIndex;
-    const recipeMentionsIndex = (candidate.recipe || '').toLowerCase().includes(`_${traceIndex}`);
-
-    if (sourceMentionsIndex || targetMentionsIndex || recipeMentionsIndex) {
-      dependencyIndex = Math.max(dependencyIndex, idx);
-    }
-  });
-
-  if (dependencyIndex >= 0) return dependencyIndex;
-
-  steps.forEach((candidate, idx) => {
-    if (idx === stepIndex) return;
-    if (candidate.operation !== 'LexicalSelect') return;
-    const labelIndex = extractMovementIndex(candidate.targetLabel);
-    if (!labelIndex || labelIndex !== traceIndex) return;
-    if (isTraceLike(candidate.targetLabel)) return;
-    dependencyIndex = Math.max(dependencyIndex, idx);
-  });
-
-  return dependencyIndex;
-};
-
-const reorderMovementSteps = (steps: PlaybackStep[]): PlaybackStep[] => {
-  if (steps.length < 2) return steps;
-  const reordered = [...steps];
-
-  let changed = true;
-  let safety = 0;
-  while (changed && safety < reordered.length * reordered.length) {
-    changed = false;
-    safety += 1;
-
-    for (let idx = 0; idx < reordered.length; idx += 1) {
-      const step = reordered[idx];
-      if (stepRepresentsMovement(step)) {
-        const dependencyIndex = getMovementDependencyIndex(reordered, idx);
-        if (dependencyIndex >= idx) {
-          const [current] = reordered.splice(idx, 1);
-          const insertAt = Math.min(dependencyIndex, reordered.length - 1) + 1;
-          reordered.splice(insertAt, 0, current);
-          changed = true;
-          break;
-        }
-      }
-
-      if (step.operation === 'LexicalSelect' && isTraceLike(step.targetLabel)) {
-        const traceDependencyIndex = getTraceDependencyIndex(reordered, idx);
-        if (traceDependencyIndex >= idx) {
-          const [current] = reordered.splice(idx, 1);
-          const insertAt = Math.min(traceDependencyIndex, reordered.length - 1) + 1;
-          reordered.splice(insertAt, 0, current);
-          changed = true;
-          break;
-        }
-      }
-    }
-  }
-
-  return reordered;
-};
-
-const finalizeReplayStepOrder = (steps: PlaybackStep[]): PlaybackStep[] => {
-  if (steps.length < 2) return steps;
-  return reorderMovementSteps(steps);
-};
-
-export const buildPlaybackSteps = (
-  root: HierNode,
-  visibleNodes: HierNode[],
-  derivationSteps?: DerivationStep[],
-  labelResolver: (node: HierNode) => string = resolveNodeLabel
-): PlaybackStep[] => {
-  if (!derivationSteps || derivationSteps.length === 0) return [];
-
-  const mappedProvidedSteps = mapProvidedStepsToNodes(visibleNodes, derivationSteps);
-  const withProvided = Array.from(mappedProvidedSteps.values()).map((provided) => ({
-    operation: provided.operation || 'Other',
-    targetNodeId: provided.targetNodeId || '',
-    targetLabel: provided.targetLabel || '',
-    sourceNodeIds: provided.sourceNodeIds,
-    sourceLabels: provided.sourceLabels || [],
-    recipe: provided.recipe,
-    workspaceAfter: provided.workspaceAfter,
-    detailBlocks: provided.detailBlocks,
-    note: provided.note
-  }));
-  const mappedIds = new Set(withProvided.map((step) => step.targetNodeId));
-  const supplementalProvided = derivationSteps
-    .filter((step) => isMoveLikeOperation(step.operation) || String(step.chainId || '').trim())
-    .filter((step) => !step.targetNodeId || mappedIds.has(step.targetNodeId))
-    .map((step, index) => ({
-      operation: step.operation || 'Other',
-      targetNodeId: step.targetNodeId || `__derived_${index}`,
-      targetLabel: step.targetLabel || 'Derivation',
-      sourceNodeIds: step.sourceNodeIds,
-      sourceLabels: step.sourceLabels || [],
-      recipe: step.recipe || 'Derivation',
-      workspaceAfter: step.workspaceAfter,
-      detailBlocks: step.detailBlocks,
-      note: step.note
-    }));
-
-  return finalizeReplayStepOrder([...withProvided, ...supplementalProvided]);
 };
 
 export const decoratePlaybackStepsWithTraceIndices = (
@@ -6816,7 +6588,7 @@ export const buildMovementCopyTraceIndexByTerminalId = (
   return traceIndexByTerminalId;
 };
 
-export const formatOperationLabel = (operation?: DerivationStep['operation']): string => {
+export const formatOperationLabel = (operation?: DerivationOperation): string => {
   if (!operation) return 'Derivation';
   if (operation === 'Other') return 'Derivation';
   if (operation === 'LexicalSelect') return 'Select';

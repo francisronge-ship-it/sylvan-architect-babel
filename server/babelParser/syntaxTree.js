@@ -24,9 +24,6 @@ import {
 
 export const createSyntaxTreeHelpers = ({
   ParseApiError,
-  normalizeOptionalStepText,
-  normalizeNodeIdArray,
-  normalizeMovementOperation,
   resolveNodeSurface,
   resolveOvertLeafSurface,
   isAbstractFeatureSurface,

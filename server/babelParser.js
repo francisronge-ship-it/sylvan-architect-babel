@@ -1,5 +1,4 @@
 ﻿import { buildSystemInstruction } from './babelParser/systemInstruction.js';
-import { MOVEMENT_INDEX_SUBSCRIPT_MAP } from './babelParser/constants.js';
 import { ParseApiError } from './babelParser/error.js';
 import { withFailureDetails } from './babelParser/validationErrors.js';
 import {
@@ -27,19 +26,15 @@ import { createDerivationHelpers } from './babelParser/derivationHelpers.js';
 import { createParseRoutes } from './babelParser/parseRoutes.js';
 import { createParseNormalizationHelpers } from './babelParser/parseNormalization.js';
 import { createDerivationCompilerHelpers } from './babelParser/derivationCompiler.js';
-import { createNormalizationUtils } from './babelParser/normalizationUtils.js';
 import { createSyntaxTreeHelpers } from './babelParser/syntaxTree.js';
 import { parseStrictModelJson, parseStrictModelJsonDetailed } from './babelParser/strictJson.js';
 
 export { ParseApiError } from './babelParser/error.js';
 
-const {
-  normalizeOptionalStepText,
-  normalizeNodeIdArray,
-  normalizeMovementOperation
-} = createNormalizationUtils({
-  MOVEMENT_INDEX_SUBSCRIPT_MAP
-});
+const normalizeOptionalText = (value) => {
+  const text = String(value || '').trim();
+  return text || undefined;
+};
 
 const {
   isAbstractFeatureSurface,
@@ -61,9 +56,6 @@ const {
 
 const syntaxTreeHelpersRef = createSyntaxTreeHelpers({
   ParseApiError,
-  normalizeOptionalStepText,
-  normalizeNodeIdArray,
-  normalizeMovementOperation,
   resolveNodeSurface,
   resolveOvertLeafSurface,
   isAbstractFeatureSurface,
@@ -93,7 +85,7 @@ const {
   buildCanonicalDerivationFromDerivationFrames
 } = createDerivationCompilerHelpers({
   ParseApiError,
-  normalizeOptionalStepText,
+  normalizeOptionalText,
   collectNodeReferencesById,
   collectOvertTerminalNodes,
   resolveNodeSurface,
@@ -106,7 +98,7 @@ const {
   normalizeParseBundle
 } = createParseNormalizationHelpers({
   ParseApiError,
-  normalizeOptionalStepText,
+  normalizeOptionalText,
   tokenizeSentenceSurfaceOrder,
   normalizeDerivationStagesToDerivationFrames,
   normalizeDerivationFrames,

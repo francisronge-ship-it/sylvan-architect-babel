@@ -177,7 +177,6 @@ test('normalizes the current four-field derivation contract without provider cal
   );
   assert.deepEqual(Object.keys(analysis).sort(), [
     'derivationStages',
-    'derivationSteps',
     'provenance',
     'tree'
   ]);

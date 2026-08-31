@@ -69,7 +69,6 @@ test('every Orchard phrasal movement creates a new landing host only in its rela
     const stages = card.derivationStages || [];
     const steps = buildPlaybackStepsFromDerivationFrames(
       adaptDerivationStagesForReplay(stages),
-      undefined,
       card.sentence,
       buildDerivationReplayPlan({ derivationStages: stages })
     );

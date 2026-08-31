@@ -60,7 +60,6 @@ const loadAtlasCases = async (t) => {
 const playback = (card) => applyPreFrontingSentenceInitialCasing(
   buildPlaybackStepsFromDerivationFrames(
     adaptDerivationStagesForReplay(card.derivationStages || []),
-    undefined,
     card.sentence,
     buildDerivationReplayPlan({ derivationStages: card.derivationStages || [] })
   ),

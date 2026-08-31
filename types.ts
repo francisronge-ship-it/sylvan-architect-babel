@@ -19,20 +19,6 @@ export interface ReplayDetailBlock {
   lines: string[];
 }
 
-export interface DerivationStep {
-  stepId?: string;
-  operation: DerivationOperation;
-  chainId?: string;
-  targetLabel?: string;
-  targetNodeId?: string;
-  sourceNodeIds?: string[];
-  sourceLabels?: string[];
-  recipe?: string;
-  workspaceAfter?: string[];
-  detailBlocks?: ReplayDetailBlock[];
-  note?: string;
-}
-
 export interface DerivationStage {
   statement: string;
   stageRecord: string;
@@ -152,7 +138,6 @@ export interface Provenance {
 export interface ParseResult {
   tree: SyntaxNode;
   derivationStages?: DerivationStage[];
-  derivationSteps?: DerivationStep[];
   provenance?: Provenance;
 }
 

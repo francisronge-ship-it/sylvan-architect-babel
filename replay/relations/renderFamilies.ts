@@ -299,14 +299,3 @@ export const FULL_ARRAY_OWNED_ROLES: Record<string, readonly string[]> = {
    * to their large arrays.
    */
 };
-
-/**
- * Relation identities deliberately NOT production-wired, each with its
- * reason. Everything else that an active accepted Lab card authors must
- * resolve through the registry — the coverage gate enforces exactly this.
- */
-export const EXCLUDED_RELATION_IDENTITIES: Record<string, string> = {
-  NegativePolarityAnswer:
-    'retired source study: Pasquereau Sigma-to-Pol is too analysis-specific for the accepted atlas '
-    + 'and must not dispatch for general polarity or NPI licensing'
-};

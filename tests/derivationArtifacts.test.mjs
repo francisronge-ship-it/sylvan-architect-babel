@@ -21,9 +21,7 @@ test('Tree Bank snapshots keep only current parse artifacts without mutating the
     analyses: [
       {
         tree: { id: 'root', label: 'TP', children: [] },
-        surfaceOrder: [],
         derivationStages: [],
-        derivationSteps: [{ operation: 'Other' }],
         transientAnalysisField: 'not persisted',
         provenance: {
           treeSource: 'derivationStages',
@@ -41,9 +39,8 @@ test('Tree Bank snapshots keep only current parse artifacts without mutating the
   assert.equal('transientBundleField' in snapshot, false);
   assert.equal('transientAnalysisField' in analysis, false);
   assert.equal('transientProvenanceField' in analysis.provenance, false);
-  assert.equal('surfaceOrder' in analysis, false);
   assert.equal(analysis.provenance.treeSource, 'derivationStages');
-  assert.deepEqual(analysis.derivationSteps, [{ operation: 'Other' }]);
+  assert.deepEqual(analysis.derivationStages, []);
   analysis.tree.label = 'Changed snapshot';
   assert.equal(bundle.analyses[0].tree.label, 'TP');
 });

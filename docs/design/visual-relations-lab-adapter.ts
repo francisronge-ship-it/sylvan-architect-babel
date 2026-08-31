@@ -389,28 +389,6 @@ export const SOURCE_BACKED_UNFROZEN_DESIGNS: Record<
 };
 
 /**
- * Inactive history. These relations keep their card, fixture, renderer and
- * research so nothing is destroyed, but they are not part of the active
- * accepted set and are excluded from active counts.
- *
- * `NegativePolarityAnswer` is Pasquereau's (2020) analysis of French polar
- * response particles: a negative Sigma head moving to a response-particle Pol
- * head, with only the highest copy interpreted. It is neither a general
- * negative-polarity relation nor NPI licensing, so it must not be dispatched
- * for arbitrary negation.
- */
-export const HISTORICAL_RELATIONS = {
-  negativePolarity: ['NegativePolarityAnswer']
-} as const;
-
-/**
- * Declared notation for the negative-polarity grammar. Sigma and the polarity
- * sign are how this relation is displayed, not linguistic material the model
- * authors; VR §7 permits declared notation alongside exact authored strings.
- */
-const NEGATIVE_POLARITY_NOTATION = { symbol: 'Σ', value: '−' };
-
-/**
  * Which drawing a trajectory relation gets, and which anchor roles are its two
  * endpoints. Production draws none of these today: the compiler purge removed
  * the inference that used to, and the authored-relation renderers are not built
@@ -675,18 +653,12 @@ export const matchRelations = (stages: LabStage[], names: readonly string[]): La
   return getRelations(stages).filter((relation) => wanted.has(foldRelationName(relation.relation)));
 };
 
-/** Authored names that no active or historical entry claims. */
+/** Authored names that no active entry claims. */
 export const unregisteredRelationNames = (stages: LabStage[]): string[] => {
-  const historical = new Set(
-    Object.values(HISTORICAL_RELATIONS).flat().map(foldRelationName)
-  );
   const unregistered = new Set<string>();
   getRelations(stages).forEach((relation) => {
     const authoredName = String(relation.relation);
-    if (
-      !historical.has(foldRelationName(authoredName))
-      && !findRelationRegistryEntry(productionRelationRegistry, authoredName)
-    ) {
+    if (!findRelationRegistryEntry(productionRelationRegistry, authoredName)) {
       unregistered.add(authoredName);
     }
   });
@@ -2198,40 +2170,6 @@ export const hydrateLabLensFromCurrentContract = (
         }
       ];
     }
-  }
-
-  /**
-   * Polarity marks are relation-layer objects, not tree nodes and not authored
-   * content. Sigma is this grammar's declared notation for the recognized
-   * relation; the recognized name and its anchors license the marks, and the
-   * index is renderer-derived. Nothing here is read from `values`.
-   */
-  const negativePolarity = single(
-    matchRelations(stages, HISTORICAL_RELATIONS.negativePolarity),
-    'NegativePolarityAnswer'
-  );
-  if (negativePolarity) {
-    const proposition = flattenAnchorIds(negativePolarity.anchors.proposition)[0];
-    const polarityHead = flattenAnchorIds(negativePolarity.anchors.polarityHead)[0];
-    const predicate = flattenAnchorIds(negativePolarity.anchors.propositionPredicate)[0];
-    const index = indices[polarityHead] || indices[proposition] || 'i';
-    const markLabel = `${NEGATIVE_POLARITY_NOTATION.symbol}${INDEX_SUBSCRIPTS[index] || index}${NEGATIVE_POLARITY_NOTATION.value}`;
-    const marks = [
-      { id: 'sigma_high_answer_lf', anchor: polarityHead, placement: 'below-anchor' },
-      { id: 'sigma_low_answer_lf', anchor: predicate, placement: 'left-of-anchor' }
-    ].filter((mark) => Boolean(mark.anchor));
-
-    lens.lf = {
-      ...(fallbackLens?.lf || {}),
-      domains: proposition ? [{ node: proposition, kind: 'polarity' }] : [],
-      ghostNodes: collectSubtreeIds(nodes.get(proposition)),
-      operatorMarks: marks.map((mark) => ({ ...mark, label: markLabel })),
-      stage: relationStageIndex.get(negativePolarity) ?? 0,
-      relationIndex: authoredRelationIndex.get(negativePolarity) ?? 0,
-      ...(marks.length === 2
-        ? { paths: [{ from: marks[1].id, to: marks[0].id, kind: 'polarity', arrow: true }] }
-        : {})
-    };
   }
 
   const focus = single(matchRelations(stages, RECOGNIZED_RELATIONS.focusMarking), 'FocusMarking');

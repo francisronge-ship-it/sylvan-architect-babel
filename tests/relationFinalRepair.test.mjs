@@ -196,7 +196,7 @@ test('anchor availability never reorders authored relation moments', () => {
   ], [rootA, rootB])];
   const frames = adaptDerivationStagesForReplay(stages);
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
-  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, undefined, replayPlan);
+  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, replayPlan);
   const played = steps
     .filter((step) => step.replayKind === 'relation')
     .map((step) => step.replayRelationIdentity);
@@ -237,7 +237,6 @@ test('sequential relation entries get separate Replay frames while one multi-anc
   const sequentialSteps = buildPlaybackStepsFromDerivationFrames(
     sequentialFrames,
     undefined,
-    undefined,
     sequentialPlan
   );
   const relationFrames = sequentialSteps.filter((step) => step.replayKind === 'relation');
@@ -261,7 +260,6 @@ test('sequential relation entries get separate Replay frames while one multi-anc
   const simultaneousPlan = buildDerivationReplayPlan({ derivationStages: simultaneousStages });
   const simultaneousSteps = buildPlaybackStepsFromDerivationFrames(
     simultaneousFrames,
-    undefined,
     undefined,
     simultaneousPlan
   );
@@ -293,7 +291,6 @@ test('structural relation roles use authored node categories in Replay details',
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
   const relationFrame = buildPlaybackStepsFromDerivationFrames(
     frames,
-    undefined,
     undefined,
     replayPlan
   ).find((step) => step.replayKind === 'relation');
@@ -365,44 +362,6 @@ test('identical surface strings are not treated as one chain without authored id
   assert.equal(chains.length, 2);
   assert.notEqual(chains[0].index, chains[1].index,
     'same word, no shared authored lineage: two chains, never merged by string equality');
-});
-
-/* ------------------------------------------------------------------ *
- * Found by the final audit: a stage-identified frame must never borrow
- * an unrelated positionally-aligned derivation step.
- * ------------------------------------------------------------------ */
-
-test('retired generic SpellOut steps are ignored and cannot reclassify authored stages', () => {
-  const shared = forest();
-  const stages = [
-    stage([
-      { relation: 'Coreference', anchors: { antecedent: 'a_fr', pronoun: 'b_fr' } },
-      { relation: 'Coreference', anchors: { antecedent: 'b_fr', pronoun: 'c_fr' } }
-    ], shared),
-    stage([{ relation: 'Coreference', anchors: { antecedent: 'a_fr', pronoun: 'c_fr' } }], shared)
-  ];
-  const frames = adaptDerivationStagesForReplay(stages);
-  const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
-  const retiredSteps = [{
-    stepId: 'retired-spellout',
-    operation: 'SpellOut',
-    targetNodeId: 'root_fr',
-    targetLabel: 'TP',
-    sourceNodeIds: ['root_fr'],
-    sourceLabels: ['TP'],
-    note: 'Retired generic terminal frame'
-  }];
-  const steps = buildPlaybackStepsFromDerivationFrames(
-    frames, retiredSteps, 'a b c', replayPlan);
-  assert.equal(steps.some((step) => step.operation === 'SpellOut'), false);
-  const moments = steps
-    .filter((step) => step.replayKind === 'relation')
-    .map((step) => step.replayRelationIdentity);
-  assert.deepEqual(
-    moments.map((identity) => [identity.stageIndex, identity.relationIndex]),
-    [[0, 0], [0, 1], [1, 0]],
-    'every authored relation keeps its exact moment despite the synthesized step'
-  );
 });
 
 /* ------------------------------------------------------------------ *
@@ -656,7 +615,7 @@ const deletionStages = (silent) => {
 const assertStageTwoReachable = (stages) => {
   const frames = adaptDerivationStagesForReplay(stages);
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
-  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, undefined, replayPlan);
+  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, replayPlan);
   const stageTwoMacro = steps.find((step) =>
     step.replayKind === 'macro' && Number(step.visualFrameIndex) === 1);
   assert.ok(stageTwoMacro, 'the deletion-only stage owns a reachable Stage Record state');
@@ -875,7 +834,7 @@ test('a relation moment in a node-returning stage survives the overt-material gu
   ];
   const frames = adaptDerivationStagesForReplay(stages);
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
-  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, undefined, replayPlan);
+  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, replayPlan);
   const stageThreeMoments = steps.filter((step) =>
     step.replayKind === 'relation' && step.replayRelationIdentity?.stageIndex === 2);
   assert.equal(stageThreeMoments.length, 1,
@@ -908,7 +867,7 @@ test('each authored relation yields exactly one genuine relation moment with its
   ];
   const frames = adaptDerivationStagesForReplay(stages);
   const replayPlan = buildDerivationReplayPlan({ derivationStages: stages });
-  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, undefined, replayPlan);
+  const steps = buildPlaybackStepsFromDerivationFrames(frames, undefined, replayPlan);
   const genuine = steps.filter(isAuthoredRelationReplayMoment);
   assert.deepEqual(
     genuine.map((step) => [step.replayRelationIdentity.stageIndex, step.replayRelationIdentity.relationIndex]),
