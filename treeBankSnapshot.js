@@ -1,7 +1,3 @@
-import {
-  stripLegacyCaseMetadataFromParseBundle
-} from './legacyCaseMetadata.js';
-
 const CURRENT_PROVENANCE_FIELDS = [
   'modelRoute',
   'framework',
@@ -45,7 +41,7 @@ const CURRENT_BUNDLE_FIELDS = [
 ];
 
 export const loadTreeBankBundleSnapshot = (bundle) => {
-  const current = stripLegacyCaseMetadataFromParseBundle(JSON.parse(JSON.stringify(bundle)));
+  const current = JSON.parse(JSON.stringify(bundle));
   (Array.isArray(current?.analyses) ? current.analyses : []).forEach((analysis) => {
     if (!analysis || typeof analysis !== 'object') return;
     delete analysis.surfaceOrder;
