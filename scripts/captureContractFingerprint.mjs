@@ -52,8 +52,7 @@ const explicitSections = {
     'server/babelParser/surfaceTokens.js',
     'server/babelParser/syntaxTree.js',
     'server/babelParser/treeBasics.js',
-    'server/babelParser/validationErrors.js',
-    'legacyCaseMetadata.js'
+    'server/babelParser/validationErrors.js'
   ],
   dependencyLock: [
     'package.json',

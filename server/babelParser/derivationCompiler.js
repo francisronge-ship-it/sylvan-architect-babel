@@ -1,7 +1,3 @@
-import {
-  stripLegacyCaseMetadataFromSyntaxForest
-} from '../../legacyCaseMetadata.js';
-
 export const createDerivationCompilerHelpers = ({
   ParseApiError,
   normalizeOptionalStepText,
@@ -215,9 +211,7 @@ export const createDerivationCompilerHelpers = ({
           frameId: stageId,
           stepId: stageId,
           after: {
-            workspaceForest: stripLegacyCaseMetadataFromSyntaxForest(
-              cloneJson(stage.workspaceForest)
-            )
+            workspaceForest: cloneJson(stage.workspaceForest)
           },
           change: {
             statement: stage.statement,

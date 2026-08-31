@@ -24,8 +24,6 @@ This file answers one question: which document should be trusted for what?
   benchmark plumbing.
 - [`docs/design/benchmark-provenance-conditions.md`](design/benchmark-provenance-conditions.md):
   benchmark provenance conditions.
-- [`docs/implementation/case-retirement-census.md`](implementation/case-retirement-census.md):
-  completed case-metadata retirement evidence.
 - [`docs/implementation/contract-qualification/incumbent-contract-audit-2026-08-28.md`](implementation/contract-qualification/incumbent-contract-audit-2026-08-28.md):
   Program 1 fingerprint and audit of the current model-facing interface.
 - [`docs/implementation/contract-qualification/fable-review-2026-08-28.md`](implementation/contract-qualification/fable-review-2026-08-28.md):
